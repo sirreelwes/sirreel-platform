@@ -954,6 +954,84 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## "Approved — book it" names the order and takes you to it (2026-09-17 — Wes)
+- Wes, on SR-JOB-0312: "It says that the production supply order is booked
+  but it does not give me any other options there. On the tile it says
+  that I need to book it." Both surfaces were right, about DIFFERENT
+  orders — the job carried one booked order and one still APPROVED.
+- **The header badge cannot tell APPROVED from BOOKED, on purpose.**
+  `cadenceForOrder` in `src/lib/jobs/cadence.ts` maps both to the state
+  `booked`, because a new `CadenceState` would re-tier the board's
+  colours, legend and sort (the same reason `approvedUnbooked` is carried
+  as its own COUNT in `/api/jobs`, not as a state). So the badge is NOT
+  changing. What was missing is the qualifier beside it.
+- **The job page now carries a `#book-it` prompt** under the quick-action
+  row (where JobWelcomeButton already lives), rendered when any live order
+  is APPROVED. It NAMES each order with its content summary and puts
+  `MarkBookedButton` beside it — "which order?" was the whole complaint,
+  and a count on a tile can never answer it.
+- **The tile chip navigates now.** It was plain text inside the row's
+  `<Link>`, so pressing it landed a rep at the top of a long job page
+  whose header reads BOOKED. It is a `<button>` that pushes
+  `/jobs/<id>?book=1`; the job page expands every approved order and
+  scrolls the prompt into view, once per landing.
+- **One name per act, across all three surfaces.** Before: the tile said
+  "Approved — book it", the job page said "Record client approval", the
+  order page said "Mark booked". Now the label follows the STATUS —
+  APPROVED already has the client's yes on file, so the only act left is
+  **Book it**; from DRAFT / QUOTE_SENT the yes is not on file and
+  recording it is half the point, so it is **Record client approval**.
+  The confirm button inside the panel always says Book it. The order
+  page's own APPROVED action was already "Book it" and is unchanged.
+- Nothing about the booking mechanics moved: `POST /api/orders/[id]/
+  mark-booked` and `bookOrder()` are untouched, and `MARK_BOOKABLE` /
+  `BOOKABLE_FROM` still agree on DRAFT / QUOTE_SENT / APPROVED.
+
+## The reservation follows the order's dates (2026-09-17 — Wes)
+- Wes, on Someday Studios' passenger van: "I changed it in the order, but
+  that did not change it on the reservation as we had planned for it to
+  do." Pickup 18th → 17th on the order; the board still drew the van on
+  the 18th. Nothing had ever moved a UNIT with a line's dates:
+  `BookingAssignment.startDate/endDate` are COPIES stamped at assign time
+  from the quoted block (assignWindow.ts), and neither date edit wrote
+  them back. Worse, `coverageOfBlock` matches by exact day, so the NEW
+  block read as unfilled while the same van sat held on the old one.
+- **Two edits move line dates, one implementation follows them:**
+  `syncReservationToLineDates()` in `src/lib/scheduling/followLineDates.ts`,
+  called by the row editor (`PUT /line-items/[lineId]`) and "Change dates…"
+  (`POST /dates/apply`). It runs `holdOnQuoteSend` (peak + envelope widen),
+  re-stamps the units, then `tightenBookingEnvelope` brings the envelope IN
+  when nothing still needs the old days. Pure rules `planAssignmentFollow`
+  / `bookingEnvelopeFor`, `npm run test:follow-line-dates`.
+- **Why the row editor never fired before:** its gate was the line's own
+  `assetCategoryId`, which every catalog-bound vehicle leaves null (the
+  class lives on the catalog row). `holdCategoryForLine()` in
+  holdOnQuoteSend.ts is now the exported, pure resolution the hold itself
+  uses; resolve a line's class through it, never off `assetCategoryId`
+  alone. The qty-change branch of that route still gates the old way —
+  open, not touched here.
+- **Which units follow:** the ones carrying the old block's days verbatim
+  (the same rule coverage counts by), up to the moved line's quantity, this
+  order's own before unstamped ones; a sibling order's unit never moves.
+  Overlap is accepted only when the class has NO other block on the order
+  (a row stamped with an order span before blocks existed). CHECKED_OUT:
+  the pickup already happened, so only the return follows, and only when
+  the pickup did not move.
+- **A unit booked elsewhere on the new days does NOT move** on the row
+  editor — it stays, and the PUT response's `assignmentsFollowed.blocked`
+  names it (the page alerts). The client's dates are the client's dates;
+  the truck is a re-pick. "Change dates…" showed the rep every conflict
+  and had them tick through, so it passes `allowConflicts` and the unit
+  moves anyway, audited `overrodeConflict: true`. Every re-stamp is
+  AuditLog `booking_assignment.dates_followed_line` with old/new days.
+- **The envelope shrinks only when nothing bare is on the booking:** a
+  class held with no quoted line behind it (Make Reservation, no order
+  line) has the envelope as its only date, so with one present the
+  envelope stays widen-only. Otherwise pushing an order a week later no
+  longer leaves a phantom hold on the old days.
+- The header `PUT /api/orders/[id]` `startDate/endDate` is still a mirror
+  with no UI and reaches nothing scheduling-side — on purpose.
+
 ## "Booking item is fully assigned" — one capacity rule (2026-09-17 — Jose)
 - Jose, on Mad Minds (SR-JOB-0389): changing Cargo 35 for another van was
   refused "booking item is fully assigned". Not a driver, not a lock. The
@@ -1388,6 +1466,27 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   records them; only the red chip on the card is lost. The card is red
   with an URGENT pill and the summary line; the sender's toast reads the
   same summary, so a failed text is never mistaken for a sent one.
+- **A reply to the client is CONFIRMED before it goes (Wes 2026-09-17:
+  "Things that are going out to the client need to be flagged or confirmed
+  because I'm a little bit afraid that someone's going to try to write an
+  internal note and accidentally send an email to the client").** Two taps:
+  the first ARMS the reply and shows exactly who receives it (To, Cc,
+  from); the second sends. Any edit to the message, the recipients or the
+  mode disarms it, and ⌘↵ follows the same two taps. Notes never arm.
+- **The armed strip also reads the WORDS, not just the recipients.**
+  `internalNoteTells()` in conversationRules.ts (pure, in
+  `test:job-conversation`) looks for the marks of a team note — an
+  @mention of someone on staff, a "Hey team" / "Hi all" opener, a
+  colleague addressed by first name at a line start — and names each one
+  with a **"Keep it internal instead"** button that files the draft as a
+  note and emails nobody. Loud, never blocking: "Hi all" to a production
+  is a real thing to write. The recipient list answers "who gets this";
+  this answers "what IS this", which is the half Wes was afraid of.
+- **Server-side, `POST /api/jobs/[id]/email` refuses without
+  `confirmed: true`** (400). The arm step is what supplies it, so a
+  composer that skips the confirmation — a future one, or a stale tab —
+  cannot put a message in front of a client. `JobEmailButton`'s modal is
+  its own review and passes it. The Chat page does not send client mail.
 - **The composer is the Phase 1 send** (`POST /api/jobs/[id]/email`), now
   **From = the author** (`Jose Pacheco <jose@sirreel.com>` through Resend's
   verified domain — the cadence runner has sent as the agent that way since

@@ -565,13 +565,17 @@ const STATUS_ACTIONS: Record<string, StatusAction[]> = {
   // APPROVED + Book it in one go, holds firmed. From DRAFT it books with no
   // quote round and no booking-welcome email (Wes 2026-09-10 — a rep must
   // be able to book and go straight to the pre-invoice).
+  // One name per act, across the tile, the job page and here (Wes
+  // 2026-09-17). Before the client's yes is on file the act is RECORDING
+  // it (and booking); once the order is APPROVED the yes is already on
+  // file and the only act left is "Book it".
   DRAFT: [
     { label: "Send Quote", next: "QUOTE_SENT", color: "bg-lt-fg hover:bg-black" },
-    { label: "Mark booked", next: "BOOKED", color: "bg-amber-600 hover:bg-amber-500", endpoint: "mark-booked" },
+    { label: "Record client approval", next: "BOOKED", color: "bg-amber-600 hover:bg-amber-500", endpoint: "mark-booked" },
   ],
   QUOTE_SENT: [
     { label: "Mark Approved", next: "APPROVED", color: "bg-lt-fg hover:bg-black" },
-    { label: "Mark booked", next: "BOOKED", color: "bg-amber-600 hover:bg-amber-500", endpoint: "mark-booked" },
+    { label: "Record client approval", next: "BOOKED", color: "bg-amber-600 hover:bg-amber-500", endpoint: "mark-booked" },
     { label: "Back to Draft", next: "DRAFT", color: "bg-lt-fg2 hover:bg-lt-fg" },
   ],
   APPROVED: [
@@ -2558,6 +2562,20 @@ export default function OrderDetailPage() {
       setSavingLineId(null);
       return;
     }
+    // The reservation follows a date change (2026-09-17). A unit that
+    // could NOT follow — booked elsewhere on the new days — stays on its
+    // old days, and the rep has to hear that here, or the order and the
+    // board quietly disagree again.
+    const saved = await res.json().catch(() => ({}));
+    const followed = saved?.assignmentsFollowed as
+      | { blocked?: { reason: string }[]; tight?: { reason: string }[] }
+      | null
+      | undefined;
+    const notes = [
+      ...(followed?.blocked ?? []).map((b) => b.reason),
+      ...(followed?.tight ?? []).map((t) => t.reason),
+    ];
+    if (notes.length > 0) alert(notes.join('\n'));
     setSavingLineId(null);
     setEditingLineId(null);
     fetchOrder();
