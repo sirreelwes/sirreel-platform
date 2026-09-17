@@ -234,6 +234,40 @@ export async function buildInspectionReport(
  * than a settings row: a client-facing send should not be one stray
  * click in an admin UI away from going live.
  */
+/**
+ * The same report with the CHECK-IN half removed — what a DRIVER may see.
+ *
+ * Wes, 2026-09-17: "typically we deal straight with production for damage
+ * reporting — do not need to send to driver after return." The full
+ * document carries the return walk-around, its damage close-ups and
+ * `newDamage`, which is by its own comment "what the renter is actually
+ * being told about". A driver's link lives for 45 days, so once fleet
+ * checked the vehicle in, the person who drove it could read the damage
+ * findings before the production did. That is the wrong channel: damage
+ * is a conversation with the production, and the driver is not a party
+ * to it.
+ *
+ * What the driver keeps is the CHECK-OUT sheet — the one Julian used to
+ * print and leave on the passenger seat, the record of how they received
+ * the vehicle. That half is theirs and stays theirs.
+ *
+ * Pure. Nothing is re-queried and nothing is stored; this shapes a report
+ * that has already been built.
+ */
+export function checkoutSideOnly(report: InspectionReport): InspectionReport {
+  return {
+    ...report,
+    back: null,
+    pairs: report.pairs.map((p) => ({ ...p, back: null })),
+    damagePhotos: { out: report.damagePhotos.out, back: [] },
+    unpositioned: { out: report.unpositioned.out, back: [] },
+    // Both are facts ABOUT the return, and both are the production's to
+    // hear first.
+    newDamage: [],
+    milesDriven: null,
+  }
+}
+
 export function inspectionReportSendingEnabled(): boolean {
   return process.env.INSPECTION_REPORT_SENDING === 'enabled'
 }

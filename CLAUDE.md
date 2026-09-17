@@ -653,11 +653,29 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   cannot drift from the record it copies. Token is the credential (404
   invalid / 410 expired / 409 cancelled), scoped to the one assignment.
   Shown on the page as "Vehicle condition → Open the checkout sheet".
-- **Three things it must never carry, and does not:** the DRIVER'S LICENCE
+- **FOUR things it must never carry, and does not:** the DRIVER'S LICENCE
   photo (`buildInspectionReport` filters `DRIVERS_LICENSE` out of every
   side on purpose), the lockbox/gate CODE (the report has never read
   `Asset.accessCode`; codes reach a driver only through the earned-and-
-  unlocked path on the page), and anyone else's rental.
+  unlocked path on the page), anyone else's rental, and **anything about
+  the CHECK-IN**.
+- **The driver's copy is the CHECK-OUT sheet ONLY (2026-09-17 — Wes:
+  "typically we deal straight with production for damage reporting — do
+  not need to send to driver after return").** `checkoutSideOnly()` in
+  inspectionReport.ts strips `back`, every pair's `back`, the check-in
+  damage close-ups and extras, `milesDriven` and `newDamage` — which that
+  file's own comment calls "what the renter is actually being told about"
+  — before the driver route renders. **A driver's link lives 45 days**, so
+  without this the person who drove the truck could read the damage found
+  at check-in before the production heard it. Damage is a conversation
+  with the PRODUCTION; the driver is not a party to it. The availability
+  count on the page is `type: 'CHECKOUT'` for the same reason: a vehicle
+  with only a RETURN on file has nothing to show them. Pre-existing damage
+  recorded at CHECK-OUT stays — that is what they received.
+  `npm run test:driver-report-scope` sweeps EVERY field for check-in
+  markers, so a `back`-shaped field added later fails there rather than
+  quietly reaching a driver. Nothing is emailed to a driver after a return
+  either — `selfReturn` mails the `driver-returns` HQ channel.
 - **NOT gated on blind** — Wes said drivers, not blind drivers, and a
   staffed pickup's driver having the sheet costs nothing. Gated instead on
   a walk-around actually being FILED on the assignment (staff's or the
