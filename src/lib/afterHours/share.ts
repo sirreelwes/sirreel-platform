@@ -16,7 +16,7 @@
 import { randomBytes } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { portalBaseUrl } from '@/lib/portal/portalUrl'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { buildAfterHoursShareEmail } from '@/lib/email/templates/afterHoursShare'
 
 /** A run is a night, not a quarter. */
@@ -119,7 +119,8 @@ export async function shareAfterHours(args: {
     expiresInDays: SHARE_TTL_DAYS,
   })
 
-  const result = await sendAgreementEmail({
+  const result = await sendOnJobThread({
+    jobId: job.id,
     label: 'job/after-hours-share',
     to: [email],
     subject: tpl.subject,

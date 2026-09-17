@@ -9,7 +9,11 @@
  */
 
 import {
+  alertSummary,
   applyClaim,
+  urgentPlan,
+  urgentSmsText,
+  URGENT_SMS_EXCERPT,
   awaitingReply,
   bareAddress,
   claimLabel,
@@ -58,6 +62,21 @@ check('portal invite', systemLabel('portal/invite') === 'Portal invite')
 check('invoice', systemLabel('send-invoice:INV-1042') === 'Invoice sent')
 check('pre-invoice', systemLabel('send-pre-invoice:INV-1042') === 'Pre-invoice sent')
 check('unknown label still reads', systemLabel('something-new') === 'Sent by HQ' && systemLabel(null) === 'Sent by HQ')
+// 2026-09-17: every client-facing send on a known job rides the thread, so
+// each of the labels those sites stamp needs a name — none may fall through.
+const WIRED_LABELS = [
+  'resend-quote-on-change:check-out:S260912-003', 'card-auth-request', 'card-auth-handoff', 'self-serve:S260912-003',
+  'thank-you:S260912-003', 'orders/agreement/resend-link', 'portal/resend-link:S260912-003', 'orders/contacts/invite',
+  'portal/authorize-approved-invite', 'orders/contract-review/accept', 'contract-review/counter-notice',
+  'agreement/reissue:S260912-003', 'portal/agreement/sign', 'portal/v2/stage-sign client confirmation',
+  'stage-ready-to-sign', 'final-invoice-payment-options', 'payment-info-operator-send', 'payment-share',
+  'job/after-hours', 'job/after-hours-share', 'job/vehicle-pickup', 'driver/request', 'coi-request-fix',
+  'coi-approved', 'coi-requirements:S260912-003', 'sub-rental-estimate',
+]
+check('every wired send label has its own name', WIRED_LABELS.every((l) => systemLabel(l) !== 'Sent by HQ'), WIRED_LABELS.filter((l) => systemLabel(l) === 'Sent by HQ'))
+check('after-hours share is not read as after-hours access', systemLabel('job/after-hours-share') !== systemLabel('job/after-hours'))
+check('final invoice, payment details and payment share are Billing', ['final-invoice-payment-options', 'payment-info-operator-send', 'payment-share'].every((l) => laneFor({ kind: 'system', fromAddress: 'notifications@sirreel.com', label: l }) === 'BILLING'))
+check('card authorization is Sales', laneFor({ kind: 'system', fromAddress: 'notifications@sirreel.com', label: 'card-auth-request' }) === 'SALES')
 check('detail is the last segment', labelDetail('send-quote:S260912-003') === 'S260912-003' && labelDetail('follow-up:STAGE_2:S260912-003') === 'S260912-003' && labelDetail('job-welcome') === null)
 
 console.log('\n— claim —')
@@ -97,6 +116,32 @@ const n1 = { id: 'n1', at: new Date('2026-09-12T10:00:00Z') }
 const e2 = { id: 'e2', at: new Date('2026-09-12T11:00:00Z') }
 const n0 = { id: 'n0', at: new Date('2026-09-12T09:00:00Z') }
 check('merged oldest first, email before note on a tie', eq(mergeTimeline([e2, e1], [n1, n0]).map((r) => r.id), ['n0', 'e1', 'n1', 'e2']))
+
+console.log('\n— urgent notes —')
+const team = [
+  { id: 'u-jose', name: 'Jose Pacheco', email: 'jose@sirreel.com', phone: '(818) 555-0101' },
+  { id: 'u-ana', name: 'Ana', email: 'ana@sirreel.com', phone: null },
+  { id: 'u-chris', name: 'Chris Valencia', email: '', phone: '' },
+]
+const plan = urgentPlan({ mentions: ['u-jose', 'u-ana', 'u-chris', 'u-jose'], authorUserId: 'u-wes', staff: team })
+check('text beats email, email beats nothing', eq(plan.map((p) => [p.userId, p.channel, p.to]), [
+  ['u-jose', 'SMS', '(818) 555-0101'],
+  ['u-ana', 'EMAIL', 'ana@sirreel.com'],
+  ['u-chris', 'NONE', null],
+]))
+check('the author is never alerted', urgentPlan({ mentions: ['u-jose'], authorUserId: 'u-jose', staff: team }).length === 0)
+check('an unknown id is dropped, not guessed', urgentPlan({ mentions: ['u-gone'], authorUserId: 'u-wes', staff: team }).length === 0)
+const sms = urgentSmsText({ byName: 'Jose Pacheco', jobName: 'Cleveland Golf', jobCode: 'SR-JOB-0369', body: '@Ana client needs the final invoice before 3pm', url: 'https://hq.sirreel.com/jobs/abc?tab=conversation' })
+check('text names who, the job, the note and the link', sms === 'URGENT from Jose on Cleveland Golf (SR-JOB-0369): @Ana client needs the final invoice before 3pm https://hq.sirreel.com/jobs/abc?tab=conversation', sms)
+const long = urgentSmsText({ byName: 'Ana', jobName: 'J', jobCode: 'SR-JOB-1', body: 'x'.repeat(500), url: 'https://h.q/j' })
+check('a long note is cut to the excerpt with an ellipsis', long.includes('…') && long.length < URGENT_SMS_EXCERPT + 60, long.length)
+check('summary reads who was reached and how', alertSummary([
+  { name: 'Jose Pacheco', channel: 'SMS', status: 'SENT' },
+  { name: 'Ana', channel: 'EMAIL', status: 'SENT' },
+  { name: 'Chris Valencia', channel: 'NONE', status: 'SKIPPED' },
+  { name: 'Julian', channel: 'SMS', status: 'FAILED' },
+]) === 'texted Jose · emailed Ana · Chris unreachable (no mobile or email) · text to Julian failed')
+check('no alerts → empty summary', alertSummary([]) === '')
 
 console.log('\n— waiting on us —')
 const at = (s: string) => new Date(s)

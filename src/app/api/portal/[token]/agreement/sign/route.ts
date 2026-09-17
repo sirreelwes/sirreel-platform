@@ -5,7 +5,8 @@ import { prisma } from '@/lib/prisma'
 import { resolveAgreementToken } from '@/lib/portal/agreementToken'
 import { ensureSignedAgreementForOrder } from '@/lib/orders/signedAgreement'
 import { generateSignedAgreementPdf } from '@/lib/contracts/generateSignedAgreementPdf'
-import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
+import { type EmailResult } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
 import { transitionCadenceState } from '@/lib/cadence/scheduler'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
@@ -90,6 +91,8 @@ async function sendSignedCopies(args: {
    *  their watched inbox instead of the unmonitored notifications@
    *  sender. Sales is only CC'd, so without this a client reply is lost. */
   agentEmail: string | null
+  /** The order's job — the signed copy rides the job's one thread. */
+  jobId: string | null
   documentType: 'BASELINE' | 'NEGOTIATED'
   pdfBuffer: Buffer
   attachmentName: string
@@ -115,7 +118,8 @@ async function sendSignedCopies(args: {
     </div>
   </div>
 </body></html>`
-  return sendAgreementEmail({
+  return sendOnJobThread({
+    jobId: args.jobId,
     label: 'portal/agreement/sign',
     to: [args.signerEmail],
     replyTo: args.agentEmail ?? undefined,
@@ -177,6 +181,7 @@ export async function POST(
     select: {
       id: true,
       orderNumber: true,
+      jobId: true,
       company: { select: { name: true, billingAddress: true } },
       // "Rental period" on the contract is THIS order's window. It used
       // to come off Job.startDate/endDate — a separately-typed job range
@@ -322,6 +327,7 @@ export async function POST(
     signerName: body.signerName,
     signerEmail: body.signerEmail,
     agentEmail: orderRow.agent?.email ?? null,
+    jobId: orderRow.jobId,
     documentType: agreement.documentType === 'NEGOTIATED' ? 'NEGOTIATED' : 'BASELINE',
     pdfBuffer,
     attachmentName: `sirreel-rental-agreement-${orderRow.job?.jobCode || orderRow.orderNumber}.pdf`,

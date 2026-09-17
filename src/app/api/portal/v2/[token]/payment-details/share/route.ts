@@ -24,7 +24,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { prisma } from '@/lib/prisma'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { sendPaymentShareEmail } from '@/lib/payments/paymentShare'
 
 export const dynamic = 'force-dynamic'
@@ -41,6 +41,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       booking: {
         select: {
           personId: true,
+          jobId: true,
           jobName: true,
           // Nullable: a call-in booking can exist before the production
           // company is known. The job name is the honest fallback — better in
@@ -86,7 +87,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     orderRef: orderNumber ? ` for order ${orderNumber}` : '',
     createdVia: 'PAPERWORK_PORTAL',
     personId: booking.personId,
-    send: (msg) => sendAgreementEmail(msg),
+    send: (msg) => sendOnJobThread({ ...msg, jobId: booking.jobId }),
   })
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })
 

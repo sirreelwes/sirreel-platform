@@ -44,6 +44,7 @@ import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
 import { isEmailAddress, splitPersonName } from '@/lib/portal/grantCompanyAccess'
 import { buildCardAuthRequestEmail } from '@/lib/email/templates/cardAuthRequest'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { agentReplyTo } from '@/lib/email/teamVisibility'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { checkRateLimit } from '@/lib/portal/publicRateLimit'
@@ -202,7 +203,8 @@ export async function POST(req: NextRequest) {
     customBody,
   })
 
-  const sent = await sendAgreementEmail({
+  const sent = await sendOnJobThread({
+    jobId,
     to: [email],
     replyTo: agentReplyTo(order.agent?.email) ?? undefined,
     subject: `${sharerName} asked you to authorize a card for ${jobName}`,

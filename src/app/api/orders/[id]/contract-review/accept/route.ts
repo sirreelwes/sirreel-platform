@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
+import { type EmailResult } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { portalJobUrl, portalTokenUrl } from '@/lib/portal/portalUrl'
 import { pickCanonicalRecipient, rankRecipients } from '@/lib/email/recipients'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
@@ -52,6 +53,7 @@ export async function POST(
       id: true,
       orderNumber: true,
       bookingId: true,
+      jobId: true,
       portalSlug: true,
       company: { select: { name: true } },
       job: {
@@ -261,7 +263,9 @@ export async function POST(
     </div>
   </div>
 </body></html>`
-    emailResult = await sendAgreementEmail({
+    emailResult = await sendOnJobThread({
+      jobId: order.jobId,
+      staffEmail: session.user.email,
       label: 'orders/contract-review/accept',
       to: [recipientEmail],
       cc: ccList.length > 0 ? ccList : undefined,

@@ -21,7 +21,7 @@ import { prisma } from '@/lib/prisma'
 import { blindForVehicle, loadJobBlindContext, ordersForBooking } from '@/lib/fleet/blindHandoff'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { afterHoursPayload } from '@/lib/afterHours/instructions'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import {
   buildVehiclePickupEmail,
@@ -257,7 +257,8 @@ export async function sendVehiclePickupInstructions(args: {
   })
 
   const cc = await withTeamCc([], to[0])
-  const result = await sendAgreementEmail({
+  const result = await sendOnJobThread({
+    jobId: job.id,
     label: 'job/vehicle-pickup',
     to,
     cc: cc.filter((c) => !to.includes(c)).length ? cc.filter((c) => !to.includes(c)) : undefined,
