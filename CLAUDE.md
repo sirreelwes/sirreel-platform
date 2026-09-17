@@ -1563,7 +1563,14 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
     header scrolls away on a phone, so the box repeats it.
   - Nav: `CHAT_ITEM` in permissions.ts is in ALL FOUR branches (sales,
     billing, yard, the fixed IA) — the yard gets tagged as often as sales.
-    A shared nav row is not a shared view; the page scopes it.
+    A shared nav row is not a shared view; the page scopes it. **FIRST in
+    every branch, directly under the Incoming pill** (Wes 2026-09-17: "I
+    assume the chat item will sit at the top of the left menu, just under
+    Incoming?"). That NARROWS the 2026-09-03 ruling ("move the Reservations
+    tab to the top of the list and have that be the default view for
+    everyone") to its second half: Reservations is still where everyone
+    LANDS — `defaultLandingPath` is untouched — it is just no longer the
+    top row. A chat tab people have to hunt for is one nobody reads.
 - NOT built: an attachment picker in the composer; a mention notification;
   the role gate on the Billing lane (Wes's recommendation was to leave it
   visible); the New inbound column link; Phase 3 (Gmail-native sending).
