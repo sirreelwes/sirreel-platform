@@ -147,6 +147,14 @@ export async function GET(req: NextRequest) {
         licensePlate: a.licensePlate,
         accessCode: a.accessCode,
         latestBitDate: latestBitByAsset.get(a.id) ?? null,
+        // DOT documents. PRESENCE + expiry only — the stored values are
+        // private-blob URLs that 403 in a browser, so they never leave the
+        // server (same discipline as categoryHasImage below). Both are read
+        // through the gated proxy at /api/fleet/[id]/documents/[kind].
+        hasRegistration: Boolean(a.registrationUrl),
+        registrationExpiresAt: a.registrationExpiresAt,
+        hasBitCertificate: Boolean(a.bitCertificateUrl),
+        bitCertificateExpiresAt: a.bitCertificateExpiresAt,
         notes: a.notes,
         categoryId: a.categoryId,
         categoryName: a.category.name,

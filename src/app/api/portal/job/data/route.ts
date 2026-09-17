@@ -41,6 +41,7 @@ import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { buildBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
 import { PUBLIC_VEHICLE_VISIBLE_WHERE } from '@/lib/site/vehicleCatalog'
 import { CLIENT_KIT_VISIBILITY, hiddenFromClient } from '@/lib/orders/clientLines'
+import { narrowAssignmentsToOrder, portalDocHref } from '@/lib/fleet/vehicleDocs'
 
 export const dynamic = 'force-dynamic'
 
@@ -407,12 +408,15 @@ export async function GET(req: NextRequest) {
   // Without this the narrowing inverted on exactly the job it was written
   // for: the three vans dropped out and only the unstamped SuperCube was
   // left.
-  const ownIds = new Set([order.id, resolved.followedFrom?.id].filter((v): v is string => !!v))
-  const ownedByThisOrder = vehicleAssignmentsOnBooking.filter((va) => va.orderId && ownIds.has(va.orderId))
-  const vehicleAssignments =
-    ownedByThisOrder.length > 0
-      ? ownedByThisOrder
-      : vehicleAssignmentsOnBooking.filter((va) => va.orderId === null)
+  //
+  // The rule itself lives in vehicleDocs.ts now, because the vehicle-document
+  // proxy has to answer this identically — it takes an assetId off the query
+  // string, so a second copy that drifted would be a way to read another
+  // order's paperwork.
+  const vehicleAssignments = narrowAssignmentsToOrder(vehicleAssignmentsOnBooking, [
+    order.id,
+    resolved.followedFrom?.id,
+  ])
 
   // A catalog photo per reserved vehicle class, for the client's "Assets
   // reserved" tiles (Wes 2026-09-12: "possibly with little icon pictures of
@@ -966,9 +970,14 @@ export async function GET(req: NextRequest) {
           licensePlate: va.asset.licensePlate,
           assignmentStartDate: va.startDate,
           assignmentEndDate: va.endDate,
-          registrationUrl: va.asset.registrationUrl,
+          // The stored values are PRIVATE blob URLs — they 403 in a
+          // browser, so the client gets the gated proxy href instead and
+          // the blob URL never leaves the server. Nothing had ever WRITTEN
+          // these columns until the Fleet page gained an upload, so this
+          // link has read "Not yet on file" on every job we have sent.
+          registrationUrl: va.asset.registrationUrl ? portalDocHref(va.asset.id, 'registration') : null,
           registrationExpiresAt: va.asset.registrationExpiresAt,
-          bitCertificateUrl: va.asset.bitCertificateUrl,
+          bitCertificateUrl: va.asset.bitCertificateUrl ? portalDocHref(va.asset.id, 'bit-certificate') : null,
           bitCertificateExpiresAt: va.asset.bitCertificateExpiresAt,
         }
       }),
