@@ -387,6 +387,14 @@ export type NavItem = { id: string; label: string; icon: string; href: string };
 // the yard and billing are on the receiving end of a tag as often as sales
 // is. The PAGE is what scopes it — /chat lists only conversations you are
 // included in (chatInbox.ts), so a shared nav row is not a shared view.
+//
+// FIRST in every branch, directly under the Incoming pill (Wes 2026-09-17:
+// "I assume the chat item will sit at the top of the left menu, just under
+// Incoming?"). This NARROWS the 2026-09-03 ruling — "move the Reservations
+// tab to the top of the list and have that be the default view for
+// everyone" — to its second half: Reservations is still where everyone
+// LANDS (`defaultLandingPath` is untouched), it is simply no longer the
+// top row. A chat tab people have to hunt for is a chat tab nobody reads.
 const CHAT_ITEM: NavItem = { id: 'chat', label: 'Chat', icon: 'MessagesSquare', href: '/chat' };
 export type NavSection = { label: string | null; items: NavItem[] };
 
@@ -496,9 +504,9 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // lookup, not a daily surface.
         label: 'Warehouse & Fleet',
         items: [
+          CHAT_ITEM,
           { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           { id: 'yard', label: 'Today', icon: 'Sun', href: '/yard' },
-          CHAT_ITEM,
           // Hugo, 2026-09-03: the floor picks on PAPER, then walks the
           // paperwork to a supervisor who enters it here. Gear.
           { id: 'order-reports', label: 'Check In/Out Reports', icon: 'ClipboardList', href: '/reports/orders' },
@@ -634,8 +642,8 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         items: [
           // Reservations first — the app's default view for everyone
           // as of 2026-09-03.
-          { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           CHAT_ITEM,
+          { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
           // Sub-Rentals sits in Sales, not Ops (Wes 2026-08-28): the roster
@@ -728,8 +736,8 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // IS the inbound queue; /inquiries redirects there.
         // Reservations first — the app's default view for everyone as
         // of 2026-09-03 (Wes, after the Hugo meeting).
-        { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
         CHAT_ITEM,
+        { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
         { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
         { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
         // Sub-Rentals sits in Sales, not Ops (Wes 2026-08-28): the roster
