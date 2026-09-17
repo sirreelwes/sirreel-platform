@@ -877,9 +877,14 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   rate with Vic, and model detail is kept loose ("Pro pack & head kit — 2400
   W/s", never a SKU) so a call CORRECTS a row instead of discovering it was
   invented. **Rates are EMPTY** — Vic proposes from his page, HQ accepts.
-- **Their Sprinter van packages are deliberately NOT on the roster** — that
-  is our own fleet's lane (the GreenLite caveat). If Wes wants them they go
-  under Specialty Vehicles or Cars & SUVs, never under Photo Shoot Rentals.
+- **Their Sprinter Cargo Van Packages ARE ours to sell, and they belong in
+  Photo Shoot Rentals** (Wes 2026-09-17: "VSM cargo vans come preloaded with
+  gear that we don't carry so keep them"). This file first excluded them as
+  competing with our own vans — the GreenLite caveat — which read the VAN as
+  the product. It is not: the van is the wrapper and the preloaded package is
+  the thing, and none of it is gear SirReel holds. So they are NOT a
+  Specialty Vehicle or a Car & SUV; they are a photo package that happens to
+  arrive on wheels. **Do not "correct" them back out.**
 - **WILL_CALL is the partner default**, set on the Vendor and left NULL on
   every unit so it is one edit on the Portals row. A stills rental house is a
   counter business: DELIVERY would ask Vic for a window and a contact he
@@ -1314,6 +1319,72 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   wes@ LINKED filter — anchors add proof, nothing else. `startThreadForJob`
   in recordOutboundOnThread.ts has no callers now; the root thread comes
   from `jobThreadContext()`.
+
+## The job Conversation — Phase 2 SHIPPED 2026-09-17 (Wes: "Build Phase 2")
+- **Schema change — NOT `prisma db push`.** Two tables by additive SQL:
+  `npx tsx scripts/add-job-thread-tables.ts` (`sr_job_threads` — the claim,
+  one row per job; `sr_job_thread_notes` — internal notes). Until it has
+  run, the panel still shows the emails, notes/claim read as none, and a
+  note or claim POST answers 503 naming the script. Models
+  `JobThreadState` / `JobThreadNote`, plain columns, no relations (the Job
+  and User models are untouched).
+- **The panel is `src/components/jobs/JobConversation.tsx`**, fed by
+  `GET /api/jobs/[id]/conversation` (`src/lib/email/jobConversation.ts`):
+  every `EmailMessage` on a thread with this `jobId`, canonical copies only
+  (`duplicateOfId: null`), merged with the notes by time. It is a READ — no
+  second copy of the mail. Four row kinds: client (left; quoted history
+  stripped by `stripQuotedReply`), staff (right, by name — a
+  `@sirreel.com` sender whatever the direction, so a Gmail reply Jose
+  sent shows as his), system (the notifications@ sender, one compact line
+  reading the send label back out of `triageNotes` — `recordOutboundOnThread`
+  now writes `label:<EmailPayload.label>` there; unknown label → "Sent by
+  HQ"), and note (violet, dashed, "Internal · never sent").
+- **Lanes are derived on read, no column** (`laneFor` in
+  `src/lib/email/conversationRules.ts`, pure, `npm run test:job-conversation`):
+  system → by label (invoice/pre-invoice = BILLING); staff → BILLING role
+  or a billing inbox; client → the inbox it landed in (`routingHeaders.
+  deliveredTo`, To, Cc) — billing@/payments@/ana@ = BILLING. Filter chips
+  All / Sales / Billing in the panel header; notes always show.
+- **Claim:** "<name> is answering" / "Handed to Billing" / "Handed to
+  Sales" / Release — `POST …/conversation/claim`, `applyClaim` is the pure
+  transition (a new claim replaces the old; a hand leaves nobody holding
+  it and points the lane). **Hand to Billing emails `COPY_RECIPIENTS.
+  billing`** with a link to `/jobs/[id]?tab=conversation` (label
+  `job-thread-handoff`). Audited `job.thread_claimed|handed|released`.
+- **Notes:** `POST …/conversation/notes`, `cleanNote` (4000 chars),
+  `@First` / `@First Last` mentions matched against HQ users into
+  `mentions` (ids). Nothing notifies a mentioned person yet — the chip row
+  under the box is the nudge. Audited `job.note_added`. Do NOT use the
+  legacy `job_messages` table for this.
+- **The composer is the Phase 1 send** (`POST /api/jobs/[id]/email`), now
+  **From = the author** (`Jose Pacheco <jose@sirreel.com>` through Resend's
+  verified domain — the cadence runner has sent as the agent that way since
+  it shipped); a sender outside `@sirreel.com` falls back to SirReel HQ.
+  Subject is the job's and read-only; the job address is implicit ("filed
+  to SR-JOB-…" chip). ⌘↵ sends. No attachment picker yet — the Send quote /
+  Send invoice buttons still carry the documents.
+- **Placement** (`/jobs/[id]/page.tsx`): the page's outer wrapper is a
+  2-column grid at `xl` (1280px+) — the job's column plus a 400px
+  `<aside>` holding the panel, sticky, full height. Below `xl` a
+  `ConversationTabs` strip (Details | Conversation, with a dot when the
+  client is waiting) sits at the top of the page and the panel takes the
+  full width when the tab is on. **The panel is mounted ONCE** and
+  shown/hidden by class, so it loads once and its summary reaches the tab.
+  `?tab=conversation` is the deep link (same pattern as
+  `/jobs?panel=incoming`). The header's old "Email client" button is now
+  "Conversation" — switches the tab and focuses the box
+  (`job-conversation:focus` window event). `JobEmailThreads` is gone from
+  the job page (still used by /rentalworks/reconcile); `JobEmailButton`
+  stays for the counter-proposal panel.
+- **Rail:** `/api/jobs` rows carry `conversation: { awaitingReply,
+  lastInboundAt }` from ONE `emailThread.groupBy` over the page
+  (`conversationSummaryForJobs`: newest inbound on any thread filed to the
+  job newer than our newest send). The rail shows a "Client replied" chip.
+  The order page shows a link to the job's conversation and no composer —
+  one place to write.
+- NOT built: an attachment picker in the composer; a mention notification;
+  the role gate on the Billing lane (Wes's recommendation was to leave it
+  visible); the New inbound column link; Phase 3 (Gmail-native sending).
 
 ## Active Roadmap
 1. AI fleet optimization

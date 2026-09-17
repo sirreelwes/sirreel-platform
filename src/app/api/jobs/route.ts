@@ -25,6 +25,7 @@ import { liveOrdersForRollup } from '@/lib/jobs/liveOrders'
 import { jobBlindRollup } from '@/lib/fleet/blindRule'
 import { countRedlinesAwaitingAction } from '@/lib/jobs/redlineAlert'
 import { WELCOME_SENT_ACTION, welcomeSignal } from '@/lib/jobs/welcomeReminder'
+import { conversationSummaryForJobs } from '@/lib/email/jobConversation'
 import { computeReadiness } from '@/lib/jobs/readiness'
 import { deriveJobStage, WAREHOUSE_DEPARTMENTS } from '@/lib/jobs/stage'
 import { PARTNER_LINE_WHERE } from '@/lib/orders/partnerLines'
@@ -466,6 +467,9 @@ export async function GET(req: NextRequest) {
     // RW rollup for the listed jobs — one batch, so board cards don't
     // read "$— / 0 orders" for jobs whose money lives in RentalWorks.
     const jobIds = jobs.map((j) => j.id)
+    // One-thread-per-job: is the client waiting on us? One groupBy over the
+    // page's threads (lib/email/jobConversation); the rail shows a chip.
+    const convoByJob = await conversationSummaryForJobs(jobIds)
     const rwLinks = jobIds.length
       ? await prisma.jobRwOrder.findMany({
           where: { jobId: { in: jobIds } },
@@ -900,6 +904,7 @@ export async function GET(req: NextRequest) {
         approvedUnbooked,
         redlinePending,
         welcome,
+        conversation: convoByJob.get(j.id) ?? null,
         cadence,
         hasLD,
         hasStageScope,
