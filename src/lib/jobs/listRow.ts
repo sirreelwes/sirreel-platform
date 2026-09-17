@@ -115,6 +115,10 @@ export interface JobRow {
    *  reminder window and never welcomed; the tile says so. See
    *  lib/jobs/welcomeReminder — the job page button reads the same rule. */
   welcome?: { state: 'due' | 'sent' | 'none'; quotedAt: string | null; sentAt: string | null }
+  /** One-thread-per-job: is the client waiting on us? Newest inbound on any
+   *  thread filed to the job is newer than our newest send. The rail shows a
+   *  chip; the job page's Conversation tab is where it gets answered. */
+  conversation?: { awaitingReply: boolean; lastInboundAt: string | null } | null
   cadence?: { state: string; partial: boolean }
   hasLD?: boolean
   hasStageScope?: boolean

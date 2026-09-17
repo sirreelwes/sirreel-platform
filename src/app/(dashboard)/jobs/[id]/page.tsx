@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useMoneyFormatter, useMoneyVisible } from '@/hooks/useMoney';
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { deriveJobDateRange, deriveOrderWindow, isoDate } from '@/lib/jobs/dateRange';
 import { buildReservedAssets, DEAD_ORDER_STATUSES } from '@/lib/jobs/reservedAssets';
@@ -34,7 +34,7 @@ import { notifyJobsChanged } from '@/components/jobs/JobsListProvider';
  * CompanyAgreement.autoCoverJobs — see src/lib/orders/annualCoverage.ts.
  */
 const SHOW_AGREEMENT_ON_FILE = true;
-import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
+import { JobConversation, ConversationTabs } from '@/components/jobs/JobConversation';
 import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { JobWelcomeButton } from '@/components/jobs/JobWelcomeButton';
 import { AddAssetButton } from '@/components/jobs/AddAssetButton';
@@ -52,7 +52,6 @@ import { TextButton } from '@/components/sms/TextButton';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { SelfServeEmailButton } from '@/components/jobs/SelfServeEmailButton';
-import { JobEmailButton } from '@/components/jobs/JobEmailButton';
 import { MarkBookedButton } from '@/components/jobs/MarkBookedButton';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
@@ -75,7 +74,7 @@ import { STAGE_CHIP, STAGE_RAIL, readinessMeterStyle } from '@/lib/scheduling/st
 import { computeReadiness } from '@/lib/jobs/readiness';
 import { orderContentSummary } from '@/lib/orders/contentSummary';
 import { rollupCoiState } from '@/lib/coi/coiState';
-import { AlertTriangle, CalendarDays, Check, User } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Check, User, Mail } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { canCreateOrders } from '@/lib/permissions';
 import { jobBlindRollup } from '@/lib/fleet/blindRule';
@@ -528,6 +527,24 @@ export default function JobDetailPage() {
   const canSeeMoney = useMoneyVisible();
   const params = useParams();
   const router = useRouter();
+  // One-thread-per-job (Phase 2): the Conversation is a pinned rail at
+  // 1280px+ and a Details | Conversation tab below that. `?tab=conversation`
+  // is the deep link a notification lands on (same pattern as
+  // /jobs?panel=incoming). The panel is mounted ONCE and shown/hidden by
+  // class, so it loads once and its "client replied" dot reaches the tab.
+  const searchParams = useSearchParams();
+  const tab: 'details' | 'conversation' = searchParams?.get('tab') === 'conversation' ? 'conversation' : 'details';
+  const setTab = useCallback(
+    (t: 'details' | 'conversation') => {
+      const q = new URLSearchParams(searchParams?.toString() ?? '');
+      if (t === 'conversation') q.set('tab', 'conversation');
+      else q.delete('tab');
+      router.replace(`${window.location.pathname}${q.toString() ? `?${q.toString()}` : ''}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+  const [convoAwaiting, setConvoAwaiting] = useState(false);
+  const onConvoSummary = useCallback((sum: { awaitingReply: boolean }) => setConvoAwaiting(sum.awaitingReply), []);
   const id = params?.id as string;
 
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -1529,7 +1546,9 @@ const driverTone = (d: any): string => {
   const foldedChips = FOLD_META.filter((m) => sectionEmpty[m.key] && !openSections.has(m.key));
 
   return (
-    <div className="max-w-5xl mx-auto space-y-3 text-[15px]">
+    <div className="mx-auto max-w-5xl xl:max-w-[1480px] xl:grid xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-4 xl:items-start">
+      <ConversationTabs tab={tab} onChange={setTab} awaiting={convoAwaiting} />
+      <div className={`max-w-5xl mx-auto space-y-3 text-[15px] min-w-0 ${tab === 'conversation' ? 'hidden xl:block' : ''}`}>
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-zinc-100 border border-zinc-300 text-zinc-900 text-[15px] px-4 py-2 rounded-lg shadow-xl">
           {toast}
@@ -1724,7 +1743,17 @@ const driverTone = (d: any): string => {
                 )}
               </div>
             )}
-              <JobEmailButton jobId={job.id} />
+              <button
+                type="button"
+                onClick={() => {
+                  setTab('conversation');
+                  setTimeout(() => window.dispatchEvent(new CustomEvent('job-conversation:focus')), 60);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-semibold rounded-lg border border-lt-hairline bg-lt-card text-lt-fg2 hover:text-lt-fg"
+                title="Write to the client on this job's one thread"
+              >
+                <Mail size={13} aria-hidden /> Conversation
+              </button>
             </div>
             {/* In-Job creation — the ONLY place quotes/reservations are
                 created (canonical-Job consolidation). Job pre-seeded. */}
@@ -3840,7 +3869,6 @@ const driverTone = (d: any): string => {
 
       {/* Email threads filed in this Job (email-in-Job, step 6). The
           component hides itself until a thread is filed. */}
-      <JobEmailThreads jobId={job.id} tone="light" />
 
       {/* Not started — every empty section, reachable in one click.
           A chip expands its section in place; a section that gains
@@ -3985,6 +4013,14 @@ const driverTone = (d: any): string => {
           }}
         />
       )}
+    </div>
+      <aside className={`min-w-0 ${tab === 'conversation' ? '' : 'hidden xl:block'} xl:sticky xl:top-4`}>
+        <JobConversation
+          jobId={job.id}
+          onSummary={onConvoSummary}
+          className="h-[calc(100vh-7rem)] min-h-[480px] xl:h-[calc(100vh-2.5rem)]"
+        />
+      </aside>
     </div>
   );
 }
