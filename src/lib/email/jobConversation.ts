@@ -21,7 +21,9 @@ import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { COPY_RECIPIENTS } from '@/lib/email/copyRecipients'
 import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { jobRootThreadKey, jobThreadAddress, normalizeSubject, rootSubjectFor } from '@/lib/email/jobThreadRules'
+import { sendTracked } from '@/lib/sms/threads'
 import {
+  alertSummary,
   applyClaim,
   awaitingReply,
   bareAddress,
@@ -34,6 +36,9 @@ import {
   mentionsIn,
   mergeTimeline,
   systemLabel,
+  urgentPlan,
+  urgentSmsText,
+  type AlertChannel,
   type ClaimAction,
   type ClaimState,
   type ConversationKind,
@@ -97,6 +102,14 @@ export interface EmailRow {
   autoReply: boolean
 }
 
+export interface NoteAlert {
+  userId: string
+  name: string
+  channel: AlertChannel
+  /** SENT | FAILED | SKIPPED */
+  status: string
+}
+
 export interface NoteRow {
   kind: 'note'
   id: string
@@ -106,6 +119,11 @@ export interface NoteRow {
   body: string
   mentions: string[]
   anchoredEmailMessageId: string | null
+  /** True when the note was sent with the Urgent toggle — it has alert rows. */
+  urgent: boolean
+  alerts: NoteAlert[]
+  /** "texted Ana · emailed Julian" — empty for a plain note. */
+  alertSummary: string
 }
 
 export interface Conversation {
@@ -215,17 +233,36 @@ export async function loadConversation(jobId: string): Promise<Conversation | nu
       prisma.jobThreadState.findUnique({ where: { jobId } }),
     ])
     const staffById = new Map(staff.map((s) => [s.id, s]))
-    noteRows = notes.map((n) => ({
-      kind: 'note',
-      id: n.id,
-      at: n.createdAt.toISOString(),
-      atDate: n.createdAt,
-      authorUserId: n.authorUserId,
-      authorName: staffById.get(n.authorUserId)?.name ?? 'Someone',
-      body: n.body,
-      mentions: n.mentions,
-      anchoredEmailMessageId: n.anchoredEmailMessageId,
-    }))
+    // Urgent-note alerts — a third table, added after the first two. Its
+    // own try: a missing alerts table must not hide the notes.
+    const alertsByNote = new Map<string, NoteAlert[]>()
+    try {
+      const alerts = await prisma.jobThreadAlert.findMany({ where: { jobId }, orderBy: { createdAt: 'asc' }, take: 2000 })
+      for (const a of alerts) {
+        const list = alertsByNote.get(a.noteId) ?? []
+        list.push({ userId: a.userId, name: staffById.get(a.userId)?.name ?? 'Someone', channel: a.channel as AlertChannel, status: a.status })
+        alertsByNote.set(a.noteId, list)
+      }
+    } catch (err) {
+      if (!isMissingTable(err)) throw err
+    }
+    noteRows = notes.map((n) => {
+      const alerts = alertsByNote.get(n.id) ?? []
+      return {
+        kind: 'note',
+        id: n.id,
+        at: n.createdAt.toISOString(),
+        atDate: n.createdAt,
+        authorUserId: n.authorUserId,
+        authorName: staffById.get(n.authorUserId)?.name ?? 'Someone',
+        body: n.body,
+        mentions: n.mentions,
+        anchoredEmailMessageId: n.anchoredEmailMessageId,
+        urgent: alerts.length > 0,
+        alerts,
+        alertSummary: alertSummary(alerts),
+      }
+    })
     claimRow = claim
   } catch (err) {
     if (!isMissingTable(err)) throw err
@@ -302,15 +339,100 @@ export async function conversationSummaryForJobs(
 
 export type NoteResult = { ok: true; note: NoteRow } | { ok: false; status: number; error: string }
 
+/**
+ * An URGENT note reaches every tagged person right now (Wes 2026-09-17):
+ * a text to the mobile on file (User.phone — the number set on
+ * /admin/assistant), an email when there is no mobile, and an honest
+ * "unreachable" when there is neither. Sent as `source: 'staff'`, which is
+ * exempt from quiet hours — a person pressed Urgent at that hour on
+ * purpose. Every outcome is written to sr_job_thread_alerts (best-effort:
+ * a missing table costs the record, never the text) and to the audit log.
+ */
+async function raiseUrgentAlerts(args: {
+  jobId: string
+  noteId: string
+  actor: Actor
+  body: string
+  mentions: string[]
+  job: { jobCode: string; name: string }
+}): Promise<NoteAlert[]> {
+  const users = await prisma.user.findMany({
+    where: { id: { in: args.mentions } },
+    select: { id: true, name: true, email: true, phone: true, isActive: true },
+  })
+  const plan = urgentPlan({
+    mentions: args.mentions,
+    authorUserId: args.actor.id,
+    staff: users.filter((u) => u.isActive !== false),
+  })
+  const byName = args.actor.name || args.actor.email
+  const url = `${HQ_APP_URL}/jobs/${args.jobId}?tab=conversation`
+  const out: Array<NoteAlert & { sentTo: string | null; detail: string | null }> = []
+
+  for (const t of plan) {
+    let status = 'SKIPPED'
+    let detail: string | null = null
+    if (t.channel === 'SMS' && t.to) {
+      const r = await sendTracked({
+        to: t.to,
+        body: urgentSmsText({ byName, jobName: args.job.name, jobCode: args.job.jobCode, body: args.body, url }),
+        source: 'staff',
+        jobId: args.jobId,
+        sentById: args.actor.id,
+      })
+      status = r.ok ? 'SENT' : 'FAILED'
+      detail = r.ok ? null : r.error ?? r.status
+    } else if (t.channel === 'EMAIL' && t.to) {
+      const subject = `URGENT · ${args.job.name} (${args.job.jobCode}) — ${byName}`
+      const text = `${byName} flagged this as urgent on ${args.job.name} (${args.job.jobCode}):\n\n${args.body}\n\nOpen the conversation: ${url}`
+      const html = `<p><strong>${esc(byName)}</strong> flagged this as urgent on <strong>${esc(args.job.name)}</strong> (${esc(args.job.jobCode)}):</p><blockquote style="border-left:3px solid #7c3aed;margin:12px 0;padding:8px 12px;white-space:pre-wrap">${esc(args.body)}</blockquote><p><a href="${url}">Open the conversation →</a></p>`
+      const r = await sendAgreementEmail({ to: [t.to], subject, html, text, label: 'job-thread-urgent' })
+      status = r.ok ? 'SENT' : 'FAILED'
+      detail = r.ok ? null : r.reason
+    } else {
+      detail = 'no mobile or email on file'
+    }
+    out.push({ userId: t.userId, name: t.name, channel: t.channel, status, sentTo: t.to, detail })
+  }
+
+  if (out.length) {
+    await prisma.jobThreadAlert
+      .createMany({
+        data: out.map((a) => ({ jobId: args.jobId, noteId: args.noteId, userId: a.userId, channel: a.channel, status: a.status, sentTo: a.sentTo, detail: a.detail })),
+      })
+      .catch((err) => {
+        if (!isMissingTable(err)) throw err
+        console.warn('[jobConversation] alerts table missing — urgent sends went out but were not recorded; run "Create the job Conversation tables" again')
+      })
+  }
+  await prisma.auditLog
+    .create({
+      data: {
+        userId: args.actor.id,
+        action: 'job.note_urgent',
+        entityType: 'Job',
+        entityId: args.jobId,
+        newValues: { noteId: args.noteId, alerts: out.map((a) => ({ userId: a.userId, channel: a.channel, status: a.status })) },
+      },
+    })
+    .catch((e) => console.error('[jobConversation] urgent audit failed', e))
+  return out.map(({ sentTo: _s, detail: _d, ...a }) => a)
+}
+
 export async function addNote(args: {
   jobId: string
   actor: Actor
   body: unknown
   anchoredEmailMessageId?: string | null
+  /** Reach every tagged person now (text, else email). Refused with nobody tagged. */
+  urgent?: boolean
 }): Promise<NoteResult> {
   const body = cleanNote(args.body)
   if (!body) return { ok: false, status: 400, error: 'The note is empty.' }
-  const job = await prisma.job.findUnique({ where: { id: args.jobId }, select: { id: true } })
+  const job = await prisma.job.findUnique({
+    where: { id: args.jobId },
+    select: { id: true, jobCode: true, name: true, company: { select: { name: true } } },
+  })
   if (!job) return { ok: false, status: 404, error: 'job not found' }
 
   let anchored: string | null = null
@@ -324,37 +446,63 @@ export async function addNote(args: {
 
   const staff = await staffList()
   const mentions = mentionsIn(body, staff)
+  const urgent = args.urgent === true
+  if (urgent && mentions.filter((id) => id !== args.actor.id).length === 0) {
+    return { ok: false, status: 400, error: 'Tag someone with @Name first — an urgent note has to have someone to reach.' }
+  }
+  let note: { id: string; createdAt: Date }
   try {
-    const note = await prisma.jobThreadNote.create({
+    note = await prisma.jobThreadNote.create({
       data: { jobId: args.jobId, authorUserId: args.actor.id, body, mentions, anchoredEmailMessageId: anchored },
     })
-    await prisma.auditLog
-      .create({
-        data: {
-          userId: args.actor.id,
-          action: 'job.note_added',
-          entityType: 'Job',
-          entityId: args.jobId,
-          newValues: { noteId: note.id, mentions, anchoredEmailMessageId: anchored, length: body.length },
-        },
-      })
-      .catch((e) => console.error('[jobConversation] note audit failed', e))
-    return {
-      ok: true,
-      note: {
-        kind: 'note',
-        id: note.id,
-        at: note.createdAt.toISOString(),
-        authorUserId: args.actor.id,
-        authorName: args.actor.name ?? 'You',
-        body,
-        mentions,
-        anchoredEmailMessageId: anchored,
-      },
-    }
   } catch (err) {
     if (isMissingTable(err)) return { ok: false, status: 503, error: MISSING_TABLE_HINT }
     throw err
+  }
+  await prisma.auditLog
+    .create({
+      data: {
+        userId: args.actor.id,
+        action: 'job.note_added',
+        entityType: 'Job',
+        entityId: args.jobId,
+        newValues: { noteId: note.id, mentions, anchoredEmailMessageId: anchored, length: body.length, urgent },
+      },
+    })
+    .catch((e) => console.error('[jobConversation] note audit failed', e))
+
+  // The note is saved; the alerts are the second half. A failure here is
+  // reported per person, never as a failed note.
+  let alerts: NoteAlert[] = []
+  if (urgent) {
+    try {
+      alerts = await raiseUrgentAlerts({
+        jobId: args.jobId,
+        noteId: note.id,
+        actor: args.actor,
+        body,
+        mentions,
+        job: { jobCode: job.jobCode, name: resolveDisplayJobName({ jobName: job.name, companyName: job.company?.name ?? null }) },
+      })
+    } catch (err) {
+      console.error('[jobConversation] urgent alerts failed', err)
+    }
+  }
+  return {
+    ok: true,
+    note: {
+      kind: 'note',
+      id: note.id,
+      at: note.createdAt.toISOString(),
+      authorUserId: args.actor.id,
+      authorName: args.actor.name ?? 'You',
+      body,
+      mentions,
+      anchoredEmailMessageId: anchored,
+      urgent: alerts.length > 0,
+      alerts,
+      alertSummary: alertSummary(alerts),
+    },
   }
 }
 

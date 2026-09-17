@@ -314,3 +314,174 @@ export function awaitingReply(rows: Array<{ kind: ConversationKind; at: Date }>)
   if (lastClient == null) return false
   return lastOurs == null || lastClient > lastOurs
 }
+
+// ── Urgent notes ─────────────────────────────────────────────────────
+//
+// Wes 2026-09-17: "Is there a way to mark something urgent or send text
+// messages? Something that elevates it from an internal chat, which we
+// don't necessarily need text messages for, to 'this needs to be seen
+// right now' by whomever is tagged." A plain note pings nobody. A note
+// sent with the Urgent toggle reaches every tagged person at once: a text
+// to the mobile on file, an email when there is no mobile, and an honest
+// "unreachable" when there is neither. The author is never on the list.
+
+export type AlertChannel = 'SMS' | 'EMAIL' | 'NONE'
+
+export interface UrgentTarget {
+  userId: string
+  name: string
+  channel: AlertChannel
+  /** The number or address the alert goes to; null for NONE. */
+  to: string | null
+}
+
+/**
+ * Who an urgent note reaches and how. Text beats email — a text is what
+ * "right now" means on a phone in a truck. Unknown ids (a user deactivated
+ * since the mention was typed) are dropped rather than guessed at.
+ */
+export function urgentPlan(args: {
+  mentions: string[]
+  authorUserId: string
+  staff: Array<{ id: string; name: string; email?: string | null; phone?: string | null }>
+}): UrgentTarget[] {
+  const byId = new Map(args.staff.map((s) => [s.id, s]))
+  const out: UrgentTarget[] = []
+  const seen = new Set<string>()
+  for (const id of args.mentions) {
+    if (id === args.authorUserId || seen.has(id)) continue
+    const s = byId.get(id)
+    if (!s) continue
+    seen.add(id)
+    const phone = (s.phone ?? '').trim()
+    const email = (s.email ?? '').trim().toLowerCase()
+    if (phone) out.push({ userId: id, name: s.name, channel: 'SMS', to: phone })
+    else if (email) out.push({ userId: id, name: s.name, channel: 'EMAIL', to: email })
+    else out.push({ userId: id, name: s.name, channel: 'NONE', to: null })
+  }
+  return out
+}
+
+/** How much of the note rides in the text. One SMS segment is 160; the
+ *  frame + link + the STOP line sendTracked appends take the rest. */
+export const URGENT_SMS_EXCERPT = 140
+
+/**
+ * The text an urgent note sends. Who, which job, the first line of the
+ * note, the link straight to that job's Conversation tab. `sendTracked`
+ * adds the STOP line itself.
+ */
+export function urgentSmsText(args: { byName: string; jobName: string; jobCode: string; body: string; url: string }): string {
+  const firstName = args.byName.trim().split(/\s+/)[0] || 'HQ'
+  const line = args.body.replace(/\s+/g, ' ').trim()
+  const excerpt = line.length > URGENT_SMS_EXCERPT ? `${line.slice(0, URGENT_SMS_EXCERPT - 1).trimEnd()}…` : line
+  return `URGENT from ${firstName} on ${args.jobName} (${args.jobCode}): ${excerpt} ${args.url}`
+}
+
+/**
+ * One line for the note card and the sender's toast: "texted Ana · emailed
+ * Julian · Chris unreachable (no mobile or email)". A failed send says so —
+ * the sender must not believe a text went out when Twilio refused it.
+ */
+export function alertSummary(alerts: Array<{ name: string; channel: AlertChannel; status: string }>): string {
+  if (alerts.length === 0) return ''
+  const first = (n: string) => n.trim().split(/\s+/)[0] || n
+  return alerts
+    .map((a) => {
+      const ok = a.status === 'SENT'
+      if (a.channel === 'SMS') return ok ? `texted ${first(a.name)}` : `text to ${first(a.name)} failed`
+      if (a.channel === 'EMAIL') return ok ? `emailed ${first(a.name)}` : `email to ${first(a.name)} failed`
+      return `${first(a.name)} unreachable (no mobile or email)`
+    })
+    .join(' · ')
+}
+
+// ── The Chat page: every job conversation you are IN ──────────────────
+//
+// Wes 2026-09-17: "let's create a chat tab on the left menu … all chats,
+// no matter which job, will show up here" — then, at once: "the chats
+// shouldn't be for everyone. It should be for everyone who is included in
+// that chat. In other words if it was directly @billing, it wouldn't show
+// up in Hugo's and vice versa."
+//
+// So the page is NOT a firehose of every conversation. A job reaches your
+// list only for a REASON, and the reason is shown on the row — if you
+// cannot see why a job is in your chat list, the rule is wrong.
+
+export type ChatReason =
+  /** @you in a note on that job. */
+  | 'mentioned'
+  /** You hold the claim — "<you> is answering". */
+  | 'holding'
+  /** You wrote a note there, or sent/received mail on the thread. */
+  | 'wrote'
+  /** You are the agent on the job. */
+  | 'rep'
+  /** It was handed to your desk (Billing today), or landed in its inbox. */
+  | 'desk'
+
+/** Strongest first — the one the row shows, and the tie-break for equal tiers. */
+export const CHAT_REASON_ORDER: readonly ChatReason[] = ['mentioned', 'holding', 'wrote', 'rep', 'desk']
+
+export function strongestReason(reasons: readonly ChatReason[]): ChatReason | null {
+  for (const r of CHAT_REASON_ORDER) if (reasons.includes(r)) return r
+  return null
+}
+
+/** Why this job is in your list, in your words. */
+export function inclusionLabel(reasons: readonly ChatReason[]): string {
+  switch (strongestReason(reasons)) {
+    case 'mentioned': return 'You were tagged'
+    case 'holding': return 'You are answering'
+    case 'wrote': return 'You wrote here'
+    case 'rep': return 'Your job'
+    case 'desk': return 'Billing desk'
+    default: return ''
+  }
+}
+
+/** Ana's desk: the BILLING role, or one of the billing inboxes. */
+export function isBillingDesk(args: { role?: string | null; email?: string | null }): boolean {
+  if ((args.role || '').toUpperCase() === 'BILLING') return true
+  return BILLING_INBOXES.has(bareAddress(args.email))
+}
+
+export interface ChatTierInput {
+  /** An urgent note tagged you and you have not written since. */
+  urgentForMe: boolean
+  /** A note tagged you and you have not written since. */
+  taggedMe: boolean
+  /** The client's newest message is newer than anything we sent. */
+  awaitingReply: boolean
+}
+
+/**
+ * How loudly a row asks for you. Lower sorts first: someone put your name
+ * on it and said it was urgent, then your name, then a waiting client,
+ * then everything else. Deliberately NOT "newest first" overall — a chat
+ * list sorted purely by time buries the one row that named you.
+ */
+export function chatTier(r: ChatTierInput): number {
+  if (r.urgentForMe) return 0
+  if (r.taggedMe) return 1
+  if (r.awaitingReply) return 2
+  return 3
+}
+
+/** Tier first, then newest activity. Pure; the page renders this order. */
+export function sortChatRows<T extends ChatTierInput & { lastAt: Date }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const t = chatTier(a) - chatTier(b)
+    if (t !== 0) return t
+    return b.lastAt.getTime() - a.lastAt.getTime()
+  })
+}
+
+/** One line of the newest message, for the row. Notes and mail both. */
+export const CHAT_PREVIEW_MAX = 160
+
+export function chatPreview(body: string | null | undefined): string {
+  const line = (body || '').replace(/\s+/g, ' ').trim()
+  if (line.length <= CHAT_PREVIEW_MAX) return line
+  return `${line.slice(0, CHAT_PREVIEW_MAX - 1).trimEnd()}…`
+}

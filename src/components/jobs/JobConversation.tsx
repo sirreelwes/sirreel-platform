@@ -23,9 +23,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Lock, Mail, Send, StickyNote, UserCheck, UserPlus, Users } from 'lucide-react'
+import { AlertTriangle, Lock, Mail, Send, Siren, StickyNote, UserCheck, UserPlus, Users } from 'lucide-react'
 import { splitCcInput } from '@/lib/email/ccList'
-import { internalNoteTells } from '@/lib/email/conversationRules'
+import { internalNoteTells, mentionsIn } from '@/lib/email/conversationRules'
 
 type Lane = 'SALES' | 'BILLING'
 
@@ -57,6 +57,8 @@ interface NoteRow {
   body: string
   mentions: string[]
   anchoredEmailMessageId: string | null
+  urgent: boolean
+  alertSummary: string
 }
 interface Staff { id: string; name: string; email: string; role: string }
 interface Conversation {
@@ -134,18 +136,13 @@ export function JobConversation({
   const [err, setErr] = useState<string | null>(null)
   const [lane, setLane] = useState<'ALL' | Lane>('ALL')
   const [mode, setMode] = useState<'reply' | 'note'>('reply')
+  const [urgent, setUrgent] = useState(false)
   const [to, setTo] = useState('')
   const [cc, setCc] = useState('')
   const [body, setBody] = useState('')
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState<string | null>(null)
   const [claimOpen, setClaimOpen] = useState(false)
-  // Wes 2026-09-17: "things that are sent to the client need to be
-  // confirmed." A reply never leaves on the first Send: it opens this
-  // review (To, Cc, From, the whole message, and any sign it was meant
-  // for the team) and goes out on the second. Notes need no review — they
-  // are never sent.
-  const [reviewing, setReviewing] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
   const boxRef = useRef<HTMLTextAreaElement>(null)
 
@@ -223,23 +220,101 @@ export function JobConversation({
     setCc(merged.join(', '))
   }
 
-  const saveNote = async () => {
+  // Wes 2026-09-17: an URGENT note texts whoever is tagged, right now. The
+  // same matcher the server runs, so the button knows before the POST
+  // whether anyone would be reached — an urgent note with nobody tagged is
+  // refused rather than sent to no one.
+  const taggedOthers = useMemo(() => {
+    if (!data) return []
+    return mentionsIn(body, data.staff).filter((id) => id !== data.me.id)
+  }, [body, data])
+  const urgentBlocked = mode === 'note' && urgent && taggedOthers.length === 0
+
+  // Wes 2026-09-17: "Things that are going out to the client need to be
+  // flagged or confirmed because I'm a little bit afraid that someone's
+  // going to try to write an internal note and accidentally send an email
+  // to the client." A client reply is TWO taps: the first arms it and shows
+  // exactly who receives the email; the second sends. Anything that changes
+  // the message disarms it. Notes never arm — they go nowhere.
+  const [armed, setArmed] = useState(false)
+  useEffect(() => setArmed(false), [mode, body, to, cc])
+
+  // What in the draft says this was meant for the TEAM — an @mention of
+  // someone on staff, a "Hey team" / "Hi all" opener, a colleague
+  // addressed by first name. The arm step above shows who RECEIVES the
+  // email; this says what the message itself looks like, which is the
+  // half of Wes's fear the recipient list cannot answer. Loud, never
+  // blocking: "Hi all" to a production is a real thing to write.
+  const tells = useMemo(
+    () => (data && mode === 'reply' ? internalNoteTells(body, data.staff) : []),
+    [data, mode, body],
+  )
+
+  const send = async (confirmed = false) => {
     if (!data || busy) return
     const text = body.trim()
     if (!text) return
+    if (mode === 'reply' && !confirmed) {
+      if (!to.trim()) { say('Pick who this goes to.'); return }
+      setArmed(true)
+      return
+    }
+    setArmed(false)
+    setBusy(true)
+    try {
+      if (mode === 'note') {
+        const r = await fetch(`/api/jobs/${jobId}/conversation/notes`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ body: text, urgent }),
+        })
+        const j = await r.json()
+        if (!r.ok || !j.ok) throw new Error(j.error || 'Could not save the note.')
+        setBody('')
+        setUrgent(false)
+        const summary: string = j.note?.alertSummary || ''
+        say(urgent ? (summary ? `Urgent — ${summary}.` : 'Urgent note added — nobody could be reached.') : 'Note added — internal only.')
+      } else {
+        if (!to.trim()) throw new Error('Pick who this goes to.')
+        const r = await fetch(`/api/jobs/${jobId}/email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          // The arm step above IS the confirmation, and the route refuses
+          // a send that does not carry it — so no composer, now or later,
+          // can put a message in front of a client unreviewed.
+          body: JSON.stringify({ to: to.trim(), cc, subject: draft?.subject || data.subject, body: text, confirmed: true }),
+        })
+        const j = await r.json()
+        if (!r.ok || !j.ok) throw new Error(j.error || 'Send failed.')
+        setBody('')
+        say(`Sent to ${to.trim()} on the job thread.`)
+      }
+      await load()
+    } catch (e) {
+      say(e instanceof Error ? e.message : 'Something went wrong.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** The armed reply was really a note. File it as one, email nobody. */
+  const saveAsNote = async () => {
+    if (!data || busy) return
+    const text = body.trim()
+    if (!text) return
+    setArmed(false)
     setBusy(true)
     try {
       const r = await fetch(`/api/jobs/${jobId}/conversation/notes`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: text }),
+        body: JSON.stringify({ body: text, urgent: false }),
       })
       const j = await r.json()
       if (!r.ok || !j.ok) throw new Error(j.error || 'Could not save the note.')
       setBody('')
-      setReviewing(false)
       setMode('note')
-      say('Note added — internal only.')
+      say('Kept as an internal note — nothing was emailed.')
       await load()
     } catch (e) {
       say(e instanceof Error ? e.message : 'Something went wrong.')
@@ -247,55 +322,6 @@ export function JobConversation({
       setBusy(false)
     }
   }
-
-  /** First Send on a reply: open the review. Nothing is sent here. */
-  const openReview = () => {
-    if (!data || busy) return
-    if (!body.trim()) return
-    if (!to.trim()) {
-      say('Pick who this goes to.')
-      return
-    }
-    setReviewing(true)
-  }
-
-  /** Second Send, from inside the review: the one call that emails the client. */
-  const sendReviewed = async () => {
-    if (!data || busy || !reviewing) return
-    const text = body.trim()
-    if (!text || !to.trim()) return
-    setBusy(true)
-    try {
-      const r = await fetch(`/api/jobs/${jobId}/email`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to: to.trim(), cc, subject: draft?.subject || data.subject, body: text, confirmed: true }),
-      })
-      const j = await r.json()
-      if (!r.ok || !j.ok) throw new Error(j.error || 'Send failed.')
-      setBody('')
-      setReviewing(false)
-      say(`Sent to ${to.trim()} on the job thread.`)
-      await load()
-    } catch (e) {
-      say(e instanceof Error ? e.message : 'Something went wrong.')
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  /** The composer's button / ⌘↵: a note saves, a reply goes to review. */
-  const send = async () => {
-    if (mode === 'note') await saveNote()
-    else openReview()
-  }
-
-  // What in the draft says "this was for the team" — shown in the review.
-  const tells = useMemo(
-    () => (data && mode === 'reply' ? internalNoteTells(body, data.staff) : []),
-    [data, mode, body],
-  )
-  const ccList = useMemo(() => splitCcInput(cc).valid.filter((a) => a !== to.trim().toLowerCase()), [cc, to])
 
   const claim = async (action: 'claim' | 'release' | 'hand', laneArg?: Lane) => {
     setClaimOpen(false)
@@ -437,16 +463,27 @@ export function JobConversation({
         {items.map((it) => {
           if (it.kind === 'note') {
             return (
-              <div key={it.id} className="rounded-lg border border-dashed border-violet-300 bg-violet-50 text-violet-900 px-3 py-2">
-                <div className="flex items-center gap-2 text-[11px] text-violet-700">
-                  <StickyNote size={11} aria-hidden />
-                  <span className="font-semibold">Internal · never sent</span>
+              <div
+                key={it.id}
+                className={`rounded-lg border border-dashed px-3 py-2 ${
+                  it.urgent ? 'border-red-400 bg-red-50 text-red-950' : 'border-violet-300 bg-violet-50 text-violet-900'
+                }`}
+              >
+                <div className={`flex items-center gap-2 text-[11px] ${it.urgent ? 'text-red-800' : 'text-violet-700'}`}>
+                  {it.urgent ? <Siren size={11} aria-hidden /> : <StickyNote size={11} aria-hidden />}
+                  {it.urgent && (
+                    <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded-full bg-red-600 text-white">Urgent</span>
+                  )}
+                  <span className="font-semibold">Internal · never sent to the client</span>
                   <span>· {it.authorName}</span>
                   <span className="ml-auto">{fmtWhen(it.at)}</span>
                 </div>
                 <div className="mt-1">
                   <NoteBody body={it.body} />
                 </div>
+                {it.urgent && it.alertSummary && (
+                  <div className="mt-1 text-[10.5px] text-red-800/80">{it.alertSummary}</div>
+                )}
               </div>
             )
           }
@@ -500,7 +537,7 @@ export function JobConversation({
             onClick={() => setMode('reply')}
             className={`inline-flex items-center gap-1 text-[12px] font-semibold px-2.5 py-1.5 border-b-2 -mb-px ${mode === 'reply' ? 'border-amber-600 text-amber-700' : 'border-transparent text-lt-fg3 hover:text-lt-fg'}`}
           >
-            <Mail size={12} aria-hidden /> Reply to client
+            <Mail size={12} aria-hidden /> Email the client
           </button>
           <button
             type="button"
@@ -590,8 +627,32 @@ export function JobConversation({
             </div>
           </div>
         ) : (
-          <div className="text-[11px] text-violet-800 bg-violet-50 border border-violet-200 rounded-md px-2 py-1">
-            Stays here. The client never sees it. Type <span className="font-semibold">@Name</span> to mention someone on the team.
+          <div className="space-y-1.5">
+            <div className="text-[11px] text-violet-800 bg-violet-50 border border-violet-200 rounded-md px-2 py-1">
+              Stays here. The client never sees it. Type <span className="font-semibold">@Name</span> to mention someone on the team.
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setUrgent((u) => !u)}
+                aria-pressed={urgent}
+                className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-1 text-[11.5px] font-semibold ${
+                  urgent
+                    ? 'border-red-600 bg-red-600 text-white hover:bg-red-500'
+                    : 'border-lt-hairline bg-lt-card text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner'
+                }`}
+                title="Text everyone tagged in this note right now (email if they have no mobile on file)."
+              >
+                <Siren size={12} aria-hidden /> {urgent ? 'Urgent — will text whoever is tagged' : 'Mark urgent'}
+              </button>
+              {urgent && (
+                <span className={`text-[10.5px] ${urgentBlocked ? 'text-red-700 font-semibold' : 'text-lt-fg3'}`}>
+                  {urgentBlocked
+                    ? 'Tag someone first — @Name — or nobody gets it.'
+                    : `Reaches ${taggedOthers.length} ${taggedOthers.length === 1 ? 'person' : 'people'} now, quiet hours or not.`}
+                </span>
+              )}
+            </div>
           </div>
         )}
 
@@ -605,122 +666,107 @@ export function JobConversation({
             mode === 'note' ? 'border-violet-300 focus:ring-violet-300' : 'border-lt-hairline focus:ring-amber-500/40'
           }`}
           onKeyDown={(e) => {
-            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void send()
+            // ⌘↵ adds a note outright; on a client reply it ARMS (a second
+            // ⌘↵ while armed sends) — the same two taps as the buttons.
+            if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void send(mode === 'reply' && armed)
           }}
         />
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] text-lt-fg3 truncate">{flash ?? (mode === 'reply' && data ? `Sends as ${data.me.name || data.me.email} · you review it first` : '⌘↵ to add')}</span>
-          <button
-            type="button"
-            onClick={() => void send()}
-            disabled={busy || !body.trim() || (mode === 'reply' && !to.trim())}
-            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-semibold rounded-lg text-white disabled:opacity-40 disabled:cursor-not-allowed ${
-              mode === 'note' ? 'bg-violet-600 hover:bg-violet-500' : 'bg-amber-600 hover:bg-amber-500'
-            }`}
-          >
-            {mode === 'note' ? <StickyNote size={13} aria-hidden /> : <Send size={13} aria-hidden />}
-            {busy ? 'Working…' : mode === 'note' ? 'Add note' : 'Review & send'}
-          </button>
-        </div>
-        {reviewing && data && (
-          <div
-            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 px-3 py-6"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="conversation-review-title"
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') setReviewing(false)
-            }}
-          >
-            <div className="w-full max-w-lg max-h-full flex flex-col bg-lt-card border border-lt-hairline rounded-2xl shadow-xl overflow-hidden">
-              <div className="px-4 pt-4 pb-3 border-b border-lt-hairline">
-                <h3 id="conversation-review-title" className="text-[15px] font-semibold text-lt-fg flex items-center gap-2">
-                  <Mail size={15} aria-hidden className="text-amber-700" /> Send this to the client?
-                </h3>
-                <p className="mt-0.5 text-[12px] text-lt-fg2">
-                  It goes out by email, from you, on the job thread. Nothing has been sent yet.
-                </p>
-              </div>
-              <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3 text-[12px]">
-                {tells.length > 0 && (
-                  <div className="rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg text-chip-warn-fg px-3 py-2">
-                    <div className="flex items-center gap-1.5 font-semibold">
-                      <AlertTriangle size={13} aria-hidden /> This reads like a note for the team
-                    </div>
-                    <ul className="mt-1 list-disc pl-4 space-y-0.5">
-                      {tells.map((t) => (
-                        <li key={t}>{t}</li>
-                      ))}
-                    </ul>
-                    <button
-                      type="button"
-                      onClick={() => void saveNote()}
-                      disabled={busy}
-                      className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-1 text-[12px] font-semibold disabled:opacity-40"
-                    >
-                      <StickyNote size={12} aria-hidden /> Save as an internal note instead
-                    </button>
-                  </div>
-                )}
-                <dl className="grid grid-cols-[3.5rem_1fr] gap-x-2 gap-y-1">
-                  <dt className="text-lt-fg3">From</dt>
-                  <dd className="text-lt-fg break-words">{data.me.name || data.me.email}</dd>
-                  <dt className="text-lt-fg3">To</dt>
-                  <dd className="text-lt-fg font-semibold break-words">
-                    {draft?.contacts.find((c) => c.email === to.trim())?.name
-                      ? `${draft.contacts.find((c) => c.email === to.trim())!.name} · ${to.trim()}`
-                      : to.trim()}
-                  </dd>
-                  <dt className="text-lt-fg3">Cc</dt>
-                  <dd className="text-lt-fg break-words">
-                    {ccList.length ? ccList.join(', ') : <span className="text-lt-fg3">nobody</span>}
-                    <span className="text-lt-fg3"> · filed to {data.job.jobCode}</span>
-                  </dd>
-                  <dt className="text-lt-fg3">Subject</dt>
-                  <dd className="text-lt-fg break-words">{draft?.subject || data.subject}</dd>
-                </dl>
-                <div className="rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-[13px] text-lt-fg whitespace-pre-wrap break-words">
-                  {body.trim()}
+        {mode === 'reply' && armed && (
+          <div className="rounded-lg border border-amber-600 bg-amber-50 px-3 py-2 text-[12px] text-lt-fg">
+            <div className="font-semibold text-amber-900 flex items-center gap-1.5">
+              <Mail size={12} aria-hidden /> This is an email to the client. Send it?
+            </div>
+            <div className="mt-1 text-lt-fg2">
+              To <span className="font-medium text-lt-fg">{to.trim()}</span>
+              {splitCcInput(cc).valid.length > 0 && (
+                <>
+                  {' '}· Cc <span className="font-medium text-lt-fg">{splitCcInput(cc).valid.join(', ')}</span>
+                </>
+              )}
+              {' '}· from {data?.me.name || data?.me.email}
+            </div>
+            {tells.length > 0 && (
+              <div className="mt-2 rounded-md border border-chip-warn-fg/30 bg-chip-warn-bg px-2.5 py-2 text-chip-warn-fg">
+                <div className="flex items-center gap-1.5 font-semibold">
+                  <AlertTriangle size={12} aria-hidden /> This reads like a note for the team
                 </div>
-              </div>
-              <div className="px-4 py-3 border-t border-lt-hairline flex items-center justify-between gap-2">
-                {/* Focus lands on Back, on purpose: a second ⌘↵ or a stray
-                    Enter after the review opens goes back to the draft,
-                    never out to the client. Sending is a click on Send. */}
+                <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                  {tells.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
                 <button
                   type="button"
-                  onClick={() => setReviewing(false)}
+                  onClick={() => void saveAsNote()}
                   disabled={busy}
-                  autoFocus
-                  className="rounded-lg border border-lt-hairline px-3 py-1.5 text-[13px] font-semibold text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner"
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-1 text-[12px] font-semibold disabled:opacity-40"
                 >
-                  Back to editing
-                </button>
-                <button
-                  type="button"
-                  onClick={() => void sendReviewed()}
-                  disabled={busy}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 text-[13px] font-semibold disabled:opacity-40"
-                >
-                  <Send size={13} aria-hidden /> {busy ? 'Sending…' : `Send to ${to.trim()}`}
+                  <StickyNote size={12} aria-hidden /> Keep it internal instead
                 </button>
               </div>
+            )}
+            <div className="mt-2 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => void send(true)}
+                disabled={busy}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-semibold rounded-lg text-white bg-amber-600 hover:bg-amber-500 disabled:opacity-40"
+              >
+                <Send size={13} aria-hidden /> {busy ? 'Sending…' : 'Yes, send to the client'}
+              </button>
+              <button
+                type="button"
+                onClick={() => setArmed(false)}
+                className="px-3 py-1.5 text-[13px] font-medium rounded-lg border border-lt-hairline bg-lt-card text-lt-fg2 hover:text-lt-fg"
+              >
+                Not yet
+              </button>
             </div>
           </div>
         )}
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[11px] text-lt-fg3 truncate">{flash ?? (mode === 'reply' && data ? `Emails the client as ${data.me.name || data.me.email} — you confirm before it goes` : '⌘↵ to add')}</span>
+          <button
+            type="button"
+            onClick={() => void send()}
+            disabled={busy || !body.trim() || (mode === 'reply' && (!to.trim() || armed)) || urgentBlocked}
+            className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[13px] font-semibold rounded-lg text-white disabled:opacity-40 disabled:cursor-not-allowed ${
+              mode === 'note' ? (urgent ? 'bg-red-600 hover:bg-red-500' : 'bg-violet-600 hover:bg-violet-500') : 'bg-amber-600 hover:bg-amber-500'
+            }`}
+          >
+            {mode === 'note' ? (urgent ? <Siren size={13} aria-hidden /> : <StickyNote size={13} aria-hidden />) : <Mail size={13} aria-hidden />}
+            {busy ? 'Working…' : mode === 'note' ? (urgent ? 'Send urgent note' : 'Add note') : 'Email client…'}
+          </button>
+        </div>
         {data && data.staff.length > 0 && mode === 'note' && (
           <div className="flex items-center gap-1 text-[10.5px] text-lt-fg3 flex-wrap">
             <Users size={10} aria-hidden />
-            {data.staff.slice(0, 8).map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => setBody((b) => `${b}${b && !b.endsWith(' ') ? ' ' : ''}@${s.name.split(' ')[0]} `)}
-                className="px-1.5 py-0.5 rounded bg-lt-inner hover:text-lt-fg"
-              >
-                @{s.name.split(' ')[0]}
-              </button>
-            ))}
+            {/* Everyone on the team except yourself (2026-09-17: a cap of 8
+                hid Jose and Ana behind the end of the list). A chip already
+                in the note is shown lit and tapping it again adds nothing. */}
+            {data.staff
+              .filter((s) => s.id !== data.me.id)
+              .map((s) => {
+                const tagged = taggedOthers.includes(s.id)
+                return (
+                  <button
+                    key={s.id}
+                    type="button"
+                    aria-pressed={tagged}
+                    onClick={() => {
+                      if (tagged) return
+                      setBody((b) => `${b}${b && !b.endsWith(' ') ? ' ' : ''}@${s.name.split(' ')[0]} `)
+                    }}
+                    className={`px-1.5 py-0.5 rounded ${
+                      tagged
+                        ? urgent ? 'bg-red-600 text-white' : 'bg-violet-600 text-white'
+                        : 'bg-lt-inner hover:text-lt-fg'
+                    }`}
+                  >
+                    @{s.name.split(' ')[0]}
+                  </button>
+                )
+              })}
           </div>
         )}
       </footer>

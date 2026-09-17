@@ -113,11 +113,11 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
   {
     id: 'job-conversation-tables',
     title: 'Create the job Conversation tables',
-    summary: 'Adds the two tables the job Conversation needs for internal notes and the "who is answering" claim.',
+    summary: 'Adds the three tables the job Conversation needs: internal notes, the "who is answering" claim, and the urgent-note alerts.',
     detail:
-      'Phase 2 of one-thread-per-job (shipped 2026-09-17) reads and writes two new tables: sr_job_threads (one row per job — who is answering, or which desk it was handed to) and sr_job_thread_notes (internal notes in the conversation, never sent). Until they exist the panel still shows the emails, but posting a note or pressing Hand to Billing answers "the Conversation tables are not in the database yet". This runs the four CREATE … IF NOT EXISTS statements and then lists each table’s columns so you can see it took. No existing table is touched; running it twice changes nothing. Dry run only reads the catalog and says which tables are missing.',
+      'Phase 2 of one-thread-per-job (shipped 2026-09-17) reads and writes three new tables: sr_job_threads (one row per job — who is answering, or which desk it was handed to), sr_job_thread_notes (internal notes in the conversation, never sent) and sr_job_thread_alerts (who an URGENT note texted or emailed, added later the same day — re-run this task once to add it). Until they exist the panel still shows the emails, but posting a note or pressing Hand to Billing answers "the Conversation tables are not in the database yet", and an urgent note cannot record who it reached. This runs the CREATE … IF NOT EXISTS statements and then lists each table’s columns so you can see it took. No existing table is touched; running it twice changes nothing. Dry run only reads the catalog and says which tables are missing.',
     category: 'schema',
-    writes: 'sr_job_threads, sr_job_thread_notes (created if absent, with their two indexes) · sr_audit_logs',
+    writes: 'sr_job_threads, sr_job_thread_notes, sr_job_thread_alerts (each created only if absent, with its indexes) · sr_audit_logs',
     cliEquivalent: 'npx tsx scripts/add-job-thread-tables.ts',
     ddl: JOB_THREAD_TABLES_DDL,
   },

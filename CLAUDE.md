@@ -1443,25 +1443,50 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `job-thread-handoff`). Audited `job.thread_claimed|handed|released`.
 - **Notes:** `POST …/conversation/notes`, `cleanNote` (4000 chars),
   `@First` / `@First Last` mentions matched against HQ users into
-  `mentions` (ids). Nothing notifies a mentioned person yet — the chip row
-  under the box is the nudge. Audited `job.note_added`. Do NOT use the
-  legacy `job_messages` table for this.
-- **A reply to the client is REVIEWED before it goes (Wes 2026-09-17:
-  "Things that are sent to the client need to be confirmed. I'm a little
-  bit afraid that someone's going to write an internal note and
-  accidentally send it to the client").** The composer's "Review & send"
-  (and ⌘↵ on the reply tab) opens a review dialog — From, To, Cc, subject,
-  the whole message — and only the Send inside it emails. Focus lands on
-  "Back to editing", so a second ⌘↵ or a stray Enter goes back, never out.
+  `mentions` (ids). A plain note notifies nobody — the chip row under the
+  box is the nudge. Audited `job.note_added`. Do NOT use the legacy
+  `job_messages` table for this.
+- **URGENT notes (Wes 2026-09-17: "something that elevates it from an
+  internal chat … to 'this needs to be seen right now' by whomever is
+  tagged").** The "Mark urgent" toggle in note mode → `urgent: true` on the
+  POST → `raiseUrgentAlerts`: every tagged person (never the author) gets a
+  TEXT to `User.phone` (the /admin/assistant mobile) via `sendTracked`
+  with `source: 'staff'` — exempt from quiet hours on purpose, a person
+  pressed it — else an EMAIL (label `job-thread-urgent`), else recorded as
+  unreachable. Pure half in conversationRules: `urgentPlan` (who, how),
+  `urgentSmsText` (140-char excerpt + deep link), `alertSummary` ("texted
+  Ana · emailed Julian · Chris unreachable"). **Refused with nobody tagged**
+  (400) — the panel disables the button and says "Tag someone first".
+  **A note is urgent when it has rows in `sr_job_thread_alerts`** (one per
+  recipient: channel SMS/EMAIL/NONE, status SENT/FAILED/SKIPPED, sentTo,
+  detail) — no column on the note, so the table went in by CREATE TABLE
+  alone: `JOB_THREAD_TABLES_DDL` now carries THREE tables and Wes re-runs
+  "Create the job Conversation tables" once (dry run shows one missing).
+  Until then the texts still go out and the audit row `job.note_urgent`
+  records them; only the red chip on the card is lost. The card is red
+  with an URGENT pill and the summary line; the sender's toast reads the
+  same summary, so a failed text is never mistaken for a sent one.
+- **A reply to the client is CONFIRMED before it goes (Wes 2026-09-17:
+  "Things that are going out to the client need to be flagged or confirmed
+  because I'm a little bit afraid that someone's going to try to write an
+  internal note and accidentally send an email to the client").** Two taps:
+  the first ARMS the reply and shows exactly who receives it (To, Cc,
+  from); the second sends. Any edit to the message, the recipients or the
+  mode disarms it, and ⌘↵ follows the same two taps. Notes never arm.
+- **The armed strip also reads the WORDS, not just the recipients.**
   `internalNoteTells()` in conversationRules.ts (pure, in
-  `test:job-conversation`) reads the draft for signs it was meant for the
-  team — an @mention of someone on staff, a "Hey team" / "Hi all" opener,
-  a colleague addressed by first name at a line start — and the review
-  says so and offers "Save as an internal note instead". Loud, never
-  blocking. **Server-side, `POST /api/jobs/[id]/email` refuses without
-  `confirmed: true`** (400), so a composer that skips the review cannot
-  send; `JobEmailButton`'s modal is its own review and passes it. Notes
-  need no review — they are never sent.
+  `test:job-conversation`) looks for the marks of a team note — an
+  @mention of someone on staff, a "Hey team" / "Hi all" opener, a
+  colleague addressed by first name at a line start — and names each one
+  with a **"Keep it internal instead"** button that files the draft as a
+  note and emails nobody. Loud, never blocking: "Hi all" to a production
+  is a real thing to write. The recipient list answers "who gets this";
+  this answers "what IS this", which is the half Wes was afraid of.
+- **Server-side, `POST /api/jobs/[id]/email` refuses without
+  `confirmed: true`** (400). The arm step is what supplies it, so a
+  composer that skips the confirmation — a future one, or a stale tab —
+  cannot put a message in front of a client. `JobEmailButton`'s modal is
+  its own review and passes it. The Chat page does not send client mail.
 - **The composer is the Phase 1 send** (`POST /api/jobs/[id]/email`), now
   **From = the author** (`Jose Pacheco <jose@sirreel.com>` through Resend's
   verified domain — the cadence runner has sent as the agent that way since
@@ -1473,7 +1498,14 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   the job's contacts not already in To/Cc (pick one, it re-lists the rest)
   and "Cc everyone on the job (N)" adds them all; the box stays free-text
   for an outside address. Both feed the same comma list the route parses
-  (`MAX_JOB_EMAIL_CC` 15).
+  (`MAX_JOB_EMAIL_CC` 15). **A client email is TWO taps (Wes 2026-09-17:
+  "I'm a little bit afraid that someone's going to try to write an
+  internal note and accidentally send an email to the client"):** "Email
+  client…" ARMS it and shows To / Cc / from in an amber strip; "Yes, send
+  to the client" sends. Editing anything disarms. ⌘↵ follows the same two
+  steps; a note never arms. The @chip row shows EVERY active teammate but
+  yourself (the old `slice(0, 8)` hid Jose and Ana) and a chip already in
+  the note is lit and inert.
 - **Placement** (`/jobs/[id]/page.tsx`): the page's outer wrapper is a
   2-column grid at `xl` (1280px+) — the job's column plus a 400px
   `<aside>` holding the panel, sticky, full height. Below `xl` a
@@ -1493,6 +1525,45 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   job newer than our newest send). The rail shows a "Client replied" chip.
   The order page shows a link to the job's conversation and no composer —
   one place to write.
+- **The Chat page — /chat, every conversation YOU are in (2026-09-17 —
+  Wes: "a chat tab on the left menu … all chats, no matter which job, will
+  show up here … another way to communicate if you're not already in the
+  job", then at once "the chats shouldn't be for everyone. It should be
+  for everyone who is included in that chat. In other words if it was
+  directly @billing, it wouldn't show up in Hugo's and vice versa").**
+  - **INCLUSION, not a listing.** `chatInboxFor(actor)` in
+    `src/lib/email/chatInbox.ts` collects jobs by REASON and the row NAMES
+    the reason: `mentioned` (@you in a note) · `holding` (you hold the
+    claim) · `wrote` (your note, or mail from/to you on the thread) ·
+    `rep` (you are `Job.agentId`) · `desk` (handed to Billing, or it
+    landed in billing@/payments@/ana@, and you ARE the billing desk —
+    `isBillingDesk`, role BILLING or one of those inboxes). **Seniority is
+    not a reason**: an ADMIN sees what they are in, nothing more. If you
+    cannot see why a job is in your list, the rule is wrong.
+  - Scoped SERVER-side off the session (`GET /api/chat` passes no user id
+    and has no "all" mode). Bounded: 45-day window, ≤60 jobs, capped
+    sub-queries. Cc-only participation is NOT a reason — `EmailMessage`
+    has no cc column (Cc lives in `routingHeaders` JSON), and jobs@ is on
+    every send anyway.
+  - **Order is attention, not time** (`chatTier` / `sortChatRows`, pure):
+    urgent-for-you → tagged-you → client waiting → the rest, newest first
+    inside each. "Still on you" is DERIVED — tagged and you have not
+    written since; there is no read/unread table and this did not add one.
+  - **Replies here are INTERNAL NOTES only** (Wes asked which way; the
+    split is by risk). A note's context is the note, so it answers inline
+    — and it POSTs to the job's own notes route, so it is ONE record that
+    "shows up simultaneously in the chat page and the job internal notes",
+    never a copy. Urgent + @chips work the same as on the job. **A client
+    email needs the job**: that message quotes dates and money that live
+    on the job page, and the two-tap confirm lives there too — one
+    composer, so the guard rails cannot drift. Every row carries "Open the
+    job to email the client".
+  - **Company + job on every row AND above the reply box** (Wes: "it needs
+    to be very clear what company and job it is referring to") — the
+    header scrolls away on a phone, so the box repeats it.
+  - Nav: `CHAT_ITEM` in permissions.ts is in ALL FOUR branches (sales,
+    billing, yard, the fixed IA) — the yard gets tagged as often as sales.
+    A shared nav row is not a shared view; the page scopes it.
 - NOT built: an attachment picker in the composer; a mention notification;
   the role gate on the Billing lane (Wes's recommendation was to leave it
   visible); the New inbound column link; Phase 3 (Gmail-native sending).

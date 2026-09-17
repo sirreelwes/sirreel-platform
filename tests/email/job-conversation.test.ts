@@ -9,7 +9,18 @@
  */
 
 import {
+  alertSummary,
   applyClaim,
+  chatPreview,
+  chatTier,
+  CHAT_PREVIEW_MAX,
+  inclusionLabel,
+  isBillingDesk,
+  sortChatRows,
+  strongestReason,
+  urgentPlan,
+  urgentSmsText,
+  URGENT_SMS_EXCERPT,
   awaitingReply,
   bareAddress,
   claimLabel,
@@ -113,6 +124,65 @@ const n1 = { id: 'n1', at: new Date('2026-09-12T10:00:00Z') }
 const e2 = { id: 'e2', at: new Date('2026-09-12T11:00:00Z') }
 const n0 = { id: 'n0', at: new Date('2026-09-12T09:00:00Z') }
 check('merged oldest first, email before note on a tie', eq(mergeTimeline([e2, e1], [n1, n0]).map((r) => r.id), ['n0', 'e1', 'n1', 'e2']))
+
+console.log('\n— urgent notes —')
+const team = [
+  { id: 'u-jose', name: 'Jose Pacheco', email: 'jose@sirreel.com', phone: '(818) 555-0101' },
+  { id: 'u-ana', name: 'Ana', email: 'ana@sirreel.com', phone: null },
+  { id: 'u-chris', name: 'Chris Valencia', email: '', phone: '' },
+]
+const plan = urgentPlan({ mentions: ['u-jose', 'u-ana', 'u-chris', 'u-jose'], authorUserId: 'u-wes', staff: team })
+check('text beats email, email beats nothing', eq(plan.map((p) => [p.userId, p.channel, p.to]), [
+  ['u-jose', 'SMS', '(818) 555-0101'],
+  ['u-ana', 'EMAIL', 'ana@sirreel.com'],
+  ['u-chris', 'NONE', null],
+]))
+check('the author is never alerted', urgentPlan({ mentions: ['u-jose'], authorUserId: 'u-jose', staff: team }).length === 0)
+check('an unknown id is dropped, not guessed', urgentPlan({ mentions: ['u-gone'], authorUserId: 'u-wes', staff: team }).length === 0)
+const sms = urgentSmsText({ byName: 'Jose Pacheco', jobName: 'Cleveland Golf', jobCode: 'SR-JOB-0369', body: '@Ana client needs the final invoice before 3pm', url: 'https://hq.sirreel.com/jobs/abc?tab=conversation' })
+check('text names who, the job, the note and the link', sms === 'URGENT from Jose on Cleveland Golf (SR-JOB-0369): @Ana client needs the final invoice before 3pm https://hq.sirreel.com/jobs/abc?tab=conversation', sms)
+const long = urgentSmsText({ byName: 'Ana', jobName: 'J', jobCode: 'SR-JOB-1', body: 'x'.repeat(500), url: 'https://h.q/j' })
+check('a long note is cut to the excerpt with an ellipsis', long.includes('…') && long.length < URGENT_SMS_EXCERPT + 60, long.length)
+check('summary reads who was reached and how', alertSummary([
+  { name: 'Jose Pacheco', channel: 'SMS', status: 'SENT' },
+  { name: 'Ana', channel: 'EMAIL', status: 'SENT' },
+  { name: 'Chris Valencia', channel: 'NONE', status: 'SKIPPED' },
+  { name: 'Julian', channel: 'SMS', status: 'FAILED' },
+]) === 'texted Jose · emailed Ana · Chris unreachable (no mobile or email) · text to Julian failed')
+check('no alerts → empty summary', alertSummary([]) === '')
+
+console.log('\n— the Chat page: who sees what —')
+// Wes 2026-09-17: "the chats shouldn't be for everyone. It should be for
+// everyone who is included in that chat … if it was directly @billing, it
+// wouldn't show up in Hugo's and vice versa."
+check('the strongest reason wins the row label', strongestReason(['rep', 'mentioned', 'wrote']) === 'mentioned')
+check('no reason = not in your list', strongestReason([]) === null)
+check('each reason says itself', inclusionLabel(['mentioned']) === 'You were tagged'
+  && inclusionLabel(['holding']) === 'You are answering'
+  && inclusionLabel(['wrote']) === 'You wrote here'
+  && inclusionLabel(['rep']) === 'Your job'
+  && inclusionLabel(['desk']) === 'Billing desk')
+check('the billing desk is the role or the inbox', isBillingDesk({ role: 'BILLING' }) && isBillingDesk({ email: 'ana@sirreel.com' }) && isBillingDesk({ email: 'billing@sirreel.com' }))
+check('Hugo is not the billing desk', !isBillingDesk({ role: 'MANAGER', email: 'hugo@sirreel.com' }))
+check('an admin is not the billing desk either — inclusion is not seniority', !isBillingDesk({ role: 'ADMIN', email: 'wes@sirreel.com' }))
+
+check('urgent-for-you outranks a tag, a tag outranks a waiting client', 
+  chatTier({ urgentForMe: true, taggedMe: true, awaitingReply: true }) === 0
+  && chatTier({ urgentForMe: false, taggedMe: true, awaitingReply: true }) === 1
+  && chatTier({ urgentForMe: false, taggedMe: false, awaitingReply: true }) === 2
+  && chatTier({ urgentForMe: false, taggedMe: false, awaitingReply: false }) === 3)
+const quiet = (id: string, at: string) => ({ id, urgentForMe: false, taggedMe: false, awaitingReply: false, lastAt: new Date(at) })
+check('newest first inside a tier, but a tag beats a newer quiet row', eq(
+  sortChatRows([
+    quiet('quiet-old', '2026-09-10T10:00Z'),
+    quiet('quiet-new', '2026-09-17T10:00Z'),
+    { id: 'tagged', urgentForMe: false, taggedMe: true, awaitingReply: false, lastAt: new Date('2026-09-01T10:00Z') },
+  ]).map((r) => r.id),
+  ['tagged', 'quiet-new', 'quiet-old'],
+))
+check('preview collapses whitespace', chatPreview('  a\n\n  b  ') === 'a b')
+check('a long preview is cut with an ellipsis', (chatPreview('x'.repeat(400))).length === CHAT_PREVIEW_MAX && chatPreview('x'.repeat(400)).endsWith('…'))
+check('no body = empty preview, never "undefined"', chatPreview(null) === '' && chatPreview(undefined) === '')
 
 console.log('\n— waiting on us —')
 const at = (s: string) => new Date(s)
