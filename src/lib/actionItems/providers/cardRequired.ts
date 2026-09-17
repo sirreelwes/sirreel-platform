@@ -25,6 +25,7 @@
 import type { UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import type { ActionItem, ActionItemProvider, ProviderContext } from '@/lib/actionItems/types'
+import { PICKUP_WINDOW_DAYS } from '@/lib/actionItems/rules'
 
 const OWNER: UserRole[] = ['ADMIN', 'MANAGER', 'AGENT']
 const URGENT_DAYS = 3
@@ -58,6 +59,8 @@ export const cardRequiredProvider: ActionItemProvider = {
       WHERE b.status NOT IN ('CANCELLED', 'ARCHIVED')
         AND b.archived_at IS NULL
         AND b.start_date >= CURRENT_DATE
+        -- Inside the pickup window only (rules.ts, Wes 2026-09-17).
+        AND b.start_date <= CURRENT_DATE + ${PICKUP_WINDOW_DAYS}::int
         AND (j.status IS NULL OR j.status::text <> 'LOST')
         -- No portal card on ANY of the job's paperwork rows …
         AND NOT EXISTS (
@@ -98,6 +101,7 @@ export const cardRequiredProvider: ActionItemProvider = {
         priority: days <= URGENT_DAYS ? 'high' : 'medium',
         href: r.jobId ? `/jobs/${r.jobId}` : '/jobs',
         occurredAt: r.sentAt,
+        dueAt: r.startDate,
         source: 'card-required',
         dismissal: { kind: 'sideRow' },
       })

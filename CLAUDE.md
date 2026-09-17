@@ -458,6 +458,55 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   must STAY dead — it updateMany's every rank-2 REQUESTED item to rank 1,
   which would silently promote every LiteHold.
 
+## Action items are labelled by the PICKUP, not the record (2026-09-17 — Wes)
+- Wes, with 41 COI rows and 71 replacement-cost rows on his phone: "a ton
+  of action items that are persistent on the screen even if their time of
+  action has passed … after [a day or two] we need to have them drop off."
+  Nothing on the list was old — every provider re-derives its rows on each
+  load, so a row exists only while its condition is still true — but the
+  row's timestamp was `occurredAt`, the date the RECORD was created (a
+  booking made yesterday for a pickup six weeks out read "17h ago").
+- **Age-based expiry was considered and rejected**: dropping a live "COI
+  missing" at 48h hides the row exactly when the pickup it warns about gets
+  close. **The window is measured from the PICKUP.** `ActionItem.dueAt` is
+  the pickup; the panel labels the row "pickup in 4d" / "pickup today" and
+  the group header "next pickup …"; the registry sorts soonest pickup first
+  inside a priority. Items with no pickup (a quiet quote, an untouched
+  inquiry) keep the "N ago" label. Rules in `src/lib/actionItems/rules.ts`
+  (pure, `npm run test:action-window`).
+- **`PICKUP_WINDOW_DAYS = 14`**: COI and card-required show only for
+  bookings starting today through +14 days (the SQL says
+  `start_date <= CURRENT_DATE + 14`). A COI for a pickup six weeks out is
+  not this week's chase and was the bulk of the 41. The day-of-pickup row
+  still shows (2026-08-31 ruling); the day after, it is gone.
+  Kit-incomplete keeps its 7-day lookahead and now carries `dueAt`.
+- **COI is ONE ROW PER JOB** (`groupCoiByJob`): the certificate lives on
+  `sr_coi_checks.job_id`, so a job with two bookings was the same ask twice
+  (Digital Paradigm, in the screenshot). The item is keyed on the LEAD
+  booking — the soonest pickup, ties by id — so a `coi:<bookingId>`
+  dismissal recorded before the merge still matches for the usual
+  one-booking job. A `coi_received` on ANY of the job's paperwork rows now
+  settles the whole job (it used to settle only its own booking).
+- **Replacement cost is three shapes, not 71 rows**
+  (`splitReplacementGroups`): a VEHICLE row going out inside 7 days is its
+  own HIGH item (same `replacement-cost:item:<id>` key as before); every
+  other catalog row folds into ONE item `replacement-cost:backlog`
+  (low, medium while something in it goes out inside the window — it never
+  lights the red badge) linking to
+  `/inventory/wizard?view=value&upcoming=1`; free-typed lines fold into ONE
+  agent item `replacement-cost:free-typed` linking to the soonest order.
+  The wizard's new "On upcoming orders" chip / `?upcoming=1` on
+  `/api/inventory/items` is the same predicate (no catalog cost, no priced
+  RentalWorks unit, a line on a live not-yet-returned order), soonest
+  pickup first — so the queue IS the backlog the panel counted. The
+  backlog's dismissal key is fixed: "Mark handled" hides the chore for
+  that user until they clear the dismissal; a changing count does not
+  bring it back, the urgent rows still surface on their own.
+- NOT done (Wes chose 1, 3, 4 of the four): a 30-day backstop on the
+  past-event providers (quote-aging, inquiry-untouched, payment-info,
+  annual-requested, duplicate-job, driver-hours, partner-photos) — a quote
+  quiet for 90 days still sits there until the job is marked lost.
+
 ## Sign-in is gated on the DOMAIN, not on having an account (2026-09-11)
 - Hugo: warehouse@ "is presenting as a sales view". It was: the NextAuth
   `signIn` callback checks `isAllowedEmailDomain(email)` and NOTHING

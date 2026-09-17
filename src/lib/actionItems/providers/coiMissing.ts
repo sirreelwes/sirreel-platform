@@ -20,12 +20,25 @@
  * (ActionItemDismissal keyed by the item id). If the COI later arrives
  * the row simply stops matching and the item disappears on its own.
  *
+ * ONE ROW PER JOB (Wes 2026-09-17). The certificate lives on the job
+ * (`sr_coi_checks.job_id`), so a job with two bookings was the same ask
+ * twice (Digital Paradigm in his screenshot). Rows are grouped by job in
+ * `groupCoiByJob`; the item is keyed on the LEAD booking — the soonest
+ * pickup — so a `coi:<bookingId>` dismissal recorded before the merge
+ * still matches for the usual one-booking job. A certificate received on
+ * ANY of the job's paperwork rows settles the whole job.
+ *
+ * PICKUP WINDOW (rules.ts): only bookings starting inside
+ * PICKUP_WINDOW_DAYS. A COI for a pickup six weeks out is not this
+ * week's chase and was the bulk of the 41.
+ *
  * Owner roles: sales-lifecycle → [ADMIN, MANAGER, AGENT].
  */
 
 import type { UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import type { ActionItem, ActionItemProvider, ProviderContext } from '@/lib/actionItems/types'
+import { PICKUP_WINDOW_DAYS, groupCoiByJob } from '@/lib/actionItems/rules'
 
 const OWNER: UserRole[] = ['ADMIN', 'MANAGER', 'AGENT']
 
@@ -44,6 +57,7 @@ export const coiMissingProvider: ActionItemProvider = {
         jobName: string | null
         companyName: string | null
         createdAt: Date
+        startDate: Date
         coiDecision: string | null
       }>
     >`
@@ -52,6 +66,7 @@ export const coiMissingProvider: ActionItemProvider = {
              b.job_name AS "jobName",
              c.name AS "companyName",
              b.created_at AS "createdAt",
+             b.start_date AS "startDate",
              coi.human_decision AS "coiDecision"
       FROM bookings b
       LEFT JOIN companies c ON b.company_id = c.id
@@ -79,6 +94,8 @@ export const coiMissingProvider: ActionItemProvider = {
         -- Start-day itself still shows — the morning of pickup is the
         -- last moment the ask is actionable.
         AND b.start_date >= CURRENT_DATE
+        -- … and not further out than the pickup window (rules.ts).
+        AND b.start_date <= CURRENT_DATE + ${PICKUP_WINDOW_DAYS}::int
         -- A LOST job owes us nothing — its paperwork chase dies with
         -- the quote (same Wes ruling).
         AND (j.status IS NULL OR j.status::text <> 'LOST')
@@ -90,17 +107,25 @@ export const coiMissingProvider: ActionItemProvider = {
         -- at rollout. Native bookings keep no-row-counts-as-missing.
         AND (b.source <> 'PLANYO_BACKFILL' OR (pr.id IS NOT NULL AND pr.coi_received = false))
         AND (pr.id IS NULL OR pr.coi_received = false)
+        -- The certificate is per JOB: received on any of the job's
+        -- paperwork rows settles every booking on it.
+        AND NOT EXISTS (
+          SELECT 1 FROM paperwork_requests p2
+          JOIN bookings b2 ON b2.id = p2.booking_id
+          WHERE b.job_id IS NOT NULL AND b2.job_id = b.job_id AND p2.coi_received = true
+        )
         -- A certificate signed off in the review desk settles the booking
         -- even though it never touches paperwork_requests.
         AND COALESCE(coi.human_decision::text, '') <> 'APPROVED'
         AND COALESCE(coi.coverage_verified, false) = false
-      ORDER BY b.end_date ASC
+      ORDER BY b.start_date ASC
       LIMIT 100
     `
 
-    return rows.map((r) => {
+    return groupCoiByJob(rows).map(({ lead: r, bookings }) => {
       const who = r.companyName || r.jobName || 'booking'
       const job = r.jobName || 'Job'
+      const more = bookings.length > 1 ? ` · ${bookings.length} bookings on the job` : ''
       // The id keys the per-user ActionItemDismissal side-row. `coi:` is
       // kept for the missing case so existing dismissals keep matching;
       // the other states get their own prefix, so a certificate that
@@ -111,14 +136,14 @@ export const coiMissingProvider: ActionItemProvider = {
           ? {
               id: `coi:${r.id}`,
               title: `COI missing — ${who}`,
-              subtitle: `${job} — no certificate of insurance on file yet`,
+              subtitle: `${job} — no certificate of insurance on file yet${more}`,
               priority: 'medium' as const,
             }
           : r.coiDecision === 'REJECTED'
             ? {
                 id: `coi-rejected:${r.id}`,
                 title: `COI rejected — ${who}`,
-                subtitle: `${job} — we turned the certificate down; the client owes us a corrected one`,
+                subtitle: `${job} — we turned the certificate down; the client owes us a corrected one${more}`,
                 priority: 'high' as const,
               }
             : {
@@ -126,8 +151,8 @@ export const coiMissingProvider: ActionItemProvider = {
                 title: `COI needs review — ${who}`,
                 subtitle:
                   r.coiDecision === 'COUNTERED'
-                    ? `${job} — we asked the client to fix the certificate; nothing signed off yet`
-                    : `${job} — certificate on file, nobody has signed off on it`,
+                    ? `${job} — we asked the client to fix the certificate; nothing signed off yet${more}`
+                    : `${job} — certificate on file, nobody has signed off on it${more}`,
                 priority: 'medium' as const,
               }
 
@@ -145,6 +170,7 @@ export const coiMissingProvider: ActionItemProvider = {
         // without one falls back to the jobs list rather than a dead link.
         href: r.jobId ? `/jobs/${r.jobId}` : '/jobs',
         occurredAt: r.createdAt,
+        dueAt: r.startDate,
         source: 'coi-missing',
         dismissal: { kind: 'sideRow' as const },
       }
