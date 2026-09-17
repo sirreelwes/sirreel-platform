@@ -226,6 +226,38 @@ export function mentionsIn(body: string, staff: { id: string; name: string }[]):
   return out
 }
 
+// ── Who is OFFERED as a tag chip ─────────────────────────────────────
+
+/**
+ * People the note composer does not put on its chip row.
+ *
+ * Wes 2026-09-17: "can you remove the @Grayson and the @Tamra options?
+ * That's something private and we don't need them to be visibly there even
+ * though I love the idea that we can text them directly if need be in the
+ * future."
+ *
+ * So this hides the SUGGESTION, never the capability, and nothing about
+ * their HQ accounts changes. Typing @Greyson in a note still tags him,
+ * still texts his mobile on an urgent note, and still trips the "the
+ * client does not know who that is" warning on a client reply — every one
+ * of those reads the whole staff list through `mentionsIn`, not this one.
+ * The chip row is the only thing that asks.
+ *
+ * An entry matches a FIRST NAME or an EMAIL LOCAL PART, case-insensitively,
+ * so a row reading "Greyson Bailey <greyson@sirreel.com>" is caught either
+ * way; the spelling Wes typed ("Grayson") is carried alongside the one the
+ * account was made under. To hide someone else, add the name a colleague
+ * would type after the @.
+ */
+export const MENTION_UNLISTED: readonly string[] = ['greyson', 'grayson', 'tamra']
+
+/** True when this person belongs on the composer's chip row. */
+export function isTagSuggested(person: { name: string; email?: string | null }): boolean {
+  const first = person.name.trim().toLowerCase().split(/\s+/)[0] ?? ''
+  const local = (person.email ?? '').trim().toLowerCase().split('@')[0] ?? ''
+  return !MENTION_UNLISTED.some((hidden) => hidden === first || hidden === local)
+}
+
 // ── Before a reply goes to the client ────────────────────────────────
 
 /**

@@ -26,6 +26,8 @@ import {
   claimLabel,
   cleanNote,
   internalNoteTells,
+  isTagSuggested,
+  MENTION_UNLISTED,
   kindFor,
   labelDetail,
   labelFromTriageNotes,
@@ -217,6 +219,31 @@ console.log('\ninternalNoteTells — what the review step says out loud')
   check('a client who shares a first name, mid-line, is fine', internalNoteTells('Please let Hugo at the production office know.', team).length === 0)
   check('an empty draft has no tells', internalNoteTells('   ', team).length === 0)
   check('no staff list → only the opener can tell', internalNoteTells('Hey team, @Hugo', []).length === 1)
+}
+
+console.log('\n— who the chip row offers —')
+{
+  // Wes 2026-09-17: these two come off the chips and stay reachable.
+  const hidden = [
+    { name: 'Greyson Bailey', email: 'greyson@sirreel.com' },
+    { name: 'Tamra Bailey', email: 'tamra@sirreel.com' },
+  ]
+  check('the unlisted are off the chip row', hidden.every((p) => !isTagSuggested(p)))
+  check('matched on the email when the name is spelled differently', !isTagSuggested({ name: 'G. Bailey', email: 'Greyson@SirReel.com' }))
+  check('matched on the first name when the email is something else', !isTagSuggested({ name: 'Grayson Bailey', email: 'gb@sirreel.com' }))
+  check('the spelling Wes typed and the one the account carries are both covered', MENTION_UNLISTED.includes('greyson') && MENTION_UNLISTED.includes('grayson'))
+  check('everyone else is still offered', [
+    { name: 'Jose Pacheco', email: 'jose@sirreel.com' },
+    { name: 'Ana Ruiz', email: 'ana@sirreel.com' },
+    { name: 'Wes Bailey', email: 'wes@sirreel.com' },
+    { name: 'Hugo Ramirez', email: 'hugo@sirreel.com' },
+  ].every(isTagSuggested))
+  check('a name that merely contains a hidden one is untouched', isTagSuggested({ name: 'Tamrat Alemu', email: 'tamrat@sirreel.com' }))
+  check('a missing email is not a match', isTagSuggested({ name: 'Julian Diaz', email: null }))
+  // The capability Wes asked to keep: typed by hand, they still tag.
+  const team = [{ id: 'u-greyson', name: 'Greyson Bailey' }, { id: 'u-jose', name: 'Jose Pacheco' }]
+  check('an unlisted person is still tagged when typed', eq(mentionsIn('@Greyson can you call the yard?', team), ['u-greyson']))
+  check('and still trips the client-reply warning', internalNoteTells('@Greyson heads up', team).length > 0)
 }
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed')

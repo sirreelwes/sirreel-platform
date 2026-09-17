@@ -62,7 +62,7 @@ interface NoteRow {
   urgent: boolean
   alertSummary: string
 }
-interface Staff { id: string; name: string; email: string; role: string }
+interface Staff { id: string; name: string; email: string; role: string; suggested: boolean }
 interface Conversation {
   ok: true
   me: { id: string; name: string | null; email: string; role: string }
@@ -237,8 +237,15 @@ export function JobConversation({
   // refused rather than sent to no one.
   const taggedOthers = useMemo(() => {
     if (!data) return []
+    // The WHOLE list, not the chip row: someone kept off the chips is still
+    // tagged (and still texted on an urgent note) when their name is typed.
     return mentionsIn(body, data.staff).filter((id) => id !== data.me.id)
   }, [body, data])
+  /** Who the chip row offers — everyone but yourself, minus the unlisted. */
+  const chipPeople = useMemo(
+    () => (data ? data.staff.filter((s) => s.id !== data.me.id && s.suggested !== false) : []),
+    [data],
+  )
   const urgentBlocked = mode === 'note' && urgent && taggedOthers.length === 0
 
   // Wes 2026-09-17: "Things that are going out to the client need to be
@@ -778,14 +785,16 @@ export function JobConversation({
             {busy ? 'Working…' : mode === 'note' ? (urgent ? 'Send urgent note' : 'Add note') : 'Email client…'}
           </button>
         </div>
-        {data && data.staff.length > 0 && mode === 'note' && (
+        {data && chipPeople.length > 0 && mode === 'note' && (
           <div className="flex items-center gap-1 text-[10.5px] text-lt-fg3 flex-wrap">
             <Users size={10} aria-hidden />
             {/* Everyone on the team except yourself (2026-09-17: a cap of 8
-                hid Jose and Ana behind the end of the list). A chip already
-                in the note is shown lit and tapping it again adds nothing. */}
-            {data.staff
-              .filter((s) => s.id !== data.me.id)
+                hid Jose and Ana behind the end of the list), minus the
+                people `isTagSuggested` keeps off the row — they can still be
+                tagged by typing the name, they are just not advertised.
+                A chip already in the note is shown lit and tapping it again
+                adds nothing. */}
+            {chipPeople
               .map((s) => {
                 const tagged = taggedOthers.includes(s.id)
                 return (
