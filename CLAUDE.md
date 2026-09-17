@@ -1080,12 +1080,23 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   and every real run writes an AuditLog `admin.maintenance_run` carrying the
   CREATED IDS, which is what keeps "cleanup by captured id only" workable
   when the run happened on a phone with no journal file.
-- **No schema changes here, on purpose.** `MaintenanceCategory` has no DDL
-  member so the type system refuses one. The `add-*-columns` / `add-*-table`
-  / `ALTER TYPE` scripts stay on a laptop: the live DB carries objects no
-  schema file knows and their failure mode is a half-migrated production
-  database. Tasks that DEPEND on a migration preflight it and refuse with a
-  fix line (see the PHOTO_SHOOT enum check) rather than 500-ing a page.
+- **No schema changes here, on purpose — with ONE exception (2026-09-17,
+  Wes: "It's not possible to do any of this from my phone").**
+  `category: 'schema'` may run ONLY `CREATE TABLE / INDEX … IF NOT EXISTS`:
+  the task carries its statements as `ddl` (plain data, e.g.
+  `src/lib/email/jobThreadTableSql.ts`), `isAdditiveStatement` in
+  `src/lib/admin/additiveDdl.ts` is the gate — the registry test applies it
+  at build time and `runAdditiveDdl` refuses at run time — and the runner
+  logs each table's columns afterwards so a phone screen proves it took. A
+  brand-new table has no half-run state, which is why this class is safe
+  where an ALTER is not. The `add-*-columns` / `ALTER TYPE` scripts STAY on
+  a laptop: the live DB carries objects no schema file knows and their
+  failure mode is a half-migrated production database. Tasks that DEPEND on
+  such a migration preflight it and refuse with a fix line (see the
+  PHOTO_SHOOT enum check) rather than 500-ing a page. First schema task:
+  `job-conversation-tables` — the Phase 2 Conversation tables; the CLI
+  `scripts/add-job-thread-tables.ts` is a thin wrapper over the same
+  `JOB_THREAD_TABLES_DDL`.
 - Page is built for a phone: 16px inputs (anything smaller makes iOS Safari
   zoom on focus), full-width controls, dry run as the primary button, "Run
   for real" behind a second tap. Nav: Admin → **Run a Task**.
@@ -1321,11 +1332,14 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   from `jobThreadContext()`.
 
 ## The job Conversation — Phase 2 SHIPPED 2026-09-17 (Wes: "Build Phase 2")
-- **Schema change — NOT `prisma db push`.** Two tables by additive SQL:
-  `npx tsx scripts/add-job-thread-tables.ts` (`sr_job_threads` — the claim,
-  one row per job; `sr_job_thread_notes` — internal notes). Until it has
-  run, the panel still shows the emails, notes/claim read as none, and a
-  note or claim POST answers 503 naming the script. Models
+- **Schema change — NOT `prisma db push`.** Two tables by additive SQL,
+  from a phone on /admin/maintenance → "Create the job Conversation tables"
+  (`job-conversation-tables`, the first `schema` task) or on a laptop
+  `npx tsx scripts/add-job-thread-tables.ts` — both run
+  `JOB_THREAD_TABLES_DDL` (`sr_job_threads` — the claim, one row per job;
+  `sr_job_thread_notes` — internal notes). Until it has run, the panel still
+  shows the emails, notes/claim read as none, and a note or claim POST
+  answers 503 naming the task. Models
   `JobThreadState` / `JobThreadNote`, plain columns, no relations (the Job
   and User models are untouched).
 - **The panel is `src/components/jobs/JobConversation.tsx`**, fed by

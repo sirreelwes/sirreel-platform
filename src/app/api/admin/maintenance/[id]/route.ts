@@ -16,8 +16,10 @@
  *   · AUDITED. Every real run writes an AuditLog row carrying the ids it
  *     created — which is what makes the "cleanup by captured id only" rule
  *     workable when the run happened on a phone with no journal file.
- *   · NO SCHEMA CHANGES. The registry's `category` has no DDL member; see
- *     the header of maintenanceTasks.ts for why those stay on a laptop.
+ *   · NO SCHEMA CHANGES, bar one class: a `schema` task runs only the
+ *     CREATE … IF NOT EXISTS statements it carries in the registry, gated
+ *     by `isAdditiveStatement` at run time. See maintenanceTasks.ts for why
+ *     ALTERs and column adds stay on a laptop.
  *
  * A refusal the operator can act on (`SeedRefused`) comes back as a 409 with
  * a `fix` line, not a stack trace.
