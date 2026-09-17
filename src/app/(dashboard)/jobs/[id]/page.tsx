@@ -319,7 +319,7 @@ interface MarketOption { id: string; name: string; slug: string }
 interface JobDetail {
   id: string;
   jobCode: string;
-  /** 5-digit after-hours access code clients read to the assistant to verify. */
+  /** 5-digit after-hours verification code clients read to the assistant to verify. */
   assistantAuthCode: string | null;
   name: string;
   status: JobStatus;
@@ -1610,7 +1610,7 @@ const driverTone = (d: any): string => {
               {job.assistantAuthCode && (
                 <span
                   className="inline-flex items-center gap-1.5 text-[14px] font-mono font-bold tracking-[0.15em] text-amber-700 bg-amber-50 border border-amber-300 rounded px-2.5 py-1"
-                  title="Client access code — clients read this to the after-hours assistant to verify their identity"
+                  title="Client verification code (not the gate code) — clients read this to the after-hours assistant to verify their identity"
                 >
                   <span className="text-[10px] font-sans font-semibold uppercase tracking-wider text-amber-700">Access</span>
                   {job.assistantAuthCode}

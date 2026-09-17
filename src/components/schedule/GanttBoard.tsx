@@ -2468,7 +2468,7 @@ export function GanttBoard() {
                         </Link>
                       )}
                       {resContext?.accessCode && (
-                        <span className="text-[10px] font-mono font-bold tracking-[0.12em] text-amber-700 bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5" title="Client access code — read to the after-hours assistant to verify">
+                        <span className="text-[10px] font-mono font-bold tracking-[0.12em] text-amber-700 bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5" title="Client verification code (not the gate code) — read to the after-hours assistant to verify">
                           {resContext.accessCode}
                         </span>
                       )}
@@ -2502,7 +2502,7 @@ export function GanttBoard() {
                       </button>
                     )}
                     {resContext?.accessCode && (
-                      <span className="inline-block ml-1.5 mt-1 text-[10px] font-mono font-bold tracking-[0.12em] text-amber-700 bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5" title="Client access code — read to the after-hours assistant to verify">
+                      <span className="inline-block ml-1.5 mt-1 text-[10px] font-mono font-bold tracking-[0.12em] text-amber-700 bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5" title="Client verification code (not the gate code) — read to the after-hours assistant to verify">
                         {resContext.accessCode}
                       </span>
                     )}
