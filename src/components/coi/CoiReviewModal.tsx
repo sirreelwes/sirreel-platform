@@ -72,6 +72,23 @@ interface CoiReviewData {
   contacts: { name: string; email: string; role: string | null }[];
   /** Server-built draft of what the certificate still needs. */
   fixDraft: { issues: string[]; message: string };
+  /**
+   * The BROKER off the certificate's PRODUCER box — who issued it, and the
+   * only party who can reissue it. `extracted: false` means the stored
+   * review predates the question, not that the box was blank.
+   */
+  broker: {
+    agency: string | null;
+    contactName: string | null;
+    email: string | null;
+    phone: string | null;
+    address: string | null;
+    found: boolean;
+    extracted: boolean;
+    label: string | null;
+  };
+  /** Server-built draft addressed to the broker. The link is added on send. */
+  brokerDraft: { issues: string[]; message: string };
   /** Does the job rent a vehicle? null = no job to read it off. */
   vehiclesOnJob: boolean | null;
   /** What made it true, so the reviewer can see the truck named. */
@@ -220,6 +237,13 @@ export function CoiReviewModal({
   const [askOpen, setAskOpen] = useState(false);
   const [askTo, setAskTo] = useState('');
   const [askMsg, setAskMsg] = useState('');
+  // "Send the broker a link" compose state. Same shape as the client ask
+  // above, one field more: the client is Cc'd by default so nobody's broker
+  // is approached behind their coordinator's back.
+  const [brokerOpen, setBrokerOpen] = useState(false);
+  const [brokerTo, setBrokerTo] = useState('');
+  const [brokerCc, setBrokerCc] = useState(true);
+  const [brokerMsg, setBrokerMsg] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [flash, setFlash] = useState<string | null>(null);
@@ -244,6 +268,13 @@ export function CoiReviewModal({
           setAskTo(d.contacts[0]?.email || '');
           setNotifyTo(d.contacts[0]?.email || '');
           setAskMsg(d.fixDraft?.message || '');
+        }
+        return open;
+      });
+      setBrokerOpen((open) => {
+        if (!open) {
+          setBrokerTo(d.broker?.email || '');
+          setBrokerMsg(d.brokerDraft?.message || '');
         }
         return open;
       });
@@ -332,6 +363,20 @@ export function CoiReviewModal({
     if (d) {
       setAskOpen(false);
       setFlash(`Sent to ${askTo} — marked as changes requested.`);
+    }
+  };
+
+  const emailBroker = async () => {
+    const cc = brokerCc ? data?.contacts[0]?.email || '' : '';
+    const d = await post(
+      { action: 'EMAIL_BROKER', to: brokerTo, cc, message: brokerMsg, note },
+      'EMAIL_BROKER',
+    );
+    if (d) {
+      setBrokerOpen(false);
+      setFlash(
+        `Review link sent to ${brokerTo}${cc ? ` (copy to ${cc})` : ''} — marked as changes requested.`,
+      );
     }
   };
 
@@ -575,6 +620,44 @@ export function CoiReviewModal({
                 )}
               </div>
 
+              {/* Who issued the certificate. Shown whether or not it is
+                  passing — a reviewer approving one still wants to know who
+                  to call next time, and a review too old to have asked says
+                  so rather than reading as an empty producer box. */}
+              <div className="rounded-xl border border-zinc-800 bg-zinc-950/60 px-3.5 py-3">
+                <div className="text-[10px] uppercase tracking-widest text-zinc-500 font-semibold mb-1.5">
+                  Broker on the certificate
+                </div>
+                {data.broker?.found ? (
+                  <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-[12px]">
+                    {data.broker.label && (
+                      <>
+                        <dt className="text-zinc-500">Producer</dt>
+                        <dd className="min-w-0 break-words text-white">{data.broker.label}</dd>
+                      </>
+                    )}
+                    {data.broker.email && (
+                      <>
+                        <dt className="text-zinc-500">Email</dt>
+                        <dd className="min-w-0 break-words text-white">{data.broker.email}</dd>
+                      </>
+                    )}
+                    {data.broker.phone && (
+                      <>
+                        <dt className="text-zinc-500">Phone</dt>
+                        <dd className="min-w-0 break-words text-white">{data.broker.phone}</dd>
+                      </>
+                    )}
+                  </dl>
+                ) : (
+                  <p className="text-[12px] text-zinc-400 leading-relaxed">
+                    {data.broker?.extracted
+                      ? 'The producer box on this certificate did not read — you can still type the broker’s address below.'
+                      : 'This review was filed before we read the producer box. Re-run it to pull the broker off the certificate.'}
+                  </p>
+                )}
+              </div>
+
               {/* Decision */}
               <div className="space-y-2.5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -682,6 +765,80 @@ export function CoiReviewModal({
                   >
                     Request fix from client
                     {data.fixDraft?.issues?.length ? ` · ${data.fixDraft.issues.length} issue${data.fixDraft.issues.length === 1 ? '' : 's'}` : ''}
+                  </button>
+                )}
+
+                {/* Send the BROKER a link to a read-only review (Wes
+                    2026-09-17). The client ask above goes to the person who
+                    has to forward it; this one goes to the person who can
+                    reissue the document. */}
+                {brokerOpen ? (
+                  <div className="rounded-lg border border-sky-700/50 bg-sky-950/20 p-3 space-y-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-sky-300">
+                        Send the broker a review link
+                      </span>
+                      <button
+                        onClick={() => setBrokerOpen(false)}
+                        className="text-[11px] text-zinc-400 hover:text-zinc-200"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <input
+                      type="email"
+                      value={brokerTo}
+                      onChange={(e) => setBrokerTo(e.target.value)}
+                      placeholder="agent@brokerage.com"
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[13px] text-white placeholder-zinc-500"
+                    />
+                    {data.contacts.length > 0 && (
+                      <label className="flex items-start gap-2 text-[12px] text-zinc-300">
+                        <input
+                          type="checkbox"
+                          checked={brokerCc}
+                          onChange={(e) => setBrokerCc(e.target.checked)}
+                          className="mt-0.5"
+                        />
+                        <span>
+                          Copy {data.contacts[0].name} ({data.contacts[0].email}) — their broker,
+                          their job
+                        </span>
+                      </label>
+                    )}
+                    <textarea
+                      value={brokerMsg}
+                      onChange={(e) => setBrokerMsg(e.target.value)}
+                      rows={10}
+                      className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-[12px] text-white leading-relaxed"
+                    />
+                    <p className="text-[11px] text-zinc-500">
+                      A link to the read-only review is added under your message — requirements,
+                      what their certificate shows, and where to send the corrected one. Replies
+                      come back to you and the certificate moves to{' '}
+                      <span className="text-zinc-300">Changes requested</span>.
+                    </p>
+                    <button
+                      onClick={emailBroker}
+                      disabled={!!busy || !brokerTo.trim() || !brokerMsg.trim()}
+                      className="w-full bg-sky-700 hover:bg-sky-600 disabled:opacity-50 text-white text-[13px] font-semibold rounded-lg py-2"
+                    >
+                      {busy === 'EMAIL_BROKER' ? 'Sending…' : 'Send the broker a link'}
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setError(null);
+                      setFlash(null);
+                      setBrokerOpen(true);
+                    }}
+                    disabled={!!busy}
+                    title="Email the broker a read-only review of this certificate"
+                    className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-sky-300 text-[13px] font-semibold rounded-lg py-2"
+                  >
+                    Send the broker a review link
+                    {data.broker?.email ? ` · ${data.broker.email}` : ''}
                   </button>
                 )}
 

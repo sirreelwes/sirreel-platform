@@ -23,6 +23,14 @@ export interface CoiRequirement {
   sticking?: boolean
 }
 
+/**
+ * Where a broker sends the finished certificate. Wes 2026-09-06: rentals@,
+ * not hello@ — nobody chases COIs out of the general inbox. One constant, so
+ * the portal's broker email and the broker's review page name the same
+ * mailbox.
+ */
+export const COI_INBOX = 'rentals@sirreel.com'
+
 export const CERTIFICATE_HOLDER = {
   name: 'SirReel Production Vehicles, Inc.',
   address: '8500 Lankershim Blvd, Sun Valley, CA 91352',
