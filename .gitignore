@@ -39,6 +39,7 @@ scripts/*
 !scripts/add-unit-scan-table.ts
 !scripts/add-unit-checks-columns.ts
 !scripts/add-warehouse-line-columns.ts
+!scripts/add-booking-assignment-line-column.ts
 !scripts/seed-unit-checks.ts
 !scripts/seed-kit-unit-checks.ts
 !scripts/seed-rosco-fluid-kits.ts

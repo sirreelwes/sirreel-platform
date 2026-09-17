@@ -717,6 +717,9 @@ export async function POST(req: NextRequest, { params }: Params) {
         // a van from the 28th, two more from the 29th — must not bind
         // either block to the order's whole span.
         lineWindow: { start: lineItem.pickupDate, end: lineItem.returnDate },
+        // THIS line's truck — the stamp the order page prints on the row
+        // and the delete / quantity / class edits release by.
+        orderLineItemId: lineItem.id,
       });
     }
 

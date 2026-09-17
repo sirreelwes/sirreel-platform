@@ -1043,8 +1043,46 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   class lives on the catalog row). `holdCategoryForLine()` in
   holdOnQuoteSend.ts is now the exported, pure resolution the hold itself
   uses; resolve a line's class through it, never off `assetCategoryId`
-  alone. The qty-change branch of that route still gates the old way —
-  open, not touched here.
+  alone.
+- **The quantity / catalog-binding branch is closed too (same day).** It
+  gated on `newIsHold` off the line's own `assetCategoryId`, so a real van
+  edited 1 → 2 left the hold at 1 and the capacity confirm never fired.
+  Now: both class ids come from `holdCategoryForLine` (before and after the
+  edit — the order page sends both binding fields on EVERY save, so the
+  route compares against the row, not "present in the body");
+  `planHoldSyncOnLineEdit()` (pure, holdOnQuoteSend.ts, `npm run
+  test:quote-hold`) decides what the hold is owed; the WRITE is
+  `holdOnQuoteSend(orderId)` — SET to the peak, never the delta-summing
+  `syncHoldOnLineUpdate` (one van quoted for two separate weeks, one block
+  bumped to 2, is a hold of 2, not 3). The 409 `requiresConfirmation` is
+  kept (only the increase must fit; a class the line did not hold before
+  costs the whole quantity; checked on the line's NEW days), and
+  `saveEditLine` now does the add-line confirm-and-retry instead of a
+  dead-end alert. Response carries `holds { quantityBefore, quantityAfter,
+  releasedUnits, note }`; the page alerts `note`.
+- **Merged with the order-line ↔ unit through line (`66bec271`, rescued
+  from a detached HEAD onto `rescue/line-unit-throughline`, 2026-09-17).**
+  The PUT runs the recompute AROUND that commit's per-truck handling:
+  a VEHICLE line's quantity cut first hands back THIS line's trucks by
+  asset (`releaseLineUnits`, last-bound first, `keep: newQty` so unbound
+  slots go before a bound truck — without it a line of 18 with one van,
+  trimmed to 1, released the van), then recomputes; a bump recomputes,
+  then binds the extras stamped to the line (`assignUnitsForLine`); a
+  line that stops being a vehicle releases its trucks. A vehicle CLASS
+  change is refused (409 `USE_SWITCH_CLASS`) before any of this —
+  `saveEditLine` handles that code INSIDE its 409 branch, because the body
+  can only be read once. Response carries `holds`, `released`,
+  `unitAssignment` and `assignmentsFollowed`.
+- **Limits of the recompute:** it never shrinks a hold whose units are
+  ASSIGNED — on a stage, where there is no per-line truck, a cut is
+  reported in `holds.note` instead; and it only visits classes still
+  quoted, so a class the line LEFT (a stage re-picked) is released by
+  asset via `releaseBookingItem` when `categoryStillQuoted()` is false.
+  **Never `syncHoldOnLineDelete` for that** — at zero it DELETES the
+  BookingItem and the FK cascade takes every unit on it; the line DELETE
+  handler now uses it only for stages and releases a vehicle line's
+  trucks by asset. `syncHoldOnLineAdd/Update` prefer a live rank-1 row and
+  revive a released one from zero.
 - **Which units follow:** the ones carrying the old block's days verbatim
   (the same rule coverage counts by), up to the moved line's quantity, this
   order's own before unstamped ones; a sibling order's unit never moves.

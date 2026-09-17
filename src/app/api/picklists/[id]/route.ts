@@ -45,6 +45,10 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
           orderNumber: true,
           startDate: true,
           endDate: true,
+          // Will call, or loaded on a reserved vehicle — the order's own
+          // note, resolved to the unit's name below.
+          gearHandoff: true,
+          gearLoadsOnAssignmentId: true,
           company: { select: { id: true, name: true } },
           job: { select: { id: true, jobCode: true, name: true } },
         },
@@ -91,10 +95,22 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     (a, b) => a.orderLineItem.sortOrder - b.orderLineItem.sortOrder,
   )
 
+  // The reserved vehicle the gear loads onto, by name, only while that
+  // reservation is live — a released unit is not where anything loads.
+  let loadsOn: { assignmentId: string; unitName: string } | null = null
+  if (picklist.order.gearHandoff === 'LOAD_ON' && picklist.order.gearLoadsOnAssignmentId) {
+    const a = await prisma.bookingAssignment.findUnique({
+      where: { id: picklist.order.gearLoadsOnAssignmentId },
+      select: { id: true, status: true, asset: { select: { unitName: true } } },
+    })
+    if (a && (a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT')) loadsOn = { assignmentId: a.id, unitName: a.asset.unitName }
+  }
+
   return NextResponse.json({
     picklist: {
       ...picklist,
       items: sortedItems,
+      loadsOn,
     },
   })
 }

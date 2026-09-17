@@ -13,7 +13,11 @@ import { auditLineItemEdit, extractIp, resolveOperatorId } from "@/lib/orders/au
 import { readPickListItemForDelete, syncPickListOnLineAdd, syncPickListOnLineDelete } from "@/lib/orders/pickListSync";
 import { routeDepartment } from "@/lib/orders/bookOrder";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
-import { checkHoldFeasibility, syncHoldOnLineDelete, syncHoldOnLineUpdate, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
+import { checkHoldFeasibility, syncHoldOnLineDelete } from "@/lib/orders/holdsSync";
+import { holdOnQuoteSend, holdCategoryForLine, planHoldSyncOnLineEdit, categoryStillQuoted } from "@/lib/orders/holdOnQuoteSend";
+import { holdCategoryIdForLine, liveUnitsForLine, namesInWords, releaseLineUnits } from "@/lib/orders/lineUnits";
+import { assignUnitsForLine, type UnitAssignmentOutcome } from "@/lib/orders/assignUnitsForLine";
+import { releaseBookingItem } from "@/lib/scheduling/releaseBookingItem";
 import { syncReservationToLineDates, type FollowOutcome } from "@/lib/scheduling/followLineDates";
 import { resolveLineRate, logRateOverride } from "@/lib/pricing/resolveRate";
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
@@ -247,79 +251,129 @@ export async function PUT(req: NextRequest, { params }: Params) {
       ? await prisma.orderLineItem.findUnique({ where: { id: lineId } })
       : null;
 
-    // (#2 Phase 2) Holds feasibility for VEHICLES / STAGES updates.
-    // Three sub-cases:
-    //   (a) qty change on a hold-tracked line, same category → delta check
-    //   (b) category change between two hold-tracked categories
-    //       → treat as full delete-old + full add-new (both must be feasible)
-    //   (c) dept/category change INTO or OUT OF hold-tracked
-    //       → handled atomically below (add OR delete the hold)
+    // Holds feasibility for a quantity or catalog-binding edit on a HELD
+    // line. The class is resolved with `holdCategoryForLine` — the rule the
+    // hold was created with — before and after the edit. This used to read
+    // the line's own `assetCategoryId`, which every catalog-bound line
+    // leaves null (the class lives on the catalog row), so for a real van
+    // none of this ran: 1 → 2 vans left the hold at 1 and never asked
+    // about capacity (2026-09-17, same gap the date-follow fix closed).
+    // `planHoldSyncOnLineEdit` is the pure decision:
+    //   (a) same class, quantity up   → only the increase must fit
+    //   (b) a class the line did not hold before → the whole quantity
+    //   (c) quantity down / leaving a class → nothing to ask
     // Only blocks on capacityClear=false + no confirmConflict — same
     // rule as POST. Co-tenancy with room available proceeds silently.
     const { confirmConflict: confirmConflictBody } = body as { confirmConflict?: unknown };
     const confirmConflict = confirmConflictBody === true;
-    const fullExisting = await prisma.orderLineItem.findUnique({ where: { id: lineId } });
+    const fullExisting = await prisma.orderLineItem.findUnique({
+      where: { id: lineId },
+      include: {
+        assetCategory: { select: { department: true } },
+        inventoryItem: { select: { department: true, trackingMode: true, legacyAssetCategoryId: true } },
+      },
+    });
     if (!fullExisting) {
       return NextResponse.json({ error: 'line item not found' }, { status: 404 });
     }
     const oldQty = fullExisting.quantity;
-    const oldCategoryId = fullExisting.assetCategoryId;
     const oldDept = fullExisting.department;
     const newQty = quantity != null ? Number(quantity) : oldQty;
-    const newCategoryId = assetCategoryId !== undefined ? (assetCategoryId || null) : oldCategoryId;
     const newDept = (department as LineItemDepartment | undefined) ?? oldDept;
-    const oldIsHold = (oldDept === 'VEHICLES' || oldDept === 'STAGES') && oldCategoryId;
-    const newIsHold = (newDept === 'VEHICLES' || newDept === 'STAGES') && newCategoryId;
-    let holdsAuditNote: string | null = null;
-    let putHoldsCoTenancy: Awaited<ReturnType<typeof checkHoldFeasibility>>['conflicts'] = [];
-    let putHoldsAvailability: Awaited<ReturnType<typeof checkHoldFeasibility>>['availability'] | null = null;
-    if (parentOrder?.bookingId && newIsHold) {
-      // Same-category qty change is the common case — only delta needs
-      // to fit. Category change costs full new qty (the old release is
-      // unconditional, no feasibility math needed).
-      const sameCategory = oldIsHold && oldCategoryId === newCategoryId;
-      const proposedDelta = sameCategory ? (newQty - oldQty) : newQty;
-      if (proposedDelta > 0) {
-        const window = {
-          startDate: fullExisting.pickupDate,
-          endDate: fullExisting.returnDate,
-        };
-        const feas = await checkHoldFeasibility({
-          tx: prisma,
-          categoryId: newCategoryId as string,
-          startDate: window.startDate,
-          endDate: window.endDate,
-          deltaQty: proposedDelta,
-          excludeBookingId: parentOrder.bookingId,
+    const oldCategoryId = holdCategoryForLine(fullExisting);
+    // The order page sends both binding fields on every save, so "present
+    // in the body" is not "changed" — compare against the row.
+    const nextInventoryItemId = inventoryItemId !== undefined ? (inventoryItemId || null) : fullExisting.inventoryItemId;
+    const nextAssetCategoryId = assetCategoryId !== undefined ? (assetCategoryId || null) : fullExisting.assetCategoryId;
+    const bindingChanged =
+      nextInventoryItemId !== fullExisting.inventoryItemId || nextAssetCategoryId !== fullExisting.assetCategoryId;
+    const newCategoryId = !bindingChanged
+      ? oldCategoryId
+      : holdCategoryForLine({
+          department: newDept,
+          assetCategoryId: nextAssetCategoryId,
+          assetCategory: nextAssetCategoryId
+            ? await prisma.assetCategory.findUnique({ where: { id: nextAssetCategoryId }, select: { department: true } })
+            : null,
+          inventoryItem: nextInventoryItemId
+            ? await prisma.inventoryItem.findUnique({
+                where: { id: nextInventoryItemId },
+                select: { department: true, trackingMode: true, legacyAssetCategoryId: true },
+              })
+            : null,
         });
-        putHoldsCoTenancy = feas.conflicts;
-        putHoldsAvailability = feas.availability;
-        if (!feas.capacityClear && !confirmConflict) {
-          return NextResponse.json(
-            {
-              error: 'over-capacity',
-              requiresConfirmation: true,
-              reason: `Updating quantity to ${newQty} (delta +${proposedDelta}) would exceed available capacity. ${feas.conflicts.length} other booking(s) hold this category in the window.`,
-              category: { id: newCategoryId },
-              deltaQty: proposedDelta,
-              availability: feas.availability,
-              conflicts: feas.conflicts.map((c) => ({
-                bookingNumber: c.bookingNumber,
-                jobName: c.jobName,
-                startDate: c.startDate.toISOString().slice(0, 10),
-                endDate: c.endDate.toISOString().slice(0, 10),
-                quantity: c.quantity,
-                status: c.status,
-              })),
-            },
-            { status: 409 },
-          );
-        }
-        if (!feas.capacityClear && confirmConflict) {
-          const orderLabel = parentOrder.orderNumber;
-          const conflictList = feas.conflicts.map((c) => `${c.bookingNumber}${c.jobName ? ' / ' + c.jobName : ''}`).join('; ');
-          holdsAuditNote = `CAPACITY OVERRIDE on ${orderLabel} (qty change Δ+${proposedDelta}): conflicts with ${conflictList}`;
-        }
+    const holdPlan = planHoldSyncOnLineEdit({ oldCategoryId, newCategoryId, oldQty, newQty });
+    let holdsAuditNote: string | null = null;
+
+    // A VEHICLE line does not change class here. The reservation holds a
+    // class and a truck for THIS line, and both have to move with it —
+    // that is the switch-class route's whole job (release this line's
+    // unit, hold the new class, bind a unit of it, keep or re-price the
+    // rate). Refused, naming the truck, so the edit form hands off to
+    // Switch class rather than leaving the order and the reservation
+    // describing two different vehicles.
+    if (parentOrder?.bookingId && oldDept === 'VEHICLES' && newDept === 'VEHICLES' && oldCategoryId && newCategoryId && oldCategoryId !== newCategoryId) {
+      const { units } = await liveUnitsForLine({
+        orderId,
+        lineId,
+        categoryId: oldCategoryId,
+        quantity: oldQty,
+        window: { start: fullExisting.pickupDate, end: fullExisting.returnDate },
+      });
+      const names = units.map((u) => u.unitName);
+      return NextResponse.json(
+        {
+          error: 'class change needs switch',
+          code: 'USE_SWITCH_CLASS',
+          reason:
+            `Changing the vehicle type moves its reservation too` +
+            (names.length > 0 ? ` — ${namesInWords(names)} ${names.length === 1 ? 'is' : 'are'} reserved for this line.` : '.') +
+            ` Use Switch class on the line so the held unit is switched with it.`,
+          newCategoryId,
+          units: names,
+        },
+        { status: 409 },
+      );
+    }
+    let putHoldsCoTenancy: Awaited<ReturnType<typeof checkHoldFeasibility>>['conflicts'] = [];
+    if (parentOrder?.bookingId && newCategoryId && holdPlan.feasibilityDelta > 0) {
+      const proposedDelta = holdPlan.feasibilityDelta;
+      // The days the line will sit on AFTER this edit — a quantity bump
+      // saved together with a date move must fit on the new days.
+      const feas = await checkHoldFeasibility({
+        tx: prisma,
+        categoryId: newCategoryId,
+        startDate: pickupDate ? new Date(pickupDate) : fullExisting.pickupDate,
+        endDate: returnDate ? new Date(returnDate) : fullExisting.returnDate,
+        deltaQty: proposedDelta,
+        excludeBookingId: parentOrder.bookingId,
+      });
+      putHoldsCoTenancy = feas.conflicts;
+      if (!feas.capacityClear && !confirmConflict) {
+        return NextResponse.json(
+          {
+            error: 'over-capacity',
+            requiresConfirmation: true,
+            reason: `Updating quantity to ${newQty} (delta +${proposedDelta}) would exceed available capacity. ${feas.conflicts.length} other booking(s) hold this category in the window.`,
+            category: { id: newCategoryId },
+            deltaQty: proposedDelta,
+            availability: feas.availability,
+            conflicts: feas.conflicts.map((c) => ({
+              bookingNumber: c.bookingNumber,
+              jobName: c.jobName,
+              startDate: c.startDate.toISOString().slice(0, 10),
+              endDate: c.endDate.toISOString().slice(0, 10),
+              quantity: c.quantity,
+              status: c.status,
+            })),
+          },
+          { status: 409 },
+        );
+      }
+      if (!feas.capacityClear && confirmConflict) {
+        const orderLabel = parentOrder.orderNumber;
+        const conflictList = feas.conflicts.map((c) => `${c.bookingNumber}${c.jobName ? ' / ' + c.jobName : ''}`).join('; ');
+        holdsAuditNote = `CAPACITY OVERRIDE on ${orderLabel} (qty change Δ+${proposedDelta}): conflicts with ${conflictList}`;
       }
     }
 
@@ -346,53 +400,159 @@ export async function PUT(req: NextRequest, { params }: Params) {
       },
     });
 
-    // (#2 Phase 2) Hold-side write — fires AFTER the line update so
-    // we don't sync a hold change that the line update then rolls
-    // back. Four cases:
-    //   (1) was hold + still hold + same category → delta update
-    //   (2) was hold + still hold + different category → release old, add new
-    //   (3) was hold + now non-hold → release old
-    //   (4) was non-hold + now hold → add new
-    if (parentOrder?.bookingId) {
-      const sameCategoryHold = oldIsHold && newIsHold && oldCategoryId === newCategoryId;
+    // Hold-side write — fires AFTER the line update, because the writer
+    // reads the order's lines. `holdOnQuoteSend` is that writer: it SETs
+    // every class this order (and its booking siblings) still quotes to the
+    // PEAK CONCURRENT need and widens the envelope. It replaced the
+    // delta-accumulating `syncHoldOnLineUpdate` here — a delta sums, and one
+    // van quoted for two separate weeks is one van. It also mints the
+    // booking when the order had none (a free-typed line bound to a real
+    // van), which is the POST route's "held the moment it is quoted" rule.
+    //
+    // What the recompute does NOT do, handled around it:
+    //   · it never shrinks a hold whose units are already ASSIGNED — that
+    //     is dispatch's work. So a VEHICLE line's quantity cut first hands
+    //     back THIS line's trucks by asset, last-bound first
+    //     (`releaseLineUnits`, the order-line ↔ unit stamp), and the same
+    //     when the line stops being a vehicle. Anywhere that still cannot
+    //     shrink (a stage) is REPORTED in `holds.note`;
+    //   · it binds no truck, so a vehicle quantity bump binds the extras to
+    //     this line afterwards, the way a fresh line does;
+    //   · it only visits classes still quoted, so a class the line LEFT is
+    //     released here, by asset. Never `syncHoldOnLineDelete`: at zero it
+    //     deletes the BookingItem and the cascade takes every unit on it.
+    // A vehicle line changing CLASS never reaches here — it was refused
+    // above (USE_SWITCH_CLASS) for the switch-class route.
+    let lineRelease: Awaited<ReturnType<typeof releaseLineUnits>> | null = null;
+    let unitOutcome: UnitAssignmentOutcome | null = null;
+    let holdsOutcome: {
+      categoryId: string | null
+      quantityBefore: number | null
+      quantityAfter: number | null
+      releasedUnits: string[]
+      note: string | null
+    } | null = null;
+    if (holdPlan.recompute && (parentOrder?.bookingId || newCategoryId)) {
       const operatorIdForAudit = await resolveOperatorId(session.user.email);
-      if (sameCategoryHold && newQty !== oldQty) {
-        await syncHoldOnLineUpdate(prisma, {
-          bookingId: parentOrder.bookingId,
-          categoryId: newCategoryId as string,
-          deltaQty: newQty - oldQty,
-          conflictOverrideNote: holdsAuditNote,
+      const liveItem = async (bookingId: string | null | undefined, categoryId: string | null) =>
+        bookingId && categoryId
+          ? prisma.bookingItem.findFirst({
+              where: { bookingId, categoryId, status: { in: ['REQUESTED', 'ASSIGNED'] } },
+              orderBy: { holdRank: 'asc' },
+              select: { id: true, quantity: true, status: true, notes: true },
+            })
+          : null;
+      const before = await liveItem(parentOrder?.bookingId, newCategoryId);
+      const vehicleLine = oldDept === 'VEHICLES' && newDept === 'VEHICLES';
+      // Read against the line's OLD days: a date move saved in the same
+      // edit is followed further down, so the units still carry the old ones.
+      const oldLine = { id: lineId, quantity: oldQty, pickupDate: fullExisting.pickupDate, returnDate: fullExisting.returnDate };
+
+      if (parentOrder?.bookingId && vehicleLine && oldCategoryId && oldCategoryId === newCategoryId && newQty < oldQty) {
+        // 3 cube trucks down to 2 gives back a SPECIFIC cube truck.
+        lineRelease = await releaseLineUnits({
+          orderId,
+          line: oldLine,
+          categoryId: oldCategoryId,
+          count: oldQty - newQty,
+          keep: newQty,
+          actor: { userId: operatorIdForAudit, source: 'line-quantity-edit', reason: `${parentOrder.orderNumber}: quantity ${oldQty} → ${newQty}` },
         });
-      } else if (oldIsHold && newIsHold && oldCategoryId !== newCategoryId) {
-        // Category change — release old, add new. Sequential.
-        await syncHoldOnLineDelete(prisma, {
-          bookingId: parentOrder.bookingId,
-          categoryId: oldCategoryId as string,
-          removedQty: oldQty,
-        });
-        await syncHoldOnLineAdd(prisma, {
-          bookingId: parentOrder.bookingId,
-          categoryId: newCategoryId as string,
-          addedQty: newQty,
-          conflictOverrideNote: holdsAuditNote,
-        });
-      } else if (oldIsHold && !newIsHold) {
-        await syncHoldOnLineDelete(prisma, {
-          bookingId: parentOrder.bookingId,
-          categoryId: oldCategoryId as string,
-          removedQty: oldQty,
-        });
-      } else if (!oldIsHold && newIsHold) {
-        await syncHoldOnLineAdd(prisma, {
-          bookingId: parentOrder.bookingId,
-          categoryId: newCategoryId as string,
-          addedQty: newQty,
-          conflictOverrideNote: holdsAuditNote,
+      } else if (parentOrder?.bookingId && oldDept === 'VEHICLES' && oldCategoryId && !newCategoryId) {
+        // The line stopped being a vehicle — its trucks go back.
+        lineRelease = await releaseLineUnits({
+          orderId,
+          line: oldLine,
+          categoryId: oldCategoryId,
+          actor: { userId: operatorIdForAudit, source: 'line-edit', reason: `${parentOrder.orderNumber}: line no longer holds a vehicle` },
         });
       }
-      // Dispatch-visible audit row if an override was confirmed.
+
+      const raised = await holdOnQuoteSend(orderId);
+      if (raised.error) console.error('[line-items] hold recompute failed (PUT):', raised.error);
+      const bookingIdNow =
+        parentOrder?.bookingId ??
+        (await prisma.order.findUnique({ where: { id: orderId }, select: { bookingId: true } }))?.bookingId ??
+        null;
+      const after = await liveItem(bookingIdNow, newCategoryId);
+
+      // The class the line left, when nothing on the booking quotes it any
+      // more. This order's units come off by asset — the ones on the line's
+      // own days first — and the rest of the line's count as pooled slots.
+      const releasedUnits: string[] = [...(lineRelease?.units ?? [])];
+      if (holdPlan.releaseCategoryId && !lineRelease?.held && bookingIdNow && !(await categoryStillQuoted(orderId, holdPlan.releaseCategoryId))) {
+        const oldItem = await prisma.bookingItem.findFirst({
+          where: { bookingId: bookingIdNow, categoryId: holdPlan.releaseCategoryId, status: { in: ['REQUESTED', 'ASSIGNED'] } },
+          orderBy: { holdRank: 'asc' },
+          select: {
+            id: true,
+            assignments: {
+              where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] }, OR: [{ orderId }, { orderId: null }] },
+              select: { assetId: true, startDate: true, endDate: true, asset: { select: { unitName: true } } },
+            },
+          },
+        });
+        if (oldItem) {
+          const onLineDays = (a: { startDate: Date; endDate: Date }) =>
+            a.startDate.getTime() === fullExisting.pickupDate.getTime() && a.endDate.getTime() === fullExisting.returnDate.getTime();
+          const mine = [...oldItem.assignments]
+            .sort((a, b) => Number(onLineDays(b)) - Number(onLineDays(a)))
+            .slice(0, oldQty);
+          const rel = await releaseBookingItem(oldItem.id, {
+            assetIds: mine.map((a) => a.assetId),
+            pooledSlots: Math.max(0, oldQty - mine.length),
+            actor: {
+              userId: operatorIdForAudit,
+              source: 'line-edit',
+              reason: `${parentOrder?.orderNumber ?? 'order'}: "${fullExisting.description}" no longer holds this class`,
+            },
+          });
+          if (rel.ok) releasedUnits.push(...mine.map((a) => a.asset.unitName));
+          else console.error('[line-items] old-class release failed (PUT):', rel.reason);
+        }
+      }
+
+      // The extra slots get trucks the way a fresh line does, stamped to
+      // this line, on its NEW days. Non-fatal — the class is held either way.
+      if (vehicleLine && newCategoryId && oldCategoryId === newCategoryId && newQty > oldQty && !raised.error && bookingIdNow) {
+        unitOutcome = await assignUnitsForLine({
+          orderId,
+          categoryId: newCategoryId,
+          quantity: newQty - oldQty,
+          request: { mode: 'next' },
+          categoryLabel: lineItem.description,
+          lineWindow: { start: lineItem.pickupDate, end: lineItem.returnDate },
+          orderLineItemId: lineId,
+        });
+      }
+
+      const stuck =
+        !lineRelease && !!before && !!after && oldCategoryId === newCategoryId && newQty < oldQty &&
+        after.quantity === before.quantity && before.status === 'ASSIGNED';
+      holdsOutcome = {
+        categoryId: newCategoryId,
+        quantityBefore: before?.quantity ?? (newCategoryId ? 0 : null),
+        quantityAfter: after?.quantity ?? (newCategoryId ? 0 : null),
+        releasedUnits,
+        note: raised.error
+          ? `The line saved, but the reservation could not be updated (${raised.error}). Check the hold on the board.`
+          : stuck
+            ? `The reservation still holds ${after!.quantity} — its units are already assigned. Release the one you no longer need from the reservation.`
+            : releasedUnits.length > 0 && !lineRelease
+              ? `${namesInWords(releasedUnits)} released — this line no longer holds that class.`
+              : null,
+      };
+
+      // The override, where dispatch reads it: on the hold and in the log.
       if (holdsAuditNote) {
         try {
+          if (after) {
+            const stamp = `[${new Date().toISOString().slice(0, 16)}] ${holdsAuditNote}`;
+            await prisma.bookingItem.update({
+              where: { id: after.id },
+              data: { notes: after.notes ? `${after.notes}\n${stamp}` : stamp },
+            });
+          }
           await prisma.auditLog.create({
             data: {
               userId: operatorIdForAudit,
@@ -409,8 +569,9 @@ export async function PUT(req: NextRequest, { params }: Params) {
               newValues: {
                 orderId,
                 orderLineItemId: lineId,
-                deltaQty: newQty - oldQty,
+                deltaQty: holdPlan.feasibilityDelta,
                 newQty,
+                holdQuantityAfter: after?.quantity ?? null,
                 note: holdsAuditNote,
               },
             },
@@ -554,6 +715,15 @@ export async function PUT(req: NextRequest, { params }: Params) {
       // The page says it out loud — a van that silently stayed on the old
       // days is how the board and the order came to disagree.
       assignmentsFollowed,
+      // What the hold did about a quantity / catalog edit: its quantity
+      // before and after the peak recompute, units released from a class
+      // the line left, and a note when the rep still has something to do.
+      // Null when the edit owed the hold nothing.
+      holds: holdsOutcome,
+      // The specific trucks the edit gave back (a quantity cut, or the line
+      // leaving Vehicles), and the ones bound for a quantity increase.
+      released: lineRelease ? { units: lineRelease.units, pooledSlots: lineRelease.pooledSlots } : null,
+      unitAssignment: unitOutcome,
     });
   } catch (error) {
     console.error("Update line item error:", error);
@@ -601,6 +771,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       inventoryItemId: true, assetCategoryId: true,
       isPackageHeader: true, packageInstanceId: true,
       pickStatus: true, fulfillmentLane: true,
+      pickupDate: true, returnDate: true,
     },
   });
   if (!lineRow) {
@@ -673,24 +844,55 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     });
   }
 
+  // THE TRUCKS ON THIS LINE, read before the row goes: the stamp that
+  // names them (BookingAssignment.orderLineItemId) is SET NULL by the DB
+  // the moment the line is deleted. Removing "1× Cube Truck" from an
+  // order takes a SPECIFIC cube truck off the reservation — the one
+  // reserved for that line — and never a sibling line's, and never the
+  // whole shared hold (which, at quantity zero, used to delete the item
+  // row and every other order's units under it).
+  const holdCategoryId = await holdCategoryIdForLine(lineRow);
+  const captured =
+    parentOrder && lineRow.department === 'VEHICLES' && holdCategoryId
+      ? await liveUnitsForLine({
+          orderId,
+          lineId,
+          categoryId: holdCategoryId,
+          quantity: lineRow.quantity,
+          window: { start: lineRow.pickupDate, end: lineRow.returnDate },
+        })
+      : null;
+
   await prisma.orderLineItem.delete({ where: { id: lineId } });
 
-  // (#2 Phase 2) Hold side delete — VEHICLES / STAGES only. Decrements
-  // BookingItem.quantity by the deleted line's qty; deletes the row
-  // when qty hits 0 so the schedule view doesn't show a phantom hold.
   let deleteHoldsResult: Awaited<ReturnType<typeof syncHoldOnLineDelete>> | null = null;
-  if (
+  let releasedUnits: { units: string[]; pooledSlots: number; quantityAfter: number; status: string } | null = null;
+  if (captured?.item) {
+    const pooledSlots = Math.max(0, lineRow.quantity - captured.units.length);
+    const operatorId = await resolveOperatorId(session.user.email);
+    const rel = await releaseBookingItem(captured.item.id, {
+      assetIds: captured.units.map((u) => u.assetId),
+      pooledSlots,
+      actor: { userId: operatorId, source: 'line-delete', reason: `${lineRow.description} removed from the order` },
+    });
+    if (rel.ok) {
+      releasedUnits = { units: captured.units.map((u) => u.unitName), pooledSlots, quantityAfter: rel.quantity, status: rel.status };
+    } else {
+      console.error('[line-items DELETE] unit release refused:', rel.reason);
+    }
+  } else if (
     parentOrder &&
-    (lineRow.department === 'VEHICLES' || lineRow.department === 'STAGES') &&
-    lineRow.assetCategoryId
+    lineRow.department === 'STAGES' &&
+    holdCategoryId
   ) {
+    // Stages are still a quantity on the hold — no unit to name.
     const parentOrderForBooking = await prisma.order.findUnique({
       where: { id: orderId }, select: { bookingId: true },
     });
     if (parentOrderForBooking?.bookingId) {
       deleteHoldsResult = await syncHoldOnLineDelete(prisma, {
         bookingId: parentOrderForBooking.bookingId,
-        categoryId: lineRow.assetCategoryId,
+        categoryId: holdCategoryId,
         removedQty: lineRow.quantity,
       });
     }
@@ -749,9 +951,10 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       recomputed: pickRecompute.pickListRecomputed,
       wasPicked: alreadyPicked,
     },
-    // (#2 Phase 2) Holds outcome on delete — null for non-hold lines
-    // or orders with no Booking. quantityAfter=0 → the BookingItem
-    // row was removed; otherwise just decremented.
+    // Holds outcome on delete — null for non-hold lines or orders with
+    // no Booking. Stages: the quantity decrement. Vehicles: the specific
+    // trucks that came off the reservation for this line.
     holds: deleteHoldsResult,
+    released: releasedUnits,
   });
 }

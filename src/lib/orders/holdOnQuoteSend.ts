@@ -148,6 +148,91 @@ export function holdCategoryForLine(li: HoldableLineShape): string | null {
   return inv.legacyAssetCategoryId ?? null
 }
 
+/**
+ * What a LINE EDIT owes the hold. PURE — the row editor's quantity /
+ * catalog-binding branch (`PUT /line-items/[lineId]`) reads this instead of
+ * testing the line's own `assetCategoryId`, which a catalog-bound vehicle
+ * leaves null: until 2026-09-17 a real van edited from 1 to 2 left the hold
+ * at 1, and the capacity confirm never fired. Both class ids come from
+ * `holdCategoryForLine`, before and after the edit.
+ *
+ *   · feasibilityDelta — units the NEW class must have room for before the
+ *     edit lands (0 = nothing to ask). Same class: only the increase.
+ *     A class the line did not hold before: the whole quantity.
+ *   · recompute — re-run `holdOnQuoteSend`, which SETs each quoted class to
+ *     its PEAK CONCURRENT need. Never a delta: two sequential blocks of one
+ *     van are one van, and a delta-accumulating write says two.
+ *   · releaseCategoryId — the class the line stopped holding. The recompute
+ *     only visits classes still quoted, so the caller hands this one back
+ *     when nothing quotes it any more (`categoryStillQuoted`).
+ */
+export interface LineEditHoldPlan {
+  feasibilityDelta: number
+  recompute: boolean
+  releaseCategoryId: string | null
+}
+
+export function planHoldSyncOnLineEdit(args: {
+  oldCategoryId: string | null
+  newCategoryId: string | null
+  oldQty: number
+  newQty: number
+}): LineEditHoldPlan {
+  const { oldCategoryId, newCategoryId } = args
+  const oldQty = Math.max(0, Math.floor(args.oldQty) || 0)
+  const newQty = Math.max(0, Math.floor(args.newQty) || 0)
+  if (!oldCategoryId && !newCategoryId) return { feasibilityDelta: 0, recompute: false, releaseCategoryId: null }
+  if (oldCategoryId === newCategoryId) {
+    return { feasibilityDelta: Math.max(0, newQty - oldQty), recompute: newQty !== oldQty, releaseCategoryId: null }
+  }
+  return {
+    feasibilityDelta: newCategoryId ? newQty : 0,
+    recompute: true,
+    releaseCategoryId: oldCategoryId,
+  }
+}
+
+/** The sibling orders whose vehicle lines share this order's job-level
+ *  booking — one definition for the peak and for `categoryStillQuoted`. */
+function siblingOrdersWhere(order: { id: string; jobId: string }, bookingId: string | null) {
+  return {
+    jobId: order.jobId,
+    id: { not: order.id },
+    status: { not: 'CANCELLED' as const },
+    quoteStatus: { notIn: ['LOST' as const, 'EXPIRED' as const] },
+    archivedAt: null,
+    OR: [{ bookingId }, { bookingId: null }],
+  }
+}
+
+/**
+ * Does any dated line on this order — or on the sibling orders sharing its
+ * booking — still hold against `categoryId`? False means the recompute will
+ * never visit that class again, so whatever it holds is the caller's to
+ * release.
+ */
+export async function categoryStillQuoted(orderId: string, categoryId: string): Promise<boolean> {
+  const lineSelect = {
+    pickupDate: true, returnDate: true, department: true, assetCategoryId: true,
+    assetCategory: { select: { department: true } },
+    inventoryItem: { select: { department: true, trackingMode: true, legacyAssetCategoryId: true } },
+  } as const
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { id: true, jobId: true, bookingId: true, lineItems: { select: lineSelect } },
+  })
+  if (!order) return false
+  const siblings = order.jobId
+    ? await prisma.order.findMany({
+        where: siblingOrdersWhere({ id: order.id, jobId: order.jobId }, order.bookingId),
+        select: { lineItems: { select: lineSelect } },
+      })
+    : []
+  return [...order.lineItems, ...siblings.flatMap((o) => o.lineItems)].some(
+    (li) => !!li.pickupDate && !!li.returnDate && holdCategoryForLine(li) === categoryId,
+  )
+}
+
 export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResult> {
   const out: HoldOnQuoteResult = {
     created: 0, reused: 0, adjusted: 0, skippedNoDates: 0, skippedNotUnitTracked: 0,
@@ -320,14 +405,7 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
     // archived, or that hold on a DIFFERENT booking, stay out.
     const siblings = order.jobId
       ? await prisma.order.findMany({
-          where: {
-            jobId: order.jobId,
-            id: { not: order.id },
-            status: { not: 'CANCELLED' },
-            quoteStatus: { notIn: ['LOST', 'EXPIRED'] },
-            archivedAt: null,
-            OR: [{ bookingId }, { bookingId: null }],
-          },
+          where: siblingOrdersWhere({ id: order.id, jobId: order.jobId }, bookingId),
           select: {
             lineItems: {
               select: {

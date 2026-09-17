@@ -96,10 +96,13 @@ interface PickListDetail {
     orderNumber: string
     startDate: string | null
     endDate: string | null
+    gearHandoff?: 'WILL_CALL' | 'LOAD_ON' | string | null
     company: { id: string; name: string }
     job: { id: string; jobCode: string; name: string } | null
   }
   items: PickItem[]
+  /** The reserved vehicle this order loads onto, when the order says so. */
+  loadsOn?: { assignmentId: string; unitName: string } | null
 }
 
 const STATUS_BADGE: Record<ListStatus, string> = {
@@ -364,6 +367,18 @@ export default function WarehousePickDetailPage() {
             <div className="text-[12px] text-zinc-500 mt-1">
               Pickup {fmtDay(picklist.order.startDate)} → return {fmtDay(picklist.order.endDate)}
             </div>
+            {/* Where it goes — the order's own note (Wes 2026-09-16: gear
+                orders say at the bottom which reserved vehicle they load
+                onto). Big enough to read from the cart. */}
+            {picklist.loadsOn ? (
+              <div className="mt-2 inline-flex items-center gap-2 rounded-md bg-amber-600 px-3 py-1.5 text-[15px] font-semibold text-white">
+                Load on {picklist.loadsOn.unitName}
+              </div>
+            ) : picklist.order.gearHandoff === 'WILL_CALL' ? (
+              <div className="mt-2 inline-flex items-center rounded-md border border-zinc-700 bg-zinc-800 px-3 py-1.5 text-[15px] font-semibold text-zinc-200">
+                Will call — client picks up here
+              </div>
+            ) : null}
           </div>
 
           {/* Status-driven primary CTA + printable pick list */}
