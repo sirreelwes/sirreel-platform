@@ -285,9 +285,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // filed (the client's inquiry, the quote…), the job address on Cc, the
   // job's subject. Recorded on the root thread by the helper, so the Job
   // page's "Email threads" shows our half without the old hand-filing.
+  // From = the AUTHOR (Phase 2, Wes 2026-09-17: the client sees Jose, not a
+  // system). Through Resend's verified sirreel.com domain — the cadence
+  // runner has sent as the agent this way since it shipped, so DKIM/SPF
+  // hold. Reply-To stays the agent's watched inbox as before. A sender
+  // outside the domain (a shared desk login) falls back to SirReel HQ.
+  const from = /@sirreel\.com$/i.test(me.email)
+    ? `${(me.name || 'SirReel').replace(/[<>"\r\n]/g, '').trim() || 'SirReel'} <${me.email}>`
+    : undefined
   const result = await sendOnJobThread({
     jobId: job.id,
     staffEmail: me.email,
+    from,
     to: [to],
     cc: ccWithTeam.length > 0 ? ccWithTeam : undefined,
     replyTo: agentReplyTo(me.email) ?? undefined,

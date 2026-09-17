@@ -44,6 +44,13 @@ export interface RecordOutboundInput {
    */
   rfc822MessageId?: string | null
   inReplyTo?: string | null
+  /**
+   * The send label (EmailPayload.label — `send-quote:S260912-003`,
+   * `job-welcome`…). Kept on the row as `label:<value>` in triageNotes,
+   * which no HQ-composed row uses for anything else, so the job
+   * Conversation can say "Quote sent" instead of "Sent by HQ".
+   */
+  label?: string | null
 }
 
 /**
@@ -96,6 +103,7 @@ export async function recordOutboundOnThread(
         gmailMessageId: `hq-reply-${randomUUID()}`,
         rfc822MessageId: input.rfc822MessageId ?? null,
         inReplyTo: input.inReplyTo ?? null,
+        triageNotes: input.label ? `label:${input.label}` : null,
         fromAddress: parseEmailAddress(input.staffEmail),
         toAddresses: input.toAddresses.map((a) => a.trim().toLowerCase()).filter(Boolean),
         subject: input.subject,

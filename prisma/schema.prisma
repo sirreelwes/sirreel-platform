@@ -5377,6 +5377,41 @@ model VendorDriver {
 /// `role` is plain text against the list in lib/sub-rentals/vendorContacts.ts,
 /// not a Postgres enum: a new role should not need a two-deploy dance.
 /// Table added by additive SQL (scripts/add-vendor-contacts-table.ts).
+/// One-thread-per-job, Phase 2 — the job Conversation's CLAIM: who is
+/// answering, or which desk it was handed to. One row per job, created on
+/// the first claim. Plain columns, no relations, so the Job and User
+/// models stay untouched. Table by scripts/add-job-thread-tables.ts
+/// (additive SQL); reads fail soft until it has run.
+model JobThreadState {
+  id              String    @id @default(uuid())
+  jobId           String    @unique @map("job_id")
+  claimedByUserId String?   @map("claimed_by_user_id")
+  /// SALES | BILLING — the desk the conversation is with.
+  claimedLane     String?   @map("claimed_lane")
+  claimedAt       DateTime? @map("claimed_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at")
+
+  @@map("sr_job_threads")
+}
+
+/// An internal note in a job's Conversation — interleaved with the
+/// client's emails on the job page, never sent anywhere. `mentions` are
+/// User ids the body @named. `anchoredEmailMessageId` hangs the note
+/// under a specific message ("re: her generator question").
+model JobThreadNote {
+  id                     String   @id @default(uuid())
+  jobId                  String   @map("job_id")
+  authorUserId           String   @map("author_user_id")
+  body                   String   @db.Text
+  mentions               String[] @default([])
+  anchoredEmailMessageId String?  @map("anchored_email_message_id")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  @@index([jobId, createdAt])
+  @@map("sr_job_thread_notes")
+}
+
 model VendorContact {
   id       String @id @default(uuid())
   vendorId String @map("vendor_id")

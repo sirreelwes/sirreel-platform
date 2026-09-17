@@ -18,19 +18,27 @@
  *    a script name from the request. A web endpoint that runs whatever it is
  *    handed is a remote shell with a login page in front of it.
  *
- * 2. **No schema changes.** `category` has no DDL member on purpose, so the
- *    type system refuses one. The `add-*-columns` / `add-*-table` /
- *    `ALTER TYPE` scripts stay on a laptop: the live DB carries objects no
- *    schema file knows, their failure mode is a half-migrated production
- *    database, and they are the one class of change that genuinely wants
- *    someone at a keyboard who can read the error and act on it. Tasks that
- *    DEPEND on a migration having run say so and refuse (see the enum
- *    preflight in seedVsmPlanet.ts).
+ * 2. **No schema changes — with ONE named exception.** `category: 'schema'`
+ *    (2026-09-17, Wes: "It's not possible to do any of this from my phone")
+ *    is allowed ONLY for `CREATE TABLE / INDEX … IF NOT EXISTS`: a task in
+ *    that category carries its statements as `ddl` and every one must pass
+ *    `isAdditiveStatement` (additiveDdl.ts) — the registry test checks it at
+ *    build time, the runner refuses at run time. A brand-new table has no
+ *    half-run state, so the reason the rule existed does not apply to it.
+ *    The `add-*-columns` / `ALTER TYPE` scripts STAY on a laptop: the live
+ *    DB carries objects no schema file knows, their failure mode is a
+ *    half-migrated production database, and they are the class of change
+ *    that genuinely wants someone at a keyboard who can read the error and
+ *    act on it. Tasks that DEPEND on such a migration say so and refuse
+ *    (see the enum preflight in seedVsmPlanet.ts).
  *
  * Every task is idempotent, supports a dry run, and reports what it did.
  */
 
-export type MaintenanceCategory = 'seed' | 'backfill'
+import type { AdditiveDdl } from '@/lib/admin/additiveDdl'
+import { JOB_THREAD_TABLES_DDL } from '@/lib/email/jobThreadTableSql'
+
+export type MaintenanceCategory = 'seed' | 'backfill' | 'schema'
 
 export interface MaintenanceParam {
   key: string
@@ -59,6 +67,8 @@ export interface MaintenanceTaskMeta {
   /** The laptop equivalent, so the two are never confused for each other. */
   cliEquivalent: string
   params?: readonly MaintenanceParam[]
+  /** ONLY on a `schema` task: the additive statements it runs, verbatim. */
+  ddl?: AdditiveDdl
 }
 
 export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
@@ -99,6 +109,17 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     category: 'backfill',
     writes: 'assets (the six rows re-filed; a duplicate retired) · booking_assignments, checkout_records, maintenance_records, dispatch_tasks, inspections, insurance claims, incidents, lot checks, BIT inspections (re-pointed off a duplicate) · asset_categories + inventory_items (unit counts; the w/o class un-archived) · audit_log',
     cliEquivalent: 'npx tsx scripts/cargo-vans-no-lift-gate.ts',
+  },
+  {
+    id: 'job-conversation-tables',
+    title: 'Create the job Conversation tables',
+    summary: 'Adds the two tables the job Conversation needs for internal notes and the "who is answering" claim.',
+    detail:
+      'Phase 2 of one-thread-per-job (shipped 2026-09-17) reads and writes two new tables: sr_job_threads (one row per job — who is answering, or which desk it was handed to) and sr_job_thread_notes (internal notes in the conversation, never sent). Until they exist the panel still shows the emails, but posting a note or pressing Hand to Billing answers "the Conversation tables are not in the database yet". This runs the four CREATE … IF NOT EXISTS statements and then lists each table’s columns so you can see it took. No existing table is touched; running it twice changes nothing. Dry run only reads the catalog and says which tables are missing.',
+    category: 'schema',
+    writes: 'sr_job_threads, sr_job_thread_notes (created if absent, with their two indexes) · sr_audit_logs',
+    cliEquivalent: 'npx tsx scripts/add-job-thread-tables.ts',
+    ddl: JOB_THREAD_TABLES_DDL,
   },
 ] as const
 

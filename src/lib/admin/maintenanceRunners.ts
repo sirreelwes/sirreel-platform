@@ -14,6 +14,7 @@ import { seedVsmPlanet, RECEIVE_METHODS, type ReceiveMethodKey } from '@/lib/sub
 import { moveCargoOffLiftGate } from '@/lib/fleet/moveCargoOffLiftGate'
 import { seedDf50FluidKit } from '@/lib/inventory/seedDf50FluidKit'
 import { TaskRefused } from '@/lib/admin/taskRefused'
+import { runAdditiveDdl } from '@/lib/admin/runAdditiveDdl'
 
 // The one refusal class every task throws. `SeedRefused` is the name the
 // route and the first CLI learned it under.
@@ -107,6 +108,23 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
     // the log where a phone screen lands.
     const log = r.warnings.length ? [...r.log, '', 'Look at:', ...r.warnings.map((w) => `  ! ${w}`)] : r.log
     return { log, createdIds: [], touchedIds: r.touchedIds, headline }
+  },
+
+  'job-conversation-tables': async ({ dryRun }) => {
+    const task = MAINTENANCE_TASKS.find((t) => t.id === 'job-conversation-tables')
+    if (!task?.ddl) throw new TaskRefused('This task carries no statements.', 'Add `ddl` to its registry entry.')
+    const r = await runAdditiveDdl(task.ddl, { dryRun })
+    const n = dryRun ? r.missingAfter.length : r.created.length
+    const headline = r.missingAfter.length && !dryRun
+      ? `${r.missingAfter.join(', ')} still missing after the run — read the log.`
+      : n === 0
+        ? 'Both tables already exist — nothing to do.'
+        : dryRun
+          ? `Dry run — ${n} table${n === 1 ? '' : 's'} would be created.`
+          : `${n} table${n === 1 ? '' : 's'} created. Notes and the claim menu work now.`
+    // A table is not a row: nothing to clean up by id. The audit row still
+    // records the run and this headline; `touchedIds` names the tables made.
+    return { log: r.log, createdIds: [], touchedIds: r.created, headline }
   },
 }
 
