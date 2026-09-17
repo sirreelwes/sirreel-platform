@@ -15,7 +15,10 @@
  * quote (a charge the client cannot see is a charge they will dispute).
  * suppressIfOrdered stays on: a client who lists fluid themselves keeps
  * their line and does not get billed for a second jug. The DF-50 is NOT
- * here — it goes out pre-juiced; its extra gallon is an ordinary add-on.
+ * here — it has its own task, scripts/seed-df50-fluid-kit.ts (also on
+ * /admin/maintenance), same settings. (This file first said the DF-50
+ * went out pre-juiced and needed none; Wes 2026-09-17: the fluid "always
+ * goes out. It's part of a kit".)
  *
  * THE FLUID MUST BILL AS AN EXPENDABLE, and on 2026-09-15 it did not.
  * The 2026-09-11 re-flattening left both rows under PRO_SUPPLIES, which

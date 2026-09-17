@@ -12,6 +12,7 @@
 import { MAINTENANCE_TASKS, type MaintenanceTaskMeta } from '@/lib/admin/maintenanceTasks'
 import { seedVsmPlanet, RECEIVE_METHODS, type ReceiveMethodKey } from '@/lib/sub-rentals/seedVsmPlanet'
 import { moveCargoOffLiftGate } from '@/lib/fleet/moveCargoOffLiftGate'
+import { seedDf50FluidKit } from '@/lib/inventory/seedDf50FluidKit'
 import { TaskRefused } from '@/lib/admin/taskRefused'
 
 // The one refusal class every task throws. `SeedRefused` is the name the
@@ -46,6 +47,18 @@ const clean = (v: string | undefined): string | null => {
 }
 
 const RUNNERS: Record<string, MaintenanceRunner> = {
+  'df50-fluid-kit': async ({ dryRun }) => {
+    const r = await seedDf50FluidKit({ dryRun })
+    const n = r.linked
+    const nothing = n === 0 && r.touchedIds.length === 0
+    const headline = nothing
+      ? 'Already linked — a DF-50 already brings its fluid.'
+      : dryRun
+        ? `Dry run — ${n} DF-50 row${n === 1 ? '' : 's'} would get the fluid as a kit piece.`
+        : `${n} DF-50 row${n === 1 ? '' : 's'} now bring the fluid with them.`
+    const log = r.warnings.length ? [...r.log, '', 'Look at:', ...r.warnings.map((w) => `  ! ${w}`)] : r.log
+    return { log, createdIds: r.createdIds, touchedIds: r.touchedIds, headline }
+  },
   'seed-vsm-planet-roster': async ({ dryRun, params }) => {
     const receive = clean(params.receiveMethod)
     if (receive && !RECEIVE_METHODS.includes(receive as ReceiveMethodKey)) {
