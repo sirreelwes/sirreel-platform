@@ -211,6 +211,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     /** Attach this job's counter-proposal PDF (the "Send to client" button
      *  on the job page's counter-proposal card and the review desk). */
     counterReviewId?: unknown
+    /** The sender reviewed To / Cc / the message and pressed Send a second
+     *  time. Wes 2026-09-17: "things that are sent to the client need to
+     *  be confirmed." Required — a composer that skips the review cannot
+     *  send. */
+    confirmed?: unknown
+  }
+
+  if (payload.confirmed !== true) {
+    return NextResponse.json(
+      { ok: false, error: 'Review the message first — sends to the client are confirmed before they go out.' },
+      { status: 400 },
+    )
   }
 
   // Re-parsed server-side. The browser's validation is a convenience, not

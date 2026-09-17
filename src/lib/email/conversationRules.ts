@@ -226,6 +226,62 @@ export function mentionsIn(body: string, staff: { id: string; name: string }[]):
   return out
 }
 
+// ── Before a reply goes to the client ────────────────────────────────
+
+/**
+ * Wes 2026-09-17: "Things that are sent to the client need to be
+ * confirmed. I'm a little bit afraid that someone's going to write an
+ * internal note and accidentally send it to the client." The composer's
+ * two tabs sit an inch apart and ⌘↵ worked in both, so a note typed on the
+ * wrong tab was one keystroke from the client's inbox.
+ *
+ * Two things now stand between Send and the wire: a review step in the
+ * panel (To, Cc, From, the whole message, then a second Send), and the
+ * server refusing a send that does not say it was reviewed
+ * (`confirmed: true` on POST /api/jobs/[id]/email). This rule feeds the
+ * review step: the tells that a message was meant for the team, so the
+ * review can say so out loud and offer "Save as a note instead".
+ *
+ * Tells, all read off the text: an @mention of someone on staff (the
+ * client has no idea who @Hugo is), a team-facing opener ("Hey team",
+ * "Hi all", "Team,"), or a staff FIRST NAME used as an address ("Oliver,
+ * can you…"). None of them block — a rep can legitimately write "Hi all"
+ * to a production — they make the review louder.
+ */
+export function internalNoteTells(body: string, staff: { id: string; name: string }[]): string[] {
+  const tells: string[] = []
+  const text = body.trim()
+  if (!text) return tells
+
+  const mentioned = mentionsIn(text, staff)
+  if (mentioned.length > 0) {
+    const names = mentioned
+      .map((id) => staff.find((s) => s.id === id)?.name.split(/\s+/)[0])
+      .filter((n): n is string => !!n)
+    tells.push(`mentions ${names.map((n) => `@${n}`).join(', ')} — the client does not know who that is`)
+  }
+
+  const opener = text.split('\n')[0].trim().toLowerCase().replace(/[!.,:\s]+$/, '')
+  if (/^(hey|hi|hello|yo)?\s*(team|all|everyone|guys|folks)$/.test(opener) || /^(hey|hi|hello)\s+(team|all|everyone|guys|folks)\b/.test(opener)) {
+    tells.push(`opens "${text.split('\n')[0].trim()}" — that reads as a note to the team`)
+  }
+
+  // "Oliver, can you…" / "Hugo — " at the start of a line: a colleague
+  // addressed by first name. Only a FULL-word match at a line start, so
+  // "Ana" inside "Anaheim" and a client who shares a name mid-sentence
+  // do not trip it.
+  const firsts = new Set(staff.map((s) => s.name.trim().split(/\s+/)[0].toLowerCase()).filter((n) => n.length > 2))
+  const addressed = new Set<string>()
+  for (const line of text.split('\n')) {
+    const m = line.trim().match(/^([A-Za-z][A-Za-z'.-]*)\s*[,—:-]/)
+    if (m && firsts.has(m[1].toLowerCase())) addressed.add(m[1])
+  }
+  if (addressed.size > 0) {
+    tells.push(`addresses ${[...addressed].join(', ')} by name — someone on the team`)
+  }
+  return tells
+}
+
 /** Merge emails and notes into one stream, oldest first. Stable on ties (email before note). */
 export function mergeTimeline<E extends { at: Date }, N extends { at: Date }>(
   emails: E[],
@@ -338,4 +394,94 @@ export function alertSummary(alerts: Array<{ name: string; channel: AlertChannel
       return `${first(a.name)} unreachable (no mobile or email)`
     })
     .join(' · ')
+}
+
+// ── The Chat page: every job conversation you are IN ──────────────────
+//
+// Wes 2026-09-17: "let's create a chat tab on the left menu … all chats,
+// no matter which job, will show up here" — then, at once: "the chats
+// shouldn't be for everyone. It should be for everyone who is included in
+// that chat. In other words if it was directly @billing, it wouldn't show
+// up in Hugo's and vice versa."
+//
+// So the page is NOT a firehose of every conversation. A job reaches your
+// list only for a REASON, and the reason is shown on the row — if you
+// cannot see why a job is in your chat list, the rule is wrong.
+
+export type ChatReason =
+  /** @you in a note on that job. */
+  | 'mentioned'
+  /** You hold the claim — "<you> is answering". */
+  | 'holding'
+  /** You wrote a note there, or sent/received mail on the thread. */
+  | 'wrote'
+  /** You are the agent on the job. */
+  | 'rep'
+  /** It was handed to your desk (Billing today), or landed in its inbox. */
+  | 'desk'
+
+/** Strongest first — the one the row shows, and the tie-break for equal tiers. */
+export const CHAT_REASON_ORDER: readonly ChatReason[] = ['mentioned', 'holding', 'wrote', 'rep', 'desk']
+
+export function strongestReason(reasons: readonly ChatReason[]): ChatReason | null {
+  for (const r of CHAT_REASON_ORDER) if (reasons.includes(r)) return r
+  return null
+}
+
+/** Why this job is in your list, in your words. */
+export function inclusionLabel(reasons: readonly ChatReason[]): string {
+  switch (strongestReason(reasons)) {
+    case 'mentioned': return 'You were tagged'
+    case 'holding': return 'You are answering'
+    case 'wrote': return 'You wrote here'
+    case 'rep': return 'Your job'
+    case 'desk': return 'Billing desk'
+    default: return ''
+  }
+}
+
+/** Ana's desk: the BILLING role, or one of the billing inboxes. */
+export function isBillingDesk(args: { role?: string | null; email?: string | null }): boolean {
+  if ((args.role || '').toUpperCase() === 'BILLING') return true
+  return BILLING_INBOXES.has(bareAddress(args.email))
+}
+
+export interface ChatTierInput {
+  /** An urgent note tagged you and you have not written since. */
+  urgentForMe: boolean
+  /** A note tagged you and you have not written since. */
+  taggedMe: boolean
+  /** The client's newest message is newer than anything we sent. */
+  awaitingReply: boolean
+}
+
+/**
+ * How loudly a row asks for you. Lower sorts first: someone put your name
+ * on it and said it was urgent, then your name, then a waiting client,
+ * then everything else. Deliberately NOT "newest first" overall — a chat
+ * list sorted purely by time buries the one row that named you.
+ */
+export function chatTier(r: ChatTierInput): number {
+  if (r.urgentForMe) return 0
+  if (r.taggedMe) return 1
+  if (r.awaitingReply) return 2
+  return 3
+}
+
+/** Tier first, then newest activity. Pure; the page renders this order. */
+export function sortChatRows<T extends ChatTierInput & { lastAt: Date }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const t = chatTier(a) - chatTier(b)
+    if (t !== 0) return t
+    return b.lastAt.getTime() - a.lastAt.getTime()
+  })
+}
+
+/** One line of the newest message, for the row. Notes and mail both. */
+export const CHAT_PREVIEW_MAX = 160
+
+export function chatPreview(body: string | null | undefined): string {
+  const line = (body || '').replace(/\s+/g, ' ').trim()
+  if (line.length <= CHAT_PREVIEW_MAX) return line
+  return `${line.slice(0, CHAT_PREVIEW_MAX - 1).trimEnd()}…`
 }

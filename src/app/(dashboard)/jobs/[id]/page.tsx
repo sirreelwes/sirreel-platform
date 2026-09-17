@@ -545,6 +545,14 @@ export default function JobDetailPage() {
   );
   const [convoAwaiting, setConvoAwaiting] = useState(false);
   const onConvoSummary = useCallback((sum: { awaitingReply: boolean }) => setConvoAwaiting(sum.awaitingReply), []);
+  // `?book=1` — where the tile's "Approved — book it" chip lands. The chip
+  // used to be plain text inside the row's link, so pressing it dropped a
+  // rep at the top of a long page with nothing saying WHICH order it meant
+  // (Wes 2026-09-17). Now it opens the approved orders and puts the
+  // book-it prompt on screen. Once per landing: a rep who scrolls away is
+  // not yanked back on the next re-render.
+  const bookDeepLink = searchParams?.get('book') === '1';
+  const bookLandedRef = useRef(false);
   const id = params?.id as string;
 
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -679,6 +687,25 @@ export default function JobDetailPage() {
       next.has(oid) ? next.delete(oid) : next.add(oid);
       return next;
     });
+
+  // Land the `?book=1` deep link: open every approved-unbooked order and
+  // scroll the prompt into view. Runs after the job is in state, so the
+  // #book-it node it looks for has rendered.
+  useEffect(() => {
+    if (!bookDeepLink || !job || bookLandedRef.current) return;
+    const approved = job.orders.filter((o) => o.status === 'APPROVED');
+    if (approved.length === 0) return;
+    bookLandedRef.current = true;
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      for (const o of approved) next.add(o.id);
+      return next;
+    });
+    const raf = requestAnimationFrame(() => {
+      document.getElementById('book-it')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [bookDeepLink, job]);
 
   // Add-contact form on the Contacts card. Contacts previously attached only
   // through order flows; since the payment-options email routes by them
@@ -1012,6 +1039,21 @@ export default function JobDetailPage() {
   // Phase 7 Pass A — at-a-glance engagement rollup. All derived from
   // the expanded payload; no extra API call.
   const liveOrders = job.orders.filter((o) => o.status !== 'CANCELLED');
+  // APPROVED AND NOT BOOKED — the one state where the ball is entirely in
+  // our court and the next move is a single press.
+  //
+  // Wes 2026-09-17, on SR-JOB-0312: "It says that the production supply
+  // order is booked but it does not give me any other options there. On
+  // the tile it says that I need to book it." Both were right about
+  // different orders. The header badge is `rollupCadence`, which maps
+  // APPROVED and BOOKED to the same 'booked' state (lib/jobs/cadence.ts)
+  // — deliberately, because a new CadenceState would re-tier the board's
+  // colours, legend and sort — so on a job carrying one booked order and
+  // one approved one the header reads BOOKED and prompts nothing, while
+  // the tile's `approvedUnbooked` count says book it. The badge is not
+  // changing; this prompt is the qualifier beside it, and it NAMES the
+  // order, which is what the tile could never say.
+  const approvedUnbooked = liveOrders.filter((o) => o.status === 'APPROVED');
   // A job has no dates of its own — see lib/jobs/dateRange. Show the span
   // its ORDERS cover instead of a separately-typed job range that drifts.
   // NOT displayed — a job has no dates of its own and HQ no longer shows a
@@ -1788,6 +1830,44 @@ const driverTone = (d: any): string => {
                   nothing has welcomed them; quiet once sent. */}
               <JobWelcomeButton jobId={job.id} onSent={load} />
             </div>
+
+            {/* APPROVED, NOT BOOKED — named, with the press beside it.
+                The header badge cannot say this (see `approvedUnbooked`
+                above), so it is said here, in the row that already
+                carries the other "this is due" actions. One line per
+                order: a job can carry more than one, and "which order?"
+                was the whole complaint. */}
+            {approvedUnbooked.length > 0 && (
+              <div
+                id="book-it"
+                className="mt-3 scroll-mt-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5"
+              >
+                <div className="text-[12px] font-semibold text-amber-900">
+                  {approvedUnbooked.length === 1
+                    ? 'One order is approved but not booked yet'
+                    : `${approvedUnbooked.length} orders are approved but not booked yet`}
+                </div>
+                <div className="mt-0.5 text-[12px] text-amber-900/80">
+                  The client said yes. Booking firms the held units and routes the lines to the floor.
+                </div>
+                <div className="mt-2 space-y-2">
+                  {approvedUnbooked.map((o) => (
+                    <div key={o.id} className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[13px] font-semibold text-amber-900">{o.orderNumber}</span>
+                      <span className="text-[12px] text-amber-900/80">
+                        {orderContentSummary(o.lineItems) ?? 'No line items yet'}
+                      </span>
+                      <MarkBookedButton
+                        orderId={o.id}
+                        orderNumber={o.orderNumber}
+                        orderStatus={o.status}
+                        onDone={load}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {job.fromInquiry && (
               <div className="mt-1 flex items-center gap-1.5 text-[12px] text-zinc-700">
                 <span>Originated from</span>

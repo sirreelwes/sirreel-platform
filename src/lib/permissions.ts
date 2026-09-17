@@ -380,6 +380,22 @@ export function canAccessAssistantConfig(role: UserRole): boolean {
 
 // Navigation items per role
 export type NavItem = { id: string; label: string; icon: string; href: string };
+
+// Wes 2026-09-17: "let's create a chat tab on the left menu for everyone …
+// all chats, no matter which job, will show up here. It's another way to
+// communicate if you're not already in the job." In EVERY branch, because
+// the yard and billing are on the receiving end of a tag as often as sales
+// is. The PAGE is what scopes it — /chat lists only conversations you are
+// included in (chatInbox.ts), so a shared nav row is not a shared view.
+//
+// FIRST in every branch, directly under the Incoming pill (Wes 2026-09-17:
+// "I assume the chat item will sit at the top of the left menu, just under
+// Incoming?"). This NARROWS the 2026-09-03 ruling — "move the Reservations
+// tab to the top of the list and have that be the default view for
+// everyone" — to its second half: Reservations is still where everyone
+// LANDS (`defaultLandingPath` is untouched), it is simply no longer the
+// top row. A chat tab people have to hunt for is a chat tab nobody reads.
+const CHAT_ITEM: NavItem = { id: 'chat', label: 'Chat', icon: 'MessagesSquare', href: '/chat' };
 export type NavSection = { label: string | null; items: NavItem[] };
 
 export function getNavItems(input: UserRole | PermissionsUser): NavItem[] {
@@ -488,6 +504,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // lookup, not a daily surface.
         label: 'Warehouse & Fleet',
         items: [
+          CHAT_ITEM,
           { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           { id: 'yard', label: 'Today', icon: 'Sun', href: '/yard' },
           // Hugo, 2026-09-03: the floor picks on PAPER, then walks the
@@ -549,6 +566,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
       {
         label: 'Billing & Collections',
         items: [
+          CHAT_ITEM,
           ...(canUseCollections(navRole, navEmail)
             ? [{ id: 'collections', label: 'Collections', icon: 'CreditCard', href: '/collections' }]
             : []),
@@ -624,6 +642,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         items: [
           // Reservations first — the app's default view for everyone
           // as of 2026-09-03.
+          CHAT_ITEM,
           { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
           { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
           { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },
@@ -717,6 +736,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // IS the inbound queue; /inquiries redirects there.
         // Reservations first — the app's default view for everyone as
         // of 2026-09-03 (Wes, after the Hugo meeting).
+        CHAT_ITEM,
         { id: 'schedule', label: SCHEDULE_LABEL, icon: 'CalendarDays', href: '/gantt' },
         { id: 'jobs', label: 'Jobs', icon: 'Briefcase', href: '/jobs' },
         { id: 'orders', label: 'Orders', icon: 'FileText', href: '/orders' },

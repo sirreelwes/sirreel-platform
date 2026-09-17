@@ -23,9 +23,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Lock, Mail, Send, Siren, StickyNote, UserCheck, UserPlus, Users } from 'lucide-react'
+import { AlertTriangle, Lock, Mail, Send, Siren, StickyNote, UserCheck, UserPlus, Users } from 'lucide-react'
 import { splitCcInput } from '@/lib/email/ccList'
-import { mentionsIn } from '@/lib/email/conversationRules'
+import { internalNoteTells, mentionsIn } from '@/lib/email/conversationRules'
 
 type Lane = 'SALES' | 'BILLING'
 
@@ -239,6 +239,17 @@ export function JobConversation({
   const [armed, setArmed] = useState(false)
   useEffect(() => setArmed(false), [mode, body, to, cc])
 
+  // What in the draft says this was meant for the TEAM — an @mention of
+  // someone on staff, a "Hey team" / "Hi all" opener, a colleague
+  // addressed by first name. The arm step above shows who RECEIVES the
+  // email; this says what the message itself looks like, which is the
+  // half of Wes's fear the recipient list cannot answer. Loud, never
+  // blocking: "Hi all" to a production is a real thing to write.
+  const tells = useMemo(
+    () => (data && mode === 'reply' ? internalNoteTells(body, data.staff) : []),
+    [data, mode, body],
+  )
+
   const send = async (confirmed = false) => {
     if (!data || busy) return
     const text = body.trim()
@@ -268,13 +279,42 @@ export function JobConversation({
         const r = await fetch(`/api/jobs/${jobId}/email`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: to.trim(), cc, subject: draft?.subject || data.subject, body: text }),
+          // The arm step above IS the confirmation, and the route refuses
+          // a send that does not carry it — so no composer, now or later,
+          // can put a message in front of a client unreviewed.
+          body: JSON.stringify({ to: to.trim(), cc, subject: draft?.subject || data.subject, body: text, confirmed: true }),
         })
         const j = await r.json()
         if (!r.ok || !j.ok) throw new Error(j.error || 'Send failed.')
         setBody('')
         say(`Sent to ${to.trim()} on the job thread.`)
       }
+      await load()
+    } catch (e) {
+      say(e instanceof Error ? e.message : 'Something went wrong.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** The armed reply was really a note. File it as one, email nobody. */
+  const saveAsNote = async () => {
+    if (!data || busy) return
+    const text = body.trim()
+    if (!text) return
+    setArmed(false)
+    setBusy(true)
+    try {
+      const r = await fetch(`/api/jobs/${jobId}/conversation/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: text, urgent: false }),
+      })
+      const j = await r.json()
+      if (!r.ok || !j.ok) throw new Error(j.error || 'Could not save the note.')
+      setBody('')
+      setMode('note')
+      say('Kept as an internal note — nothing was emailed.')
       await load()
     } catch (e) {
       say(e instanceof Error ? e.message : 'Something went wrong.')
@@ -645,6 +685,26 @@ export function JobConversation({
               )}
               {' '}· from {data?.me.name || data?.me.email}
             </div>
+            {tells.length > 0 && (
+              <div className="mt-2 rounded-md border border-chip-warn-fg/30 bg-chip-warn-bg px-2.5 py-2 text-chip-warn-fg">
+                <div className="flex items-center gap-1.5 font-semibold">
+                  <AlertTriangle size={12} aria-hidden /> This reads like a note for the team
+                </div>
+                <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                  {tells.map((t) => (
+                    <li key={t}>{t}</li>
+                  ))}
+                </ul>
+                <button
+                  type="button"
+                  onClick={() => void saveAsNote()}
+                  disabled={busy}
+                  className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-1 text-[12px] font-semibold disabled:opacity-40"
+                >
+                  <StickyNote size={12} aria-hidden /> Keep it internal instead
+                </button>
+              </div>
+            )}
             <div className="mt-2 flex items-center gap-2">
               <button
                 type="button"

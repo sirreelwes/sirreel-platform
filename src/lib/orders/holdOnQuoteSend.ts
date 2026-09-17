@@ -127,6 +127,27 @@ export function isUnholdableVehicleLine(li: HoldableLineShape): boolean {
   return !inv.legacyAssetCategoryId
 }
 
+/**
+ * The AssetCategory a line holds against, or null when it holds nothing.
+ * PURE — the one resolution rule, shared with the routes that need to know
+ * whether a line's DATES moving should move the reservation
+ * (lib/scheduling/followLineDates). The line-edit route used to test the
+ * line's own `assetCategoryId`, which every catalog-bound line leaves null
+ * (the category lives on the catalog row), so a vehicle's date change
+ * never reached the hold at all.
+ */
+export function holdCategoryForLine(li: HoldableLineShape): string | null {
+  if (li.assetCategoryId) {
+    const d = li.assetCategory?.department
+    return d === LineItemDepartment.VEHICLES || d === LineItemDepartment.STAGES ? li.assetCategoryId : null
+  }
+  const inv = li.inventoryItem
+  if (!inv) return null
+  if (inv.trackingMode !== 'UNIT_TRACKED') return null
+  if (inv.department !== LineItemDepartment.VEHICLES && inv.department !== LineItemDepartment.STAGES) return null
+  return inv.legacyAssetCategoryId ?? null
+}
+
 export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResult> {
   const out: HoldOnQuoteResult = {
     created: 0, reused: 0, adjusted: 0, skippedNoDates: 0, skippedNotUnitTracked: 0,
@@ -154,32 +175,24 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
 
     /** The AssetCategory this line should hold against, or null. */
     const categoryFor = (li: (typeof order.lineItems)[number]): string | null => {
-      // Legacy lines that carry the category directly.
-      if (li.assetCategoryId) {
-        const d = li.assetCategory?.department
-        return d === LineItemDepartment.VEHICLES || d === LineItemDepartment.STAGES
-          ? li.assetCategoryId
-          : null
+      const id = holdCategoryForLine(li)
+      if (id) return id
+      // A vehicle that resolves to NO category is a quoted truck nobody is
+      // holding — name it rather than letting it vanish into
+      // skippedNotUnitTracked beside the ladders and folding tables. Two
+      // ways in: a free-typed VEHICLES line with no catalog row
+      // ("Production Truck", S260903-002), or a unit-tracked catalog row
+      // with no legacyAssetCategoryId to hold against.
+      if (!li.assetCategoryId) {
+        const inv = li.inventoryItem
+        const vehicleDept = (d: LineItemDepartment | null | undefined) =>
+          d === LineItemDepartment.VEHICLES || d === LineItemDepartment.STAGES
+        const unresolved = !inv
+          ? vehicleDept(li.department)
+          : inv.trackingMode === 'UNIT_TRACKED' && vehicleDept(inv.department) && !inv.legacyAssetCategoryId
+        if (unresolved) out.unresolvedVehicles.push(li.description || 'unnamed line')
       }
-      // Current lines: resolve through the catalog row.
-      const inv = li.inventoryItem
-      if (!inv) {
-        // No catalog row at all. A free-typed VEHICLES line ("Production
-        // Truck", S260903-002) is a real vehicle on a quote that nothing
-        // can hold — and it used to vanish into skippedNotUnitTracked
-        // beside the ladders and folding tables. Name it instead.
-        if (li.department === LineItemDepartment.VEHICLES || li.department === LineItemDepartment.STAGES) {
-          out.unresolvedVehicles.push(li.description || 'unnamed line')
-        }
-        return null
-      }
-      if (inv.trackingMode !== 'UNIT_TRACKED') return null
-      if (inv.department !== LineItemDepartment.VEHICLES && inv.department !== LineItemDepartment.STAGES) return null
-      if (!inv.legacyAssetCategoryId) {
-        out.unresolvedVehicles.push(li.description || 'unnamed line')
-        return null
-      }
-      return inv.legacyAssetCategoryId
+      return null
     }
 
     const holdable = order.lineItems

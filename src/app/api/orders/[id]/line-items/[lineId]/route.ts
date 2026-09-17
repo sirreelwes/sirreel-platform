@@ -14,7 +14,7 @@ import { readPickListItemForDelete, syncPickListOnLineAdd, syncPickListOnLineDel
 import { routeDepartment } from "@/lib/orders/bookOrder";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { checkHoldFeasibility, syncHoldOnLineDelete, syncHoldOnLineUpdate, syncHoldOnLineAdd } from "@/lib/orders/holdsSync";
-import { holdOnQuoteSend } from "@/lib/orders/holdOnQuoteSend";
+import { syncReservationToLineDates, type FollowOutcome } from "@/lib/scheduling/followLineDates";
 import { resolveLineRate, logRateOverride } from "@/lib/pricing/resolveRate";
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 import { partnerFloorGate } from '@/lib/sub-rentals/partnerMargins'
@@ -421,25 +421,32 @@ export async function PUT(req: NextRequest, { params }: Params) {
       }
     }
 
-    // THE DATES MOVED on a held line. Everything above talks about
-    // QUANTITY, so a vehicle given its own days — the same class quoted
-    // for two blocks on one order — left the hold describing the OLD
-    // window: the peak was never recomputed and the booking envelope was
-    // never widened, so the board drew the reservation short and the
-    // second block read as part of the first. Same one implementation
-    // the line-add path uses (peak concurrent, SET, envelope widened);
-    // idempotent + non-fatal.
-    if (parentOrder?.bookingId && newIsHold) {
-      const dayOf = (d: Date | null | undefined) => (d ? d.toISOString().slice(0, 10) : null);
-      const asked = (v: unknown) => (v ? String(v).slice(0, 10) : null);
+    // THE DATES MOVED on a held line: the reservation follows (Wes
+    // 2026-09-17, Someday Studios — the order said the 17th, the board
+    // still drew the van on the 18th). One implementation for this route
+    // and "Change dates…": recompute the hold (peak, envelope), re-stamp
+    // the UNIT onto the new days, re-fit the envelope. This used to gate
+    // on the line's own `assetCategoryId`, which a catalog-bound vehicle
+    // leaves null, so it never ran for a real van; the module resolves
+    // the class the way the hold was created. Idempotent + non-fatal.
+    let assignmentsFollowed: FollowOutcome | null = null;
+    if (parentOrder?.bookingId) {
       const movedPickup =
-        pickupDate !== undefined && asked(pickupDate) !== dayOf(fullExisting.pickupDate);
+        pickupDate !== undefined && lineItem.pickupDate.getTime() !== fullExisting.pickupDate.getTime();
       const movedReturn =
-        returnDate !== undefined && asked(returnDate) !== dayOf(fullExisting.returnDate);
+        returnDate !== undefined && lineItem.returnDate.getTime() !== fullExisting.returnDate.getTime();
       if (movedPickup || movedReturn) {
-        const recomputed = await holdOnQuoteSend(orderId);
-        if (recomputed.error) {
-          console.error('[line-items] hold recompute after a date change failed:', recomputed.error);
+        assignmentsFollowed = await syncReservationToLineDates({
+          orderId,
+          changes: [{
+            lineId,
+            from: { start: fullExisting.pickupDate, end: fullExisting.returnDate },
+            to: { start: lineItem.pickupDate, end: lineItem.returnDate },
+          }],
+          actor: { userId: await resolveOperatorId(session.user.email), ipAddress: extractIp(req) },
+        });
+        if (assignmentsFollowed.error) {
+          console.error('[line-items] reservation did not follow the date change:', assignmentsFollowed.error);
         }
       }
     }
@@ -538,7 +545,16 @@ export async function PUT(req: NextRequest, { params }: Params) {
     }
 
     await syncOrderWindowSafe(orderId);
-    return NextResponse.json({ lineItem, totals, kit: kitSync.noop ? null : kitSync });
+    return NextResponse.json({
+      lineItem,
+      totals,
+      kit: kitSync.noop ? null : kitSync,
+      // Which units moved with the dates, and which could not (booked
+      // elsewhere on the new days). Null when no held line's dates moved.
+      // The page says it out loud — a van that silently stayed on the old
+      // days is how the board and the order came to disagree.
+      assignmentsFollowed,
+    });
   } catch (error) {
     console.error("Update line item error:", error);
     const message = error instanceof Error ? error.message : "Unknown error";
