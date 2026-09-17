@@ -1570,19 +1570,37 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   steps; a note never arms. The @chip row shows EVERY active teammate but
   yourself (the old `slice(0, 8)` hid Jose and Ana) and a chip already in
   the note is lit and inert.
-- **Placement** (`/jobs/[id]/page.tsx`): the page's outer wrapper is a
-  2-column grid at `xl` (1280px+) — the job's column plus a 400px
-  `<aside>` holding the panel, sticky, full height. Below `xl` a
-  `ConversationTabs` strip (Details | Conversation, with a dot when the
-  client is waiting) sits at the top of the page and the panel takes the
-  full width when the tab is on. **The panel is mounted ONCE** and
-  shown/hidden by class, so it loads once and its summary reaches the tab.
-  `?tab=conversation` is the deep link (same pattern as
-  `/jobs?panel=incoming`). The header's old "Email client" button is now
-  "Conversation" — switches the tab and focuses the box
-  (`job-conversation:focus` window event). `JobEmailThreads` is gone from
-  the job page (still used by /rentalworks/reconcile); `JobEmailButton`
-  stays for the counter-proposal panel.
+- **Placement — a DOCK owned by the /jobs layout, not the job page**
+  (Wes 2026-09-17: "a minimize button for the chat window so that we can
+  leave it open on top of the other jobs that we are looking at. Also, a
+  close window button"). The panel used to be an `<aside>` in
+  `/jobs/[id]/page.tsx`, so it died on every walk from one job to the next
+  — there was nothing to leave open. `JobChatDock.tsx` mounts it from
+  `jobs/layout.tsx` (the same trick that keeps the rail's scroll
+  position), as the third flex child of the list|detail row.
+  - Three states, ONE mount: **open** = a reserved 400px column at 1280px+
+    (a flex child, so it never covers the job) and a `fixed inset-0`
+    window below that; **min** = a pill at the bottom right naming the job
+    it holds, over everything; **closed** = gone. Minimise HIDES the panel
+    rather than unmounting it, so a half-typed note survives.
+  - **Follow mode** is what preserves the old always-on rail: while
+    nobody has pressed either button the window re-binds to whichever job
+    is on screen. Minimise and close both stop it (that is what pinning
+    means); the job header's **Conversation** button is the only way back,
+    and it carries the "client replied" dot. Following is gated on 1280px
+    — below that an open window is the whole screen, and a job page that
+    buries itself under a chat on arrival is not a rail.
+  - The window can hold job A while you read job B — that IS the feature,
+    and also exactly how someone writes into the wrong conversation, so
+    the pane carries a **"Holding SR-JOB-A — you're on B · Switch"** strip
+    and an "Open SR-JOB-A" link. `key={target.id}` on the panel means a
+    draft never rides from one job to another.
+  - `?tab=conversation` is still the deep link (the Hand-to-Billing email,
+    an urgent note's text, the order page, /chat) — it OPENS the window,
+    once per job. The `ConversationTabs` strip is gone; the dock is the
+    entry point at every width. `JobEmailThreads` is gone from the job
+    page (still used by /rentalworks/reconcile); `JobEmailButton` stays
+    for the counter-proposal panel.
 - **Rail:** `/api/jobs` rows carry `conversation: { awaitingReply,
   lastInboundAt }` from ONE `emailThread.groupBy` over the page
   (`conversationSummaryForJobs`: newest inbound on any thread filed to the
