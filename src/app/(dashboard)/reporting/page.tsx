@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { pacificYmd } from '@/lib/dates/pacificDay';
 import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 import { BarChart3, Check, DollarSign, Mail, Phone, Timer, Truck, Wrench } from 'lucide-react';
 
@@ -8,7 +9,7 @@ import { BarChart3, Check, DollarSign, Mail, Phone, Timer, Truck, Wrench } from 
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
 function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:00:00'); d.setDate(d.getDate() + n); return toDS(d); }
 function fDate(ds: string): string { return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
-const today = toDS(new Date());
+const today = pacificYmd(); // the yard's date, not UTC's
 const monthName = new Date().toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
 
 // ═══ Component ═══

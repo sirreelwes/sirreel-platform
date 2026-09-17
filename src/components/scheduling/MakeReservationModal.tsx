@@ -155,6 +155,7 @@
  */
 
 import { useEffect, useMemo, useState } from 'react'
+import { pacificYmd } from '@/lib/dates/pacificDay'
 import { AlertTriangle, Check, Loader2, Mail, Plus, Trash2, X } from 'lucide-react'
 import { CompanyPicker } from '@/components/orders/CompanyPicker'
 import { InquirySourceDrawer } from '@/components/inquiries/InquirySourceDrawer'
@@ -274,7 +275,8 @@ interface Result {
 /** One line of the submit progress list. */
 type StepState = 'pending' | 'running' | 'done' | 'skipped' | 'failed'
 
-const today = () => new Date().toISOString().slice(0, 10)
+// The default start date is the yard's today, not UTC's (a day ahead after 5pm Pacific).
+const today = () => pacificYmd()
 
 type AssetTier = 'PREMIUM' | 'STANDARD' | 'ECONOMY'
 /** Same order the assignment picker uses — nicest tier first. */

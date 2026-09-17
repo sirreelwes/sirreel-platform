@@ -38,6 +38,7 @@
  */
 
 import Link from 'next/link'
+import { pacificYmd } from '@/lib/dates/pacificDay'
 import { useEffect, useMemo, useState } from 'react'
 import { AlertTriangle, Search, X } from 'lucide-react'
 import {
@@ -100,7 +101,8 @@ function shortDate(ymdStr: string): string {
 const WINDOW_DAYS = 14
 
 export function AgendaView() {
-  const today = useMemo(() => ymd(new Date()), [])
+  // The yard's date, not UTC's — from 5pm Pacific those differ by a day.
+  const today = useMemo(() => pacificYmd(), [])
   const [anchor, setAnchor] = useState(today)
   const [rows, setRows] = useState<AgendaBooking[]>([])
   const [loading, setLoading] = useState(true)

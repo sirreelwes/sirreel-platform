@@ -1,6 +1,7 @@
 "use client";
 
 import { Fragment, useEffect, useState, useCallback, useMemo, useRef } from "react";
+import { pacificYmd } from '@/lib/dates/pacificDay';
 import { useMoneyFormatter, useMoneyVisible } from '@/hooks/useMoney';
 import { paymentMethodLabel } from '@/lib/invoices/paymentMethods';
 import { calendarDays, computeBillableDays, weekCapChoices } from '@/lib/orders/billing';
@@ -6545,7 +6546,7 @@ function PaymentsPanel({
 }) {
   const [amount, setAmount] = useState('');
   const [method, setMethod] = useState<string>('CHECK');
-  const [receivedAt, setReceivedAt] = useState(() => new Date().toISOString().slice(0, 10));
+  const [receivedAt, setReceivedAt] = useState(() => pacificYmd());
   const [reference, setReference] = useState('');
   const [notes, setNotes] = useState('');
   const amountNum = parseFloat(amount);
@@ -6954,7 +6955,7 @@ function ClaimPanel({ invoiceId }: { invoiceId: string }) {
   const [showForm, setShowForm] = useState(false);
   const [posting, setPosting] = useState(false);
   const [filedAgainst, setFiledAgainst] = useState("");
-  const [incidentDate, setIncidentDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [incidentDate, setIncidentDate] = useState(() => pacificYmd());
   const [incidentDescription, setIncidentDescription] = useState("");
 
   const refresh = useCallback(async () => {

@@ -1,6 +1,7 @@
 'use client'
 
 import CollectionsReportWidget from '@/components/dashboard/CollectionsReportWidget'
+import { pacificYmd, pacificYm } from '@/lib/dates/pacificDay'
 import { NeedsAttentionAlerts } from '@/components/dashboard/NeedsAttentionAlerts'
 
 import { useState, useEffect } from 'react'
@@ -189,8 +190,8 @@ function RecentActivityWidget({ items, loading }: { items: any[]; loading: boole
 }
 
 function CollectionsWidget({ rwOrders, loading }: { rwOrders: any[]; loading: boolean }) {
-  const today = new Date().toISOString().slice(0, 10)
-  const thisMonth = new Date().toISOString().slice(0, 7)
+  const today = pacificYmd()
+  const thisMonth = pacificYm()
 
   const collectedToday = rwOrders
     .filter(o => ['ACTIVE', 'COMPLETE', 'CLOSED'].includes(o.status) && (o.startDate || '').startsWith(today))

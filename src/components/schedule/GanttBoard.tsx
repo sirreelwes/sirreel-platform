@@ -81,7 +81,11 @@ function holdHaystack(h: any): string {
 function diffDays(a: string, b: string): number { return Math.round((new Date(b + 'T12:00:00').getTime() - new Date(a + 'T12:00:00').getTime()) / 86400000); }
 function fDay(ds: string): string { return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', day: 'numeric' }); }
 function fMonth(ds: string): string { return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
-const today = toDS(new Date());
+// NOT a module constant any more. `toDS(new Date())` was the UTC date,
+// computed once when the bundle loaded — so from 5pm Pacific the today
+// column sat on tomorrow, and a tab left open overnight kept yesterday's
+// (Wes, 2026-09-16: "HQ thinks today is 9/18"). Each render asks the yard
+// clock instead; see lib/dates/pacificDay.ts.
 
 // Colors, labels, and the barColor resolver all live in
 // lib/scheduling/statusTokens — the single source shared with the
@@ -715,6 +719,7 @@ export function GanttBoard() {
   // 2026-09-15) — on the 1W default that's yesterday, today and five days
   // ahead. ‹ Today › buttons step it forward/back by the current window
   // width; Today resets here.
+  const today = pacificYmd()
   const defaultAnchor = useMemo(() => addDays(today, -1), [])
   const [anchorDate, setAnchorDate] = useState<string>(defaultAnchor)
 
@@ -2100,7 +2105,7 @@ export function GanttBoard() {
                 // (on a job right now). Idle units keep the default cell —
                 // active vs idle is read from this color + the bars in the
                 // row, never from roster membership (Wes 2026-07-16).
-                const todayYmd = new Date().toISOString().slice(0, 10)
+                const todayYmd = pacificYmd()
                 const onJobToday = ((entry.unit.bookings || []) as any[]).some(
                   (b) => b.status !== 'cancelled' && b.start <= todayYmd && todayYmd <= b.end,
                 )

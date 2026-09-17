@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
+import { pacificYmd } from '@/lib/dates/pacificDay';
 import { useRouter } from 'next/navigation';
 import { ScheduleViewToggle } from '@/components/schedule/ScheduleViewToggle';
 import { STATUS_CHIPS } from '@/lib/scheduling/statusTokens';
@@ -15,7 +16,6 @@ function fDateLong(ds: string): string { return new Date(ds + 'T12:00:00').toLoc
 function getDaysInMonth(y: number, m: number): number { return new Date(y, m + 1, 0).getDate(); }
 function getFirstDayOfMonth(y: number, m: number): number { return new Date(y, m, 1).getDay(); }
 function diffDays(a: string, b: string): number { return Math.round((new Date(b + 'T12:00:00').getTime() - new Date(a + 'T12:00:00').getTime()) / 86400000); }
-const today = toDS(new Date());
 
 // ═══ Data ═══
 const CATS: Record<string, string> = { cube: 'Cube', cargo: 'Cargo', pass: 'Pass', pop: 'Pop', cam: 'Cam', dlux: 'DLUX', scout: 'Scout', studio: 'Studio', stakebed: 'Stake' };
@@ -39,6 +39,9 @@ const STAGE_STYLES: Record<string, string> = STATUS_CHIPS;
 
 // ═══ Component ═══
 export default function CalendarPage() {
+  // The yard's date, read each render — not the UTC date frozen when the
+  // bundle loaded (a day ahead from 5pm Pacific; Wes 2026-09-16).
+  const today = pacificYmd();
   const router = useRouter();
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);

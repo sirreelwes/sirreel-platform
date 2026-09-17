@@ -9,6 +9,7 @@
  */
 
 import { useEffect, useState } from 'react'
+import { pacificYmd } from '@/lib/dates/pacificDay'
 import Link from 'next/link'
 
 interface ReservationJob {
@@ -23,7 +24,6 @@ interface ReservationJob {
   endDate: string
 }
 
-const ymd = (d: Date) => d.toISOString().slice(0, 10)
 function fmtRange(s: string, e: string): string {
   const opt = { month: 'short', day: 'numeric' } as const
   const sf = new Date(`${s}T00:00:00`).toLocaleDateString('en-US', opt)
@@ -39,10 +39,9 @@ export function SalesReservationsWidget() {
   const [error, setError] = useState(false)
 
   useEffect(() => {
-    const from = new Date()
-    const to = new Date()
-    to.setDate(to.getDate() + WINDOW_DAYS)
-    const params = new URLSearchParams({ from: ymd(from), to: ymd(to) })
+    // The yard's today, not UTC's — after 5pm Pacific the UTC window
+    // started tomorrow and today's pickups fell off the list.
+    const params = new URLSearchParams({ from: pacificYmd(0), to: pacificYmd(WINDOW_DAYS) })
     fetch(`/api/timeline-native?${params.toString()}`)
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`))))
       .then((d) => {

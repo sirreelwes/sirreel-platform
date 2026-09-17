@@ -24,6 +24,12 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ## 2026-09-17
 
+### Today is the yard's date, not UTC's
+
+`d43ef21` every staff screen's "today" now comes from `pacificYmd()` in lib/dates/pacificDay.ts — Wes at 5:40pm: "HQ thinks today is 9/18". A dozen screens took the date from a UTC timestamp, which rolls over at 5pm Pacific, so the reservations board's today column, the jobs board's "picking up today / tomorrow", the calendar ring, the dashboards and a new reservation's default start were a day ahead every evening (and the board's was frozen at page load). `cadenceDays()` reads the same helper; the board reads it each render. `npm run test:pacific-day` pins the clock at the reported moment and at the 5pm PDT / 4pm PST boundary.
+
+## 2026-09-17
+
 ### "Booking item is fully assigned" — one capacity rule
 
 `3559d59` the picker and the assign write now answer "is this block full?" with the same function — Jose (Mad Minds, SR-JOB-0389) could not change Cargo 35 for another van: the picker counted exact coverage against the quoted count, the server counted every overlapping assignment (Cargo 45 on the same job) against the hold's quantity, and refused a swap the picker had offered. `blockCapacity()` in assignWindow.ts is the rule for both; the refusal is `fully-assigned` with a reason and the swappable units, and the picker turns it into the "which unit does this replace?" prompt. On a swap the driver's assignment moves to the replacement van (it used to hang off a row being deleted), walkarounds stay with the old van, and a unit with a check-out record refuses up front. `npm run test:assign-window`.

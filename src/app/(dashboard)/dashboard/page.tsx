@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { pacificYmd } from '@/lib/dates/pacificDay';
 import { UserRole } from '@prisma/client';
 import SalesDashboard from '@/components/dashboard/SalesDashboard';
 import ReviewsWidget from "@/components/dashboard/ReviewsWidget";
@@ -84,7 +85,7 @@ function AdminDashboard({ userName }: { userName: string }) {
   const [emailLoading, setEmailLoading] = useState(true);
 
   // Count units booked today from Planyo
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = pacificYmd();
   const countOut = (cat: string) => planyoUnits.filter(u =>
     u.cat === cat && u.bookings?.some((b: any) => b.start <= todayStr && b.end >= todayStr)
   ).length;

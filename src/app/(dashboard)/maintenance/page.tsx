@@ -1,6 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react'
+import { pacificYmd } from '@/lib/dates/pacificDay';
 import { useState, useMemo } from 'react';
 import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 import { AlertTriangle, ClipboardList, Search, Wrench, X } from 'lucide-react'
@@ -11,7 +12,7 @@ function addDays(ds: string, n: number): string { const d = new Date(ds + 'T12:0
 function daysSince(ds: string): number { return Math.round((new Date(today + 'T12:00:00').getTime() - new Date(ds + 'T12:00:00').getTime()) / 86400000); }
 function fDate(ds: string): string { return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); }
 function fDateLong(ds: string): string { return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }); }
-const today = toDS(new Date());
+const today = pacificYmd(); // the yard's date, not UTC's
 
 // ═══ Shops ═══
 const SHOPS = [

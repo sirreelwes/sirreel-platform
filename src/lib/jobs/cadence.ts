@@ -23,6 +23,7 @@
  * promotion either way.
  */
 import type { JobStatus, OrderStatus } from '@prisma/client'
+import { pacificDays } from '@/lib/dates/pacificDay'
 
 /**
  * A vehicle on the job, as the scheduler knows it. CHECKED_OUT is the
@@ -219,16 +220,12 @@ export function rollupCadence(
   return { state: top, partial }
 }
 
-/** Today + tomorrow as YYYY-MM-DD, the form the cadence math compares. */
-export function cadenceDays(now = new Date()): { today: string; tomorrow: string } {
-  const todayDate = new Date(now)
-  todayDate.setUTCHours(0, 0, 0, 0)
-  const tomorrowDate = new Date(todayDate)
-  tomorrowDate.setUTCDate(tomorrowDate.getUTCDate() + 1)
-  return {
-    today: todayDate.toISOString().slice(0, 10),
-    tomorrow: tomorrowDate.toISOString().slice(0, 10),
-  }
+/** Today + tomorrow as YYYY-MM-DD, the form the cadence math compares —
+ *  in the yard's time zone. This used to be the UTC date, so from 5pm
+ *  Pacific every job picking up tomorrow read "Picking up today" (Wes,
+ *  2026-09-16: "HQ thinks today is 9/18"). */
+export function cadenceDays(now: Date | number = Date.now()): { today: string; tomorrow: string } {
+  return pacificDays(typeof now === 'number' ? now : now.getTime())
 }
 
 /**

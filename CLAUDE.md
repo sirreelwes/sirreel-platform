@@ -949,6 +949,31 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## Today is the yard's date, not UTC's (2026-09-16 — Wes)
+- Wes, 5:40pm in Sun Valley: "It seems like HQ thinks today is 9/18." It
+  thought 9/17: a dozen screens read `new Date().toISOString().slice(0, 10)`,
+  the UTC date, and UTC rolls over at **5pm PDT / 4pm PST**. From then to
+  midnight the reservations board's today column and green "on a job today"
+  rows, the jobs board's cadence ("Picking up today" / "tomorrow" — so a
+  9/18 pickup read as tomorrow on the 16th), the calendar's today ring, the
+  agenda, both dashboards, the sales reservations widget's window and the
+  default start date on a new reservation / payment / incident all sat a day
+  ahead of the wall clock.
+- **`pacificYmd()` in `src/lib/dates/pacificDay.ts` is the one rule** (pure;
+  `pacificDays()` for the today/tomorrow pair, `pacificYm()` for the month;
+  `npm run test:pacific-day` pins the clock at Wes's moment and at both
+  boundaries). `checkWindow.ts` re-exports it, so the yard / check-report
+  screens that were already right are unchanged. `cadenceDays()` reads it.
+- **Never a module constant on a real-data screen.** The board's
+  `const today = toDS(new Date())` was also frozen when the bundle loaded, so
+  an open tab kept yesterday. Read it in the component body (each render).
+  The reporting and maintenance MOCK pages keep a module constant because
+  their fixtures are built from it.
+- Left alone on purpose: `dormancy.ts` (30-day sweep, a day of slack is
+  noise), `walkiePool.ts` (availability from a UTC midnight), the
+  `timeline-native` fetch window (a range, not a label), and the "created
+  on" note stamps. All server-side and none is shown as "today".
+
 ## "Booking item is fully assigned" — one capacity rule (2026-09-17 — Jose)
 - Jose, on Mad Minds (SR-JOB-0389): changing Cargo 35 for another van was
   refused "booking item is fully assigned". Not a driver, not a lock. The

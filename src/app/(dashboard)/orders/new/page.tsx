@@ -1,6 +1,7 @@
 'use client';
 
 import { Suspense, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { pacificYmd } from '@/lib/dates/pacificDay';
 import { quoteLcdw, LCDW_FEE_CODE } from '@/lib/pricing/lcdwEligibility';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useSession } from 'next-auth/react';
@@ -873,7 +874,7 @@ function NewQuotePageInner() {
           //   • SUPPLY → INVENTORY by InventoryItem id; FLAT for EXPENDABLE
           //     consumables (qty × rate, no billable days), DAILY for EQUIPMENT.
           // Reads the ACTUAL cart-snapshot fields (qty, per-line dates).
-          const fallbackStart = startISO || new Date().toISOString().slice(0, 10);
+          const fallbackStart = startISO || pacificYmd();
           const fallbackEnd = endISO || fallbackStart;
           const items: ResolvedItem[] = meta!.cart!.map((line) => {
             const qty = Math.max(1, Math.floor(line.qty ?? line.quantity ?? 1));

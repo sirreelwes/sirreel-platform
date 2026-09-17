@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
+import { pacificYmd } from '@/lib/dates/pacificDay'
 import { useSession } from 'next-auth/react'
 import type { UserRole } from '@prisma/client'
 import { getPermissions } from '@/lib/permissions'
@@ -77,7 +78,7 @@ export function AddAssetButton({
 
   if (!canCreateBooking) return null
 
-  const today = new Date().toISOString().slice(0, 10)
+  const today = pacificYmd()
   const holdStart = job.startDate?.slice(0, 10) || today
   const holdEnd = job.endDate?.slice(0, 10) || holdStart
 
