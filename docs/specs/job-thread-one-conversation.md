@@ -180,6 +180,62 @@ keeps); SMS threads are per phone number (`SmsThread`) and could be shown
 in the same timeline later; `job_messages` is a dead legacy table keyed by
 RentalWorks order number — do not resurrect it for internal notes.
 
+## Where it lives (2026-09-17 — Wes asked)
+
+Today `JobEmailThreads` is the twelfth of thirteen stacked blocks on
+`/jobs/[id]`, above Activity, and renders nothing when no thread is filed.
+The Conversation moves to where the width allows:
+
+- **1280px and up (monitor, 15" laptop):** a pinned RAIL beside the job,
+  not a section within it. The facts stay in the existing `max-w-5xl`
+  column; the Conversation sits at ~400px on the right, full height, its
+  own scroll, composer docked at the bottom. It stays put while the job
+  scrolls, so the answer is written next to the quote lines or the COI
+  status it depends on. `JobEmailButton` stops opening a modal and focuses
+  the composer.
+- **768–1279px (iPad landscape, small laptop, or the rail still open):**
+  the rail folds into a TAB STRIP under the job header — Details |
+  Conversation (unread count). One tap opens it full width.
+- **Under 768px (phone; the jobs layout already hides the sidebar and gives
+  the detail the whole screen):** same two tabs; Conversation is a
+  full-screen chat — timeline scrolls, composer docked above the home bar,
+  16px inputs so iOS Safari does not zoom (the /admin/maintenance rule),
+  Reply / Internal note as the toggle above the box.
+- **Deep link `/jobs/[id]?tab=conversation`** (same pattern as
+  `/jobs?panel=incoming`) so a notification lands on the thread. The /jobs
+  rail row gets an unread dot + the last line beside the cadence colour;
+  the landing panel's New inbound shows a filed reply as "Sarah Chen ·
+  SR-JOB-0219" pointing at the tab.
+- **The order page gets NO composer** — send status as today plus a link to
+  the job's Conversation. A second composer is a second thread by another
+  name.
+
+## Billing on the same thread (2026-09-17 — Wes asked whether Jose and Oliver would see it all)
+
+An email thread is not a subscription: who receives a message is decided
+by that message's To/Cc, never by the thread. The anchors file a message
+to the job and add NO recipients. So Ana's invoice still goes to the
+accounting contact with Reply-To `billing@` (unchanged), and Jose's Gmail
+never carries the billing exchange unless the client copies him — also
+true today. On the job page everyone sees the whole story, kept tidy by:
+
+- **Lanes.** Each message gets a lane from where it landed / who sent it:
+  SALES (jose@, oliver@, info@), BILLING (billing@, payments@, Ana),
+  SYSTEM. Filter chips in the panel header; an AGENT's default is Sales.
+  Notifications follow the lane — a reply into billing@ pings Ana and
+  never enters Jose's New inbound. Lane is derived on read from
+  `routingHeaders.deliveredTo` / the author's role; no column needed.
+- **Hand to Billing.** The end-of-job "can we get the final invoice?" is a
+  reply to whatever is on top (probably Jose's), so it reaches Jose — with
+  two threads too. Jose taps "Hand to Billing"; Ana gets the ping, answers
+  from the thread with Reply-To billing@, and the client's replies go to
+  her from then on. This is the claim chip with a Billing target
+  (`claimedByUserId` on `sr_job_threads`, plus a lane on the claim).
+- **Role gate, optional.** The job page already money-gates cards by role;
+  the Billing lane can be hidden from AGENT-role users the same way.
+  Recommendation: leave it visible and rely on the filter — Jose knowing a
+  client is 60 days late is useful to sales. Wes's call.
+
 ## Data (Phase 2 — additive SQL, never `db push`)
 
 - `sr_job_threads` — one row per job, created lazily on the first send:
