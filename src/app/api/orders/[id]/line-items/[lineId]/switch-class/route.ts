@@ -40,7 +40,7 @@ import { isLineItemEditable, lineEditLockReason } from '@/lib/orders/editability
 import { checkHoldFeasibility, syncHoldOnLineAdd } from '@/lib/orders/holdsSync'
 import { holdOnQuoteSend } from '@/lib/orders/holdOnQuoteSend'
 import { assignUnitsForLine, parseUnitAssignment, type UnitAssignmentOutcome } from '@/lib/orders/assignUnitsForLine'
-import { releaseBookingItem } from '@/lib/scheduling/releaseBookingItem'
+import { releaseLineUnits } from '@/lib/orders/lineUnits'
 import { resolveLineRate, logRateOverride } from '@/lib/pricing/resolveRate'
 import { extractIp, resolveOperatorId } from '@/lib/orders/auditLineItemEdit'
 import { syncOrderKitPieces } from '@/lib/orders/kitSync'
@@ -203,34 +203,23 @@ export async function POST(req: NextRequest, { params }: Params) {
   let released: { units: string[]; pooledSlots: number } = { units: [], pooledSlots: 0 }
   let unitOutcome: UnitAssignmentOutcome | null = null
   if (order.bookingId && oldCategoryId) {
-    const oldItem = await prisma.bookingItem.findFirst({
-      where: { bookingId: order.bookingId, categoryId: oldCategoryId, status: { in: ['REQUESTED', 'ASSIGNED'] } },
-      orderBy: { holdRank: 'asc' },
-      select: {
-        id: true,
-        assignments: {
-          where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] }, orderId },
-          select: { assetId: true, asset: { select: { unitName: true } } },
-        },
+    // THIS LINE's trucks, by ASSET — never the whole hold, which every
+    // vehicle line of that class on the job shares
+    // (project_release_by_asset), and never a sibling line's truck: the
+    // stamp on the assignment says which line each unit belongs to
+    // (lineUnits.ts), with the order-stamped rows as the fallback for
+    // units bound before the stamp existed.
+    const rel = await releaseLineUnits({
+      orderId,
+      line: { id: line.id, quantity: qty, pickupDate: line.pickupDate, returnDate: line.returnDate },
+      categoryId: oldCategoryId,
+      actor: {
+        userId: operatorId,
+        source: 'switch-class',
+        reason: `line switched to ${target.description ?? target.code ?? 'another class'}`,
       },
     })
-    if (oldItem) {
-      // By ASSET, never the whole line: the item is shared by every
-      // vehicle line of that class on the job (project_release_by_asset).
-      const mine = oldItem.assignments.slice(0, qty)
-      const pooledSlots = Math.max(0, qty - mine.length)
-      const rel = await releaseBookingItem(oldItem.id, {
-        assetIds: mine.map((a) => a.assetId),
-        pooledSlots,
-        actor: {
-          userId: operatorId,
-          source: 'switch-class',
-          reason: `line switched to ${target.description ?? target.code ?? 'another class'}`,
-        },
-      })
-      if (rel.ok) released = { units: mine.map((a) => a.asset.unitName), pooledSlots }
-      else console.error('[switch-class] old-class release failed:', rel.reason)
-    }
+    released = { units: rel.units, pooledSlots: rel.pooledSlots }
   }
   if (order.bookingId) {
     await syncHoldOnLineAdd(prisma, {
@@ -250,6 +239,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     request: parseUnitAssignment(body.unitAssignment),
     categoryLabel: updated.description,
     lineWindow: { start: updated.pickupDate, end: updated.returnDate },
+    orderLineItemId: line.id,
   })
 
   const kitSync = await syncOrderKitPieces(prisma, orderId)

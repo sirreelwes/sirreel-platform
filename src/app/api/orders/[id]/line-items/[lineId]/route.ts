@@ -15,6 +15,8 @@ import { routeDepartment } from "@/lib/orders/bookOrder";
 import { isLineItemEditable, lineEditLockReason } from "@/lib/orders/editability";
 import { checkHoldFeasibility, syncHoldOnLineDelete } from "@/lib/orders/holdsSync";
 import { holdOnQuoteSend, holdCategoryForLine, planHoldSyncOnLineEdit, categoryStillQuoted } from "@/lib/orders/holdOnQuoteSend";
+import { holdCategoryIdForLine, liveUnitsForLine, namesInWords, releaseLineUnits } from "@/lib/orders/lineUnits";
+import { assignUnitsForLine, type UnitAssignmentOutcome } from "@/lib/orders/assignUnitsForLine";
 import { releaseBookingItem } from "@/lib/scheduling/releaseBookingItem";
 import { syncReservationToLineDates, type FollowOutcome } from "@/lib/scheduling/followLineDates";
 import { resolveLineRate, logRateOverride } from "@/lib/pricing/resolveRate";
@@ -302,6 +304,37 @@ export async function PUT(req: NextRequest, { params }: Params) {
         });
     const holdPlan = planHoldSyncOnLineEdit({ oldCategoryId, newCategoryId, oldQty, newQty });
     let holdsAuditNote: string | null = null;
+
+    // A VEHICLE line does not change class here. The reservation holds a
+    // class and a truck for THIS line, and both have to move with it —
+    // that is the switch-class route's whole job (release this line's
+    // unit, hold the new class, bind a unit of it, keep or re-price the
+    // rate). Refused, naming the truck, so the edit form hands off to
+    // Switch class rather than leaving the order and the reservation
+    // describing two different vehicles.
+    if (parentOrder?.bookingId && oldDept === 'VEHICLES' && newDept === 'VEHICLES' && oldCategoryId && newCategoryId && oldCategoryId !== newCategoryId) {
+      const { units } = await liveUnitsForLine({
+        orderId,
+        lineId,
+        categoryId: oldCategoryId,
+        quantity: oldQty,
+        window: { start: fullExisting.pickupDate, end: fullExisting.returnDate },
+      });
+      const names = units.map((u) => u.unitName);
+      return NextResponse.json(
+        {
+          error: 'class change needs switch',
+          code: 'USE_SWITCH_CLASS',
+          reason:
+            `Changing the vehicle type moves its reservation too` +
+            (names.length > 0 ? ` — ${namesInWords(names)} ${names.length === 1 ? 'is' : 'are'} reserved for this line.` : '.') +
+            ` Use Switch class on the line so the held unit is switched with it.`,
+          newCategoryId,
+          units: names,
+        },
+        { status: 409 },
+      );
+    }
     let putHoldsCoTenancy: Awaited<ReturnType<typeof checkHoldFeasibility>>['conflicts'] = [];
     if (parentOrder?.bookingId && newCategoryId && holdPlan.feasibilityDelta > 0) {
       const proposedDelta = holdPlan.feasibilityDelta;
@@ -376,13 +409,22 @@ export async function PUT(req: NextRequest, { params }: Params) {
     // booking when the order had none (a free-typed line bound to a real
     // van), which is the POST route's "held the moment it is quoted" rule.
     //
-    // Two things the recompute does NOT do, handled below:
+    // What the recompute does NOT do, handled around it:
     //   · it never shrinks a hold whose units are already ASSIGNED — that
-    //     is dispatch's work — so a quantity cut on a bound line is REPORTED
-    //     (`holds.note`) instead of silently leaving the board over-held;
+    //     is dispatch's work. So a VEHICLE line's quantity cut first hands
+    //     back THIS line's trucks by asset, last-bound first
+    //     (`releaseLineUnits`, the order-line ↔ unit stamp), and the same
+    //     when the line stops being a vehicle. Anywhere that still cannot
+    //     shrink (a stage) is REPORTED in `holds.note`;
+    //   · it binds no truck, so a vehicle quantity bump binds the extras to
+    //     this line afterwards, the way a fresh line does;
     //   · it only visits classes still quoted, so a class the line LEFT is
     //     released here, by asset. Never `syncHoldOnLineDelete`: at zero it
     //     deletes the BookingItem and the cascade takes every unit on it.
+    // A vehicle line changing CLASS never reaches here — it was refused
+    // above (USE_SWITCH_CLASS) for the switch-class route.
+    let lineRelease: Awaited<ReturnType<typeof releaseLineUnits>> | null = null;
+    let unitOutcome: UnitAssignmentOutcome | null = null;
     let holdsOutcome: {
       categoryId: string | null
       quantityBefore: number | null
@@ -401,6 +443,30 @@ export async function PUT(req: NextRequest, { params }: Params) {
             })
           : null;
       const before = await liveItem(parentOrder?.bookingId, newCategoryId);
+      const vehicleLine = oldDept === 'VEHICLES' && newDept === 'VEHICLES';
+      // Read against the line's OLD days: a date move saved in the same
+      // edit is followed further down, so the units still carry the old ones.
+      const oldLine = { id: lineId, quantity: oldQty, pickupDate: fullExisting.pickupDate, returnDate: fullExisting.returnDate };
+
+      if (parentOrder?.bookingId && vehicleLine && oldCategoryId && oldCategoryId === newCategoryId && newQty < oldQty) {
+        // 3 cube trucks down to 2 gives back a SPECIFIC cube truck.
+        lineRelease = await releaseLineUnits({
+          orderId,
+          line: oldLine,
+          categoryId: oldCategoryId,
+          count: oldQty - newQty,
+          keep: newQty,
+          actor: { userId: operatorIdForAudit, source: 'line-quantity-edit', reason: `${parentOrder.orderNumber}: quantity ${oldQty} → ${newQty}` },
+        });
+      } else if (parentOrder?.bookingId && oldDept === 'VEHICLES' && oldCategoryId && !newCategoryId) {
+        // The line stopped being a vehicle — its trucks go back.
+        lineRelease = await releaseLineUnits({
+          orderId,
+          line: oldLine,
+          categoryId: oldCategoryId,
+          actor: { userId: operatorIdForAudit, source: 'line-edit', reason: `${parentOrder.orderNumber}: line no longer holds a vehicle` },
+        });
+      }
 
       const raised = await holdOnQuoteSend(orderId);
       if (raised.error) console.error('[line-items] hold recompute failed (PUT):', raised.error);
@@ -413,8 +479,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
       // The class the line left, when nothing on the booking quotes it any
       // more. This order's units come off by asset — the ones on the line's
       // own days first — and the rest of the line's count as pooled slots.
-      const releasedUnits: string[] = [];
-      if (holdPlan.releaseCategoryId && bookingIdNow && !(await categoryStillQuoted(orderId, holdPlan.releaseCategoryId))) {
+      const releasedUnits: string[] = [...(lineRelease?.units ?? [])];
+      if (holdPlan.releaseCategoryId && !lineRelease?.held && bookingIdNow && !(await categoryStillQuoted(orderId, holdPlan.releaseCategoryId))) {
         const oldItem = await prisma.bookingItem.findFirst({
           where: { bookingId: bookingIdNow, categoryId: holdPlan.releaseCategoryId, status: { in: ['REQUESTED', 'ASSIGNED'] } },
           orderBy: { holdRank: 'asc' },
@@ -446,8 +512,22 @@ export async function PUT(req: NextRequest, { params }: Params) {
         }
       }
 
+      // The extra slots get trucks the way a fresh line does, stamped to
+      // this line, on its NEW days. Non-fatal — the class is held either way.
+      if (vehicleLine && newCategoryId && oldCategoryId === newCategoryId && newQty > oldQty && !raised.error && bookingIdNow) {
+        unitOutcome = await assignUnitsForLine({
+          orderId,
+          categoryId: newCategoryId,
+          quantity: newQty - oldQty,
+          request: { mode: 'next' },
+          categoryLabel: lineItem.description,
+          lineWindow: { start: lineItem.pickupDate, end: lineItem.returnDate },
+          orderLineItemId: lineId,
+        });
+      }
+
       const stuck =
-        !!before && !!after && oldCategoryId === newCategoryId && newQty < oldQty &&
+        !lineRelease && !!before && !!after && oldCategoryId === newCategoryId && newQty < oldQty &&
         after.quantity === before.quantity && before.status === 'ASSIGNED';
       holdsOutcome = {
         categoryId: newCategoryId,
@@ -458,8 +538,8 @@ export async function PUT(req: NextRequest, { params }: Params) {
           ? `The line saved, but the reservation could not be updated (${raised.error}). Check the hold on the board.`
           : stuck
             ? `The reservation still holds ${after!.quantity} — its units are already assigned. Release the one you no longer need from the reservation.`
-            : releasedUnits.length > 0
-              ? `${releasedUnits.join(', ')} released — this line no longer holds that class.`
+            : releasedUnits.length > 0 && !lineRelease
+              ? `${namesInWords(releasedUnits)} released — this line no longer holds that class.`
               : null,
       };
 
@@ -640,6 +720,10 @@ export async function PUT(req: NextRequest, { params }: Params) {
       // the line left, and a note when the rep still has something to do.
       // Null when the edit owed the hold nothing.
       holds: holdsOutcome,
+      // The specific trucks the edit gave back (a quantity cut, or the line
+      // leaving Vehicles), and the ones bound for a quantity increase.
+      released: lineRelease ? { units: lineRelease.units, pooledSlots: lineRelease.pooledSlots } : null,
+      unitAssignment: unitOutcome,
     });
   } catch (error) {
     console.error("Update line item error:", error);
@@ -687,6 +771,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       inventoryItemId: true, assetCategoryId: true,
       isPackageHeader: true, packageInstanceId: true,
       pickStatus: true, fulfillmentLane: true,
+      pickupDate: true, returnDate: true,
     },
   });
   if (!lineRow) {
@@ -759,24 +844,55 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     });
   }
 
+  // THE TRUCKS ON THIS LINE, read before the row goes: the stamp that
+  // names them (BookingAssignment.orderLineItemId) is SET NULL by the DB
+  // the moment the line is deleted. Removing "1× Cube Truck" from an
+  // order takes a SPECIFIC cube truck off the reservation — the one
+  // reserved for that line — and never a sibling line's, and never the
+  // whole shared hold (which, at quantity zero, used to delete the item
+  // row and every other order's units under it).
+  const holdCategoryId = await holdCategoryIdForLine(lineRow);
+  const captured =
+    parentOrder && lineRow.department === 'VEHICLES' && holdCategoryId
+      ? await liveUnitsForLine({
+          orderId,
+          lineId,
+          categoryId: holdCategoryId,
+          quantity: lineRow.quantity,
+          window: { start: lineRow.pickupDate, end: lineRow.returnDate },
+        })
+      : null;
+
   await prisma.orderLineItem.delete({ where: { id: lineId } });
 
-  // (#2 Phase 2) Hold side delete — VEHICLES / STAGES only. Decrements
-  // BookingItem.quantity by the deleted line's qty; deletes the row
-  // when qty hits 0 so the schedule view doesn't show a phantom hold.
   let deleteHoldsResult: Awaited<ReturnType<typeof syncHoldOnLineDelete>> | null = null;
-  if (
+  let releasedUnits: { units: string[]; pooledSlots: number; quantityAfter: number; status: string } | null = null;
+  if (captured?.item) {
+    const pooledSlots = Math.max(0, lineRow.quantity - captured.units.length);
+    const operatorId = await resolveOperatorId(session.user.email);
+    const rel = await releaseBookingItem(captured.item.id, {
+      assetIds: captured.units.map((u) => u.assetId),
+      pooledSlots,
+      actor: { userId: operatorId, source: 'line-delete', reason: `${lineRow.description} removed from the order` },
+    });
+    if (rel.ok) {
+      releasedUnits = { units: captured.units.map((u) => u.unitName), pooledSlots, quantityAfter: rel.quantity, status: rel.status };
+    } else {
+      console.error('[line-items DELETE] unit release refused:', rel.reason);
+    }
+  } else if (
     parentOrder &&
-    (lineRow.department === 'VEHICLES' || lineRow.department === 'STAGES') &&
-    lineRow.assetCategoryId
+    lineRow.department === 'STAGES' &&
+    holdCategoryId
   ) {
+    // Stages are still a quantity on the hold — no unit to name.
     const parentOrderForBooking = await prisma.order.findUnique({
       where: { id: orderId }, select: { bookingId: true },
     });
     if (parentOrderForBooking?.bookingId) {
       deleteHoldsResult = await syncHoldOnLineDelete(prisma, {
         bookingId: parentOrderForBooking.bookingId,
-        categoryId: lineRow.assetCategoryId,
+        categoryId: holdCategoryId,
         removedQty: lineRow.quantity,
       });
     }
@@ -835,9 +951,10 @@ export async function DELETE(req: NextRequest, { params }: Params) {
       recomputed: pickRecompute.pickListRecomputed,
       wasPicked: alreadyPicked,
     },
-    // (#2 Phase 2) Holds outcome on delete — null for non-hold lines
-    // or orders with no Booking. quantityAfter=0 → the BookingItem
-    // row was removed; otherwise just decremented.
+    // Holds outcome on delete — null for non-hold lines or orders with
+    // no Booking. Stages: the quantity decrement. Vehicles: the specific
+    // trucks that came off the reservation for this line.
     holds: deleteHoldsResult,
+    released: releasedUnits,
   });
 }
