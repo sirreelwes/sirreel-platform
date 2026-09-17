@@ -22,6 +22,12 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-17
+
+### One thread per job — Phase 1: anchors + auto-filing
+
+(SHA in the commit that carries this line) Wes: "go ahead and build Phase 1." Every client-facing send that knows its job now goes through `sendOnJobThread()` (`src/lib/email/jobThread.ts`) instead of bare `sendAgreementEmail`: quote, job welcome, paperwork summary, manual follow-up, portal invite, invoice, pre-invoice, and the job-page composer. Each carries three anchors — an HQ-minted Message-ID with In-Reply-To/References back to the job's filed messages, `jobs+<jobcode>@sirreel.com` on Cc, and one subject per job — and is recorded on the job's root `EmailThread` (`hq-job-<jobId>`) WITH its Message-ID, which is the fact HQ never had before. The pubsub ingest files an anchored reply's thread to the job by itself (fill-only), keeps HQ's own jobs@ copy from becoming a second row, checks the job address before the driver relay so `parseRelayTag` cannot claim it, and lets billing@ keep a "thanks, paid" that has no invoice keyword. Preview endpoints show the thread subject via a read-only twin, so the review modal shows what goes out. Pure rules in `jobThreadRules.ts`, `npm run test:job-thread` (33 checks). No schema change, no Workspace change. NOT built: the Conversation panel, internal notes, lanes, Hand to Billing, From = the author (Phase 2); Gmail-native sending (Phase 3); the cadence runner stays on its own gated path. Unverified: whether Resend honours a caller-set Message-ID — the design tolerates either answer via the `X-SirReel-Job-Message` marker and the own-copy in jobs@.
+
 ## 2026-09-16
 
 ### One thread per job — design written, nothing built

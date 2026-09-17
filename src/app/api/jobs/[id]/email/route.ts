@@ -3,14 +3,13 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { can } from '@/lib/permissions'
-import { sendAgreementEmail, SEND_FROM } from '@/lib/email/sendAgreementEmail'
+import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread, previewJobThreadSubject } from '@/lib/email/jobThread'
 import { splitCcInput } from '@/lib/email/ccList'
 import { agentReplyTo } from '@/lib/email/teamVisibility'
 import { channelRecipients } from '@/lib/email/notificationChannels'
 import { participantsForReply } from '@/lib/email/threadParticipants'
 import { buildJobMessageEmail } from '@/lib/email/templates/jobMessage'
-import { recordOutboundOnThread, startThreadForJob } from '@/lib/email/recordOutboundOnThread'
-import { fileThreadInJobIfUnfiled } from '@/lib/jobs/attachThreadToJob'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import {
@@ -167,7 +166,10 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
      *  team's copy is the sales-desk channel's job. */
     internalOnThread: participants.internal,
     teamCc: await channelRecipients('sales-team-cc'),
-    subject: thread ? replySubject(thread.subject) : job.name,
+    // One thread per job (lib/email/jobThread): the subject is the job's
+    // and the send will use it whatever the box says. The old per-thread
+    // subject is the fallback for a job the thread helper cannot read.
+    subject: (await previewJobThreadSubject(job.id)) ?? (thread ? replySubject(thread.subject) : job.name),
     contacts,
     thread: thread
       ? {
@@ -279,7 +281,13 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
   }
 
-  const result = await sendAgreementEmail({
+  // ON the job's thread: minted Message-ID, References back to whatever is
+  // filed (the client's inquiry, the quote…), the job address on Cc, the
+  // job's subject. Recorded on the root thread by the helper, so the Job
+  // page's "Email threads" shows our half without the old hand-filing.
+  const result = await sendOnJobThread({
+    jobId: job.id,
+    staffEmail: me.email,
     to: [to],
     cc: ccWithTeam.length > 0 ? ccWithTeam : undefined,
     replyTo: agentReplyTo(me.email) ?? undefined,
@@ -309,30 +317,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       })
       .catch((err) => console.error('[job-email] counter-proposal audit failed:', err))
   }
-  let threadId: string | null = null
-  if (payload.threadId) {
-    const existing = await prisma.emailThread.findFirst({
-      where: { id: payload.threadId, jobId: job.id },
-      select: { id: true },
-    })
-    threadId = existing?.id ?? null
-  }
-  if (!threadId) threadId = await startThreadForJob({ jobId: job.id, subject })
-
-  let filed = false
-  if (threadId) {
-    await fileThreadInJobIfUnfiled(threadId, job.id)
-    const recorded = await recordOutboundOnThread({
-      threadId,
-      staffEmail: me.email,
-      toAddresses: [to],
-      ccAddresses: cc,
-      subject,
-      bodyText: text,
-      bodyHtml: html,
-    })
-    filed = !!recorded
-  }
-
-  return NextResponse.json({ ok: true, to, cc: ccWithTeam, threadId, filed })
+  // `payload.threadId` picked which conversation's participants seeded the
+  // draft (GET); the send itself always lands on the job's one thread.
+  return NextResponse.json({ ok: true, to, cc: ccWithTeam, threadId: result.threadId, filed: !!result.threadId })
 }

@@ -21,7 +21,7 @@ import { prisma } from '@/lib/prisma'
 import { composeJobWelcomeEmail } from '@/lib/email/preview/composeJobWelcomeEmail'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { parseCcList } from '@/lib/email/ccList'
 import { agentReplyTo, withTeamCc } from '@/lib/email/teamVisibility'
@@ -78,7 +78,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const cc = await withTeamCc(manualCc, composition.to.email)
 
-  const result = await sendAgreementEmail({
+  const result = await sendOnJobThread({
+    jobId: params.id,
+    staffEmail: session.user.email,
     to: [composition.to.email],
     cc: cc.length ? cc : undefined,
     replyTo: agentReplyTo(session.user.email) ?? undefined,
@@ -96,7 +98,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await recordEmailDelivery({
       resendMessageId: result.id,
       toAddress: composition.to.email,
-      subject: composition.subject,
+      subject: result.subject,
       label: 'job-welcome',
       orderId: resolved.portalOrder.id,
     }).catch((e) => console.error('[job-welcome] delivery record failed', e))
@@ -115,7 +117,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           sentBy: session.user.email,
           to: composition.to.email,
           cc,
-          subject: composition.subject,
+          subject: result.subject,
           orderId: resolved.portalOrder.id,
         },
       },

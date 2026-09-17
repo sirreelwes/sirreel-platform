@@ -25,7 +25,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { withBillingCc } from '@/lib/email/billingVisibility'
 import { rankRecipients } from '@/lib/email/recipients'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
@@ -147,7 +147,9 @@ export async function sendPreInvoice(args: {
   // "changes requested" reply comes back to billing either way.
   const ccList = await withBillingCc([], primary.email)
 
-  const result = await sendAgreementEmail({
+  const result = await sendOnJobThread({
+    jobId: invoice.order.job?.id ?? null,
+    staffEmail: args.senderEmail,
     to: [primary.email],
     cc: ccList.length > 0 ? ccList : undefined,
     // Billing signs it and billing answers it — same as the real invoice.

@@ -1,8 +1,16 @@
 # One thread per job — design (2026-09-16, for Wes)
 
-**Status:** design only. Nothing here is built. Sketch page: see the
-artifact link in the session that produced this; the mechanism below is the
-part that matters if the page is lost.
+**Status:** Phase 1 SHIPPED 2026-09-17 (anchors + auto-filing —
+`src/lib/email/jobThread.ts`, `jobThreadRules.ts`, the pubsub filing, seven
+send sites + the job composer; `npm run test:job-thread`). Phases 2 and 3
+are not built. Two things Phase 1 settled that the design left open: the
+root subject ADOPTS the client's filed inquiry subject when one exists (a
+minted `<job> — SirReel (<code>)` only when nothing is filed), and HQ's own
+copy of a send arriving in jobs@ is folded onto the recorded row by an
+`X-SirReel-Job-Message` marker header, so it does not matter whether Resend
+honours a caller-set Message-ID. Sketch page: see the artifact link in the
+session that produced this; the mechanism below is the part that matters if
+the page is lost.
 
 **The ask (Wes):** "figure out a way to have individual jobs stay on one
 thread. For the client to have a single thread would be better … Is it that

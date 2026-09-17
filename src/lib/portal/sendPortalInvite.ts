@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma'
 import { issueJobMagicLink, refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
-import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
+import { type EmailResult } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { withTeamCc } from '@/lib/email/teamVisibility'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
@@ -52,6 +53,7 @@ export async function sendPortalInvite(args: {
     where: { id: args.orderId },
     select: {
       id: true,
+      jobId: true,
       portalSlug: true,
       job: { select: { name: true, jobCode: true } },
       company: { select: { name: true } },
@@ -119,7 +121,8 @@ export async function sendPortalInvite(args: {
   // were not). Same admin-managed 'sales-team-cc' channel as the quote
   // and card-auth sends; an empty channel list turns this off with them.
   const teamCc = await withTeamCc([], person.email)
-  const emailResult = await sendAgreementEmail({
+  const emailResult = await sendOnJobThread({
+    jobId: order.jobId,
     label: 'portal/invite',
     to: [person.email],
     cc: teamCc.length ? teamCc : undefined,
@@ -134,7 +137,7 @@ export async function sendPortalInvite(args: {
     await recordEmailDelivery({
       resendMessageId: emailResult.id,
       toAddress: person.email,
-      subject: tpl.subject,
+      subject: emailResult.subject,
       label: 'portal/invite',
       orderId: order.id,
     })
