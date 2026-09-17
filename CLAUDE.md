@@ -877,9 +877,14 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   rate with Vic, and model detail is kept loose ("Pro pack & head kit — 2400
   W/s", never a SKU) so a call CORRECTS a row instead of discovering it was
   invented. **Rates are EMPTY** — Vic proposes from his page, HQ accepts.
-- **Their Sprinter van packages are deliberately NOT on the roster** — that
-  is our own fleet's lane (the GreenLite caveat). If Wes wants them they go
-  under Specialty Vehicles or Cars & SUVs, never under Photo Shoot Rentals.
+- **Their Sprinter Cargo Van Packages ARE ours to sell, and they belong in
+  Photo Shoot Rentals** (Wes 2026-09-17: "VSM cargo vans come preloaded with
+  gear that we don't carry so keep them"). This file first excluded them as
+  competing with our own vans — the GreenLite caveat — which read the VAN as
+  the product. It is not: the van is the wrapper and the preloaded package is
+  the thing, and none of it is gear SirReel holds. So they are NOT a
+  Specialty Vehicle or a Car & SUV; they are a photo package that happens to
+  arrive on wheels. **Do not "correct" them back out.**
 - **WILL_CALL is the partner default**, set on the Vendor and left NULL on
   every unit so it is one edit on the Portals row. A stills rental house is a
   counter business: DELIVERY would ask Vic for a window and a contact he

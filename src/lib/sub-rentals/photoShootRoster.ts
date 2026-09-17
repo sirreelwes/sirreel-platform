@@ -24,12 +24,19 @@
  * pack & head kit — 2400 W/s", not a SKU) so a confirmation call CORRECTS a
  * row rather than discovering it was invented.
  *
- * SPRINTER VANS ARE NOT HERE, on purpose. VSM rents loaded Sprinter
- * packages; SirReel rents cargo and passenger vans as its own fleet. Listing
- * their vans beside ours puts a partner in competition with the house
- * inventory, which is the GreenLite caveat over again. If Wes wants them,
- * they belong under Specialty Vehicles or Cars & SUVs, never under Photo
- * Shoot Rentals.
+ * SPRINTER VAN PACKAGES ARE NOT IN THIS FILE, but they ARE ours to sell and
+ * they belong in Photo Shoot Rentals. They are absent here only because the
+ * live rows already exist and are better sourced than anything this file
+ * could infer — VSM's three Sprinter Cargo Van Packages were filed
+ * 2026-09-11 from their own published categories.
+ *
+ * This file originally excluded them on PRINCIPLE, as a partner competing
+ * with our own van fleet (the GreenLite caveat). That was wrong, and Wes
+ * said why on 2026-09-17: "VSM cargo vans come preloaded with gear that we
+ * don't carry so keep them." The van is the wrapper; the preloaded package
+ * is the product, and none of it is gear SirReel holds. A loaded van is not
+ * a Specialty Vehicle or a Car & SUV — it is a photo package that arrives on
+ * wheels. **Do not "correct" them back out.**
  *
  * RATES ARE EMPTY, like every other partner roster: Vic proposes list rates
  * from his own account page and HQ accepts them (rate-proposal.ts). Nothing
@@ -144,7 +151,7 @@ export const VSM_PLANET = {
   deliveryTerms:
     'Will-call: the production collects from and returns to VSM Planet’s Hollywood counter. Delivery is available by arrangement and quoted per booking. Rental weeks and deposits per their rental terms — confirm with Vic.',
   notes:
-    'Photo shoot rentals partner. Hollywood studio/production rental house, 23+ years, ~500 rental types from cameras and backings to Sprinter van packages; specialises in the Profoto line. Deal on file 35% to SirReel, will flex to 43% to keep a client (partnerMaxSharePercent). Their Sprinter van packages are deliberately NOT on the roster — that is our own fleet’s lane.',
+    'Photo shoot rentals partner. Hollywood studio/production rental house, 23+ years, ~500 rental types from cameras and backings to Sprinter van packages; specialises in the Profoto line. Deal on file 35% to SirReel, will flex to 43% to keep a client (partnerMaxSharePercent). Their Sprinter Cargo Van Packages belong under Photo Shoot Rentals, not with our own vans — they arrive preloaded with gear SirReel does not carry (Wes 2026-09-17).',
 } as const
 
 /**
