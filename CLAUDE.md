@@ -949,6 +949,79 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## "Booking item is fully assigned" — one capacity rule (2026-09-17 — Jose)
+- Jose, on Mad Minds (SR-JOB-0389): changing Cargo 35 for another van was
+  refused "booking item is fully assigned". Not a driver, not a lock. The
+  PICKER counted exact-day coverage against the QUOTED quantity (the ADV
+  Carrera rule, 2026-09-14) while the WRITE counted every OVERLAPPING
+  assignment against the hold's own quantity — the order is loaded on
+  Cargo 35 + Cargo 45, so the second van's overlap filled the block on the
+  server while the picker still showed the swap. Two answers to "is this
+  block full?" on one screen.
+- **`blockCapacity()` in `src/lib/scheduling/assignWindow.ts` is the one
+  rule** (pure; `npm run test:assign-window`): when the resolved window IS a
+  quoted block, the block's quantity and exact coverage; with no block to be
+  exact against, the hold's quantity and overlap. `available-units` and
+  `assignUnitToBookingItem` both call it. The refusal is now
+  `error: 'fully-assigned'` with a readable `reason`, the counts, and
+  `swappableAssetIds`; nothing matched the old string.
+- **The picker turns that refusal into the swap prompt** ("Which unit does X
+  replace?") and re-reads its counts, instead of a dead-end error. A block
+  whose units are checked out still says so.
+- **On a swap the DRIVER goes with the job, not the van.** `DriverAssignment`
+  rows on the outgoing assignment are re-pointed at the replacement inside
+  the transaction (the driver's page and link survive; it now releases the
+  new van's code); inspections are detached (a walkaround is of the OLD van,
+  it stays on that asset's history); a checkout record on the outgoing unit
+  refuses the swap up front (`replace-checked-out`) — its FK is RESTRICT and
+  would otherwise fail after every other check passed. The replacement is
+  created BEFORE the outgoing row is deleted so those rows have somewhere to
+  go. Response carries `driversMoved`. Nobody is TOLD the driver's van
+  changed — open.
+
+## Cargo 20–25 have no lift gate (2026-09-16 — Wes)
+- Wes: "We haven't successfully changed cargos 20 through 25 to be without a
+  lift gate. Instead we've added a second cargo 25 that has no lift gate but
+  cargo 25 with a lift gate still exists." The six were seeded into "Cargo
+  Van w/ Liftgate" (seed_fleet.ts, March) and ruling A of 2026-07-15 filed
+  Planyo's "w/o" placement of them as stale. Planyo was right.
+- **This is a DATA change, shipped as a maintenance task, not a hand edit.**
+  `cargo-vans-no-lift-gate` on /admin/maintenance (iPad) or `npx tsx
+  scripts/cargo-vans-no-lift-gate.ts --write` (laptop) — one implementation,
+  `src/lib/fleet/moveCargoOffLiftGate.ts`. Dry run first; it prints the plan
+  per van and writes nothing. **It has not been run yet** — this session had
+  no database access; Wes runs it.
+- **The ORIGINAL row survives, the duplicate folds into it.** Rules in
+  `src/lib/fleet/cargoLiftGate.ts` (pure, `npm run test:cargo-lift-gate`):
+  the active row in the w/ class (oldest first) is the survivor because it
+  carries the seed id, the odometer, the access code and every trip; every
+  other active row with that name — the second Cargo 25, and the Planyo-era
+  Cargo 22/25 that sat in w/o since May — has its nine history tables
+  (`ASSET_HISTORY_RELATIONS`, pinned against `model Asset` by the test)
+  re-pointed at the survivor, facts the survivor lacks copied over
+  (`fillFromDuplicate`: fill-if-empty, higher odometer, notes appended), and
+  is retired under "Cargo 25 (duplicate — folded 2026-09-16)". **Nothing is
+  deleted.** Inactive rows are never a survivor and never folded.
+- **Counts are set from the rows, on BOTH tables.** The scheduler reads the
+  merged `InventoryItem.qtyOwned` (`getCategoryAvailability`), not the frozen
+  `AssetCategory.totalUnits`; the task sets both to the active-asset count of
+  each class. The w/o class was ARCHIVED in June (exports/catalog-export.json
+  has it `isActive:false`) — the task un-archives it and mirrors the w/
+  class's `reservableOnGantt`, or the moved vans would vanish from every
+  picker.
+- **A HOLD's class is not re-written.** A live reservation filed under w/
+  whose unit is one of these vans is NAMED in the log ("Look at:") and left
+  for a person to re-class on the reservation — the class on a hold is what
+  the quote says. Same for a hold that was assigned both rows of one van
+  (it holds the unit twice after the fold; release one).
+- `PLANYO_UNIT_CATEGORY_OVERRIDES` is now EMPTY — it pointed Cargo 20/21/23/24
+  at the class they are leaving, and once they sit in w/o the reservation's
+  own category matches first. Per-asset AuditLog rows:
+  `asset.category_moved`, `asset.folded_into` (old values included; the CLI
+  journal has the same). `TaskRefused` (`src/lib/admin/taskRefused.ts`) is
+  now the one refusal class every maintenance task throws; `SeedRefused`
+  stays as an alias.
+
 ## Run a task without a laptop — /admin/maintenance (2026-09-16 — Wes)
 - Wes: "I need to be able to run these scripts from my iPad with no access
   to my actual laptop." Everything seedable had ONE way in — `npx tsx
@@ -1152,6 +1225,70 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `VSM_PLANET_ALIASES` in photoShootRoster.ts is that list and
   `findVsmVendor()` is the only lookup a VSM code path may use; the seed
   REFUSES rather than adding a roster on top of units it did not create.
+
+## One thread per job — Phase 1 SHIPPED 2026-09-17 (Wes)
+- Wes 2026-09-16: "figure out a way to have individual jobs stay on one
+  thread. For the client to have a single thread would be better … Is it
+  that we open a chat within the job itself and that chat feeds a single
+  email thread to the client?" Design, troubleshooting, placement and the
+  billing answer: `docs/specs/job-thread-one-conversation.md`. Read it
+  before touching how client mail is sent or filed. Phase 1 is the
+  ANCHORS + AUTO-FILING; Phase 2 (the Conversation panel, internal notes,
+  lanes, Hand to Billing, From = the author) and Phase 3 (Gmail-native
+  sending) are NOT built.
+- **Why it shattered, in one line:** no send carried proof of its job. 91
+  sites went through `sendAgreementEmail` with no In-Reply-To/References,
+  five subjects, three Reply-Tos (rep / billing@ / hello@); `EmailThread`
+  is keyed per MAILBOX (`gmailThreadId`), the pubsub never set `jobId`, and
+  HQ never learned its own Message-IDs (the root of the hello@ capture
+  trick for wes@).
+- **`sendOnJobThread()` in `src/lib/email/jobThread.ts` is the drop-in for
+  `sendAgreementEmail` at any site that knows its job** (same payload +
+  `jobId`, optional `staffEmail`, `separate: true` to opt out). It puts
+  three anchors on the email (rules in `jobThreadRules.ts`, pure, `npm run
+  test:job-thread`): (A) an HQ-minted `<jt.<jobcode>.<uuid>@sirreel.com>`
+  Message-ID + In-Reply-To/References to the job's earliest and newest
+  filed message, stored on the outbound `EmailMessage.rfc822MessageId` so
+  `hasKnownConversationLink` matches a FIRST reply; (B) `jobs+<jobcode>@
+  sirreel.com` on Cc — the driver-relay plus-address mechanism, Cc NEVER
+  Reply-To (Reply-To stays the person); (C) one subject per job, "Re:"
+  once. The root thread is `EmailThread` `hq-job-<jobId>` (deterministic,
+  created on first send, `jobId` set). **Its subject ADOPTS the newest
+  thread already filed to the job** (the client's inquiry) and is minted
+  `<job> — SirReel (<code>)` only when nothing is filed — continuing the
+  client's thread is more "one thread" than starting ours.
+- **Wired (Phase 1):** send-quote, job welcome, paperwork summary, manual
+  follow-up, portal invite, invoice + pre-invoice (Reply-To billing@
+  unchanged — billing rides the same thread, Wes 2026-09-17), and the job
+  page composer (`/api/jobs/[id]/email`; its subject box is read-only
+  now). The four compose helpers in `lib/email/preview/` return the
+  thread subject via `previewJobThreadSubject()` (read-only, creates
+  nothing) so the review modal shows what will go out. NOT wired: the
+  cadence runner (`sendCadenceEmail`, its own Resend path, gated OFF by
+  `CADENCE_SENDING_ENABLED`) and the pre-job sales welcome (no job yet).
+- **Ingest (`/api/gmail/pubsub`) files an anchored thread to its job by
+  itself** — `resolveJobForIngest()`: job address on To/Cc/Delivered-To/
+  X-Original-To first, then the References chain against stored ids
+  (through a duplicate's canonical row). FILL-ONLY via
+  `fileThreadInJobIfUnfiled`; a thread a person placed is never re-pointed.
+  Also: the job code is checked BEFORE the driver relay (parseRelayTag
+  would claim `jobs+sr-job-…` as a driver tag); HQ's own copy of a send
+  (it lands in jobs@ via the Cc) is folded onto the recorded row by the
+  `X-SirReel-Job-Message` header even if Resend rewrote the Message-ID on
+  the wire; MONEY-mode inboxes (billing@/payments@) keep an anchored
+  message with no invoice keyword (`jobTagged` / `conversationLink`).
+- **Unverified, by design tolerant:** whether Resend honours a caller-set
+  `Message-ID`. If it does not, the ingested own-copy carries the real id
+  on a thread filed to the job, so a client reply referencing it still
+  resolves — one hop later. Check the first live send's headers in jobs@.
+- **What the client sees:** one growing conversation per job instead of a
+  row per document; "Quote", "Invoice" live in the body headings the
+  templates already carry. `rentals@` team Cc unchanged through Phase 1.
+- Do NOT resurrect `job_messages` (legacy, keyed by RW order number) for
+  internal notes. Do NOT put the job address in Reply-To. Do NOT widen the
+  wes@ LINKED filter — anchors add proof, nothing else. `startThreadForJob`
+  in recordOutboundOnThread.ts has no callers now; the root thread comes
+  from `jobThreadContext()`.
 
 ## Active Roadmap
 1. AI fleet optimization

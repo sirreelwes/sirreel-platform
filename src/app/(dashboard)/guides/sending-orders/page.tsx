@@ -236,7 +236,39 @@ export default function SendingOrdersGuidePage() {
               </p>
               <p>With one order on the job it is stamped for you.</p>
             </Step>
-            <Step n={5} title="Let the reminder close itself">
+            <Step n={5} title="Nobody meeting the driver? Mark that vehicle blind">
+              <p>
+                Blind pickup and blind return can be set for <strong>one vehicle</strong>, not only the
+                whole order — a job with three vans can send one out blind and hand the other two over
+                at the counter. Three places do it, and they all write the same thing:
+              </p>
+              <ul className="ml-4 list-disc space-y-1">
+                <li>
+                  <strong>Reservations</strong> → open the reservation. The top{' '}
+                  <strong>Blind pickup / Blind return</strong> chips are the whole job; under them the{' '}
+                  <strong>Per vehicle</strong> list has the same two chips beside each unit.
+                </li>
+                <li>
+                  <strong>The order page</strong> → <strong>Blind handoff</strong>. The checkboxes set the
+                  whole order; the <strong>Per vehicle</strong> list under them flips one unit and saves
+                  on click.
+                </li>
+                <li>
+                  <strong>Vehicle Check In/Out</strong> → the blind toggle on a vehicle&rsquo;s row flips
+                  that vehicle only.
+                </li>
+              </ul>
+              <p>
+                The order is the default for every vehicle on the job; a vehicle&rsquo;s own setting
+                wins for that unit. Clicking a whole-job chip sets every vehicle the same way and clears
+                the per-vehicle settings — when they differ, the chip shows a count like{' '}
+                <strong>1/2</strong>. Only the blind vehicle&rsquo;s driver gets the photo check-out and
+                the lockbox code. A unit swapped for another keeps its blind setting. The list shows
+                assigned units only, so assign first (step 3). Gate code and where-to-park still go in
+                the text boxes on the order page.
+              </p>
+            </Step>
+            <Step n={6} title="Let the reminder close itself">
               <p>
                 A sent quote whose units are not all assigned raises an action item on{' '}
                 <strong>Jobs</strong>: <em>the quote is out, now put the units on it</em>. It appears the

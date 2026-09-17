@@ -86,6 +86,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       bufferOverrideUsed: result.bufferOverrideUsed,
       window: result.window,
       replacedAssetId: result.replacedAssetId,
+      driversMoved: result.driversMoved,
     },
     { status: 201 },
   )

@@ -90,6 +90,12 @@ export interface EmailPayload {
    * (Wes 2026-09-14). Use `sendPartnerMail()` rather than setting it by hand.
    */
   replyToExact?: boolean
+  /**
+   * Extra RFC 5322 headers. The job-thread wrapper (lib/email/jobThread)
+   * sets Message-ID / In-Reply-To / References here so a send threads
+   * onto the job's conversation; nothing else should need this.
+   */
+  headers?: Record<string, string>
   /** Logging tag — surfaces in console error lines so it's obvious which touchpoint failed. */
   label?: string
   /**
@@ -136,6 +142,7 @@ export async function sendAgreementEmail(payload: EmailPayload): Promise<EmailRe
       html: payload.html,
       text: payload.text,
       attachments: payload.attachments,
+      headers: payload.headers,
     })
     if ((result as any)?.error) {
       const errMessage = (result as any).error?.message || JSON.stringify((result as any).error)

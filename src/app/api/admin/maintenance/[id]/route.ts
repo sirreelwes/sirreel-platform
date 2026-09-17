@@ -66,7 +66,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   try {
-    const result = await runner({ dryRun, params: safeParams })
+    const result = await runner({ dryRun, params: safeParams, actorUserId: user.id })
 
     if (!dryRun) {
       await prisma.auditLog.create({
@@ -82,6 +82,7 @@ export async function POST(req: NextRequest, { params }: Params) {
             // The captured ids. Without the journal file a phone run would
             // otherwise leave no record of what it made.
             createdIds: result.createdIds,
+            touchedIds: result.touchedIds ?? [],
             params: Object.keys(safeParams),
             ranFrom: 'hq-web',
           },

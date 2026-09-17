@@ -41,6 +41,7 @@ import { categoryNameForLine } from '@/lib/catalog/display'
 import { NextRequest, NextResponse } from 'next/server'
 import type { FulfillmentLane, OrderStatus, BookingPriority, PickListStatus } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { jobBlindRollup } from '@/lib/fleet/blindRule'
 import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 import { companyLabel } from '@/lib/scheduling/infoGaps'
 
@@ -419,6 +420,31 @@ export async function GET(req: NextRequest) {
   }
   const driverReturnedFor = (jobId: string | null) => (jobId ? driverReturnedByJob.get(jobId) ?? null : null)
 
+  // ── Per-vehicle blind overrides, by job (Jose 2026-09-16). A card's
+  //    blind marker reads "any order flag, or any live vehicle overridden
+  //    blind" — the same rollup as the rail (lib/fleet/blindRule). ──
+  const cardJobIds = [...new Set(resolved.map((r) => r.line.order.job?.id).filter((id): id is string => !!id))]
+  const overridesByJob = new Map<string, Array<{ blindPickup: boolean | null; blindReturn: boolean | null }>>()
+  if (cardJobIds.length) {
+    const rows = await prisma.bookingAssignment.findMany({
+      where: {
+        status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
+        OR: [{ blindPickup: { not: null } }, { blindReturn: { not: null } }],
+        bookingItem: { booking: { jobId: { in: cardJobIds }, status: { notIn: ['CANCELLED', 'ARCHIVED'] }, archivedAt: null } },
+      },
+      select: { blindPickup: true, blindReturn: true, bookingItem: { select: { booking: { select: { jobId: true } } } } },
+    })
+    for (const a of rows) {
+      const jobId = a.bookingItem.booking.jobId
+      if (!jobId) continue
+      const arr = overridesByJob.get(jobId) ?? []
+      arr.push({ blindPickup: a.blindPickup, blindReturn: a.blindReturn })
+      overridesByJob.set(jobId, arr)
+    }
+  }
+  const blindOf = (order: { blindPickup?: boolean; blindReturn?: boolean; job?: { id: string } | null }) =>
+    jobBlindRollup([{ blindPickup: !!order.blindPickup, blindReturn: !!order.blindReturn }], (order.job?.id && overridesByJob.get(order.job.id)) || [])
+
   // ── Build cards ──────────────────────────────────────────────
   function toFleetCard(r: ResolvedLine): FleetCard {
     const o = r.line.order as typeof r.line.order & { blindPickup?: boolean; blindReturn?: boolean }
@@ -439,8 +465,7 @@ export async function GET(req: NextRequest) {
       effectivePickupDate: r.pickupYmd,
       effectiveReturnDate: r.returnYmd,
       priority: r.priority,
-      blindPickup: !!o.blindPickup,
-      blindReturn: !!o.blindReturn,
+      ...blindOf(o),
       driverReturned: driverReturnedFor(r.line.order.job?.id ?? null),
       reportTo: cardReportTo(r.line.order.job),
     }
@@ -483,8 +508,7 @@ export async function GET(req: NextRequest) {
       effectiveReturnDate: g.returnYmd,
       pickListStatus: head.order.pickList?.status ?? null,
       priority: g.rows[0].priority,
-      blindPickup: !!ho.blindPickup,
-      blindReturn: !!ho.blindReturn,
+      ...blindOf(ho),
       driverReturned: driverReturnedFor(head.order.job?.id ?? null),
       reportTo: cardReportTo(head.order.job),
     }

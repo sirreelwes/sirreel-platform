@@ -22,7 +22,30 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-17
+
+### One thread per job — Phase 1: anchors + auto-filing
+
+`0b73a37` Wes: "go ahead and build Phase 1." Every client-facing send that knows its job now goes through `sendOnJobThread()` (`src/lib/email/jobThread.ts`) instead of bare `sendAgreementEmail`: quote, job welcome, paperwork summary, manual follow-up, portal invite, invoice, pre-invoice, and the job-page composer. Each carries three anchors — an HQ-minted Message-ID with In-Reply-To/References back to the job's filed messages, `jobs+<jobcode>@sirreel.com` on Cc, and one subject per job — and is recorded on the job's root `EmailThread` (`hq-job-<jobId>`) WITH its Message-ID, which is the fact HQ never had before. The pubsub ingest files an anchored reply's thread to the job by itself (fill-only), keeps HQ's own jobs@ copy from becoming a second row, checks the job address before the driver relay so `parseRelayTag` cannot claim it, and lets billing@ keep a "thanks, paid" that has no invoice keyword. Preview endpoints show the thread subject via a read-only twin, so the review modal shows what goes out. Pure rules in `jobThreadRules.ts`, `npm run test:job-thread` (33 checks). No schema change, no Workspace change. NOT built: the Conversation panel, internal notes, lanes, Hand to Billing, From = the author (Phase 2); Gmail-native sending (Phase 3); the cadence runner stays on its own gated path. Unverified: whether Resend honours a caller-set Message-ID — the design tolerates either answer via the `X-SirReel-Job-Message` marker and the own-copy in jobs@.
+
+### Blind pickup/return per vehicle
+
+`e302fd6f` Jose: a job with several vehicles could only be made blind as a whole — every toggle wrote all live orders, so one blind van made every driver on the job a blind pickup (photo check-out + lockbox code). `BookingAssignment.blindPickup/blindReturn` (nullable, added on the live DB by `scripts/add-assignment-blind-columns.ts`) is the unit's own answer; null follows the order. One rule (`lib/fleet/blindRule.ts`, `blindForVehicle`), one write (`POST /api/jobs/[id]/blind-handoff` — a vehicle, or the whole job which also clears every override). The reservation modal lists a chip row per vehicle, the Vehicle Check In/Out row and the handover screen flip that unit only, the order page's Blind handoff card gets a per-vehicle list, and every reader (driver page, self check-out/return, invite, AHA lockbox, pickup email, gantt bar, today board, rail, dispatch, portal) follows the unit. A unit swap carries the override like the driver. `npm run test:blind-handoff`.
+
+### "Booking item is fully assigned" — one capacity rule
+
+`(this commit)` the picker and the assign write now answer "is this block full?" with the same function — Jose (Mad Minds, SR-JOB-0389) could not change Cargo 35 for another van: the picker counted exact coverage against the quoted count, the server counted every overlapping assignment (Cargo 45 on the same job) against the hold's quantity, and refused a swap the picker had offered. `blockCapacity()` in assignWindow.ts is the rule for both; the refusal is `fully-assigned` with a reason and the swappable units, and the picker turns it into the "which unit does this replace?" prompt. On a swap the driver's assignment moves to the replacement van (it used to hang off a row being deleted), walkarounds stay with the old van, and a unit with a check-out record refuses up front. `npm run test:assign-window`.
+
 ## 2026-09-16
+
+### One thread per job — design written, nothing built
+
+(docs only) `docs/specs/job-thread-one-conversation.md` — Wes asked how a job can stay on ONE email thread for the client, and whether that means a chat inside the job that feeds the thread, or letting Oliver/Jose/Wes/Dani/Ana work from their own email. Answer: the email thread IS the job conversation (written from the job page, internal notes interleaved), and with three anchors on every send — an HQ-minted Message-ID + References chain, `jobs+<jobcode>@` on Cc, one subject per job — a reply from anyone's own Gmail files onto the same thread, so the two options are one design. Troubleshooting from the code: 91 send sites set no threading headers, five subjects, three Reply-Tos, per-mailbox `EmailThread` keys, an ingest that never sets `jobId`, and HQ never learning its own Message-IDs. Phase 1 needs no schema or admin change. Five decisions listed for Wes.
+
+### Cargo 20–25 have no lift gate
+
+`7923c4b` move the originals into "Cargo Van w/o Liftgate", fold the duplicate — Wes: "we've added a second cargo 25 that has no lift gate but cargo 25 with a lift gate still exists." Shipped as the `cargo-vans-no-lift-gate` maintenance task (iPad: /admin/maintenance · laptop: `scripts/cargo-vans-no-lift-gate.ts --write`; dry run by default, NOT YET RUN). The original row survives with its id, trips and access code; every other active row carrying the name — the second Cargo 25, and the Planyo-era Cargo 22/25 that sat in w/o since May — has its nine history tables re-pointed at it and is retired as "Cargo 25 (duplicate — folded <date>)". Nothing deleted. Counts set on both `AssetCategory.totalUnits` and the merged `qtyOwned` the scheduler reads; the w/o class un-archived (it was, since June) and made reservable. Holds filed under w/ on a moved van are named in the log, never re-classed. `PLANYO_UNIT_CATEGORY_OVERRIDES` emptied. `npm run test:cargo-lift-gate`.
+
 
 ### The photo section, built from VSM gear
 

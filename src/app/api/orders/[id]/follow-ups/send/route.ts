@@ -28,7 +28,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { parseCcList } from '@/lib/email/ccList'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { composeFollowUpEmail } from '@/lib/email/preview/composeFollowUpEmail'
@@ -93,7 +93,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // Load only the slug here — composer already validated the order.
   const orderSlug = await prisma.order.findUnique({
     where: { id: params.id },
-    select: { portalSlug: true, agent: { select: { email: true } } },
+    select: { jobId: true, portalSlug: true, agent: { select: { email: true } } },
   })
   let portalUrl: string | null = null
   if (orderSlug?.portalSlug) {
@@ -118,7 +118,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   if (!final.ok) return bad(final.status, final.error)
 
   // ── Phase 3: dispatch ─────────────────────────────────────
-  const result = await sendAgreementEmail({
+  const result = await sendOnJobThread({
+    jobId: orderSlug?.jobId ?? null,
+    staffEmail: session.user.email,
     to: [final.to.email],
     // Replies route to the agent's watched inbox (the Gmail ingest
     // pipeline), not the unmonitored notifications@ sender — same as
@@ -163,7 +165,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         // already tell the real story.
         dueAt: new Date(),
         status: 'SENT',
-        draftSubject: final.subject,
+        draftSubject: result.subject,
         draftBody: final.text,
         sentAt: new Date(),
         sentById: userRow?.id ?? null,
@@ -180,7 +182,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           status: 'SENT',
           sentAt: new Date(),
           sentById: userRow?.id ?? null,
-          draftSubject: final.subject,
+          draftSubject: result.subject,
           draftBody: final.text,
         },
       })
@@ -193,7 +195,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await recordEmailDelivery({
       resendMessageId: result.id,
       toAddress: final.to.email,
-      subject: final.subject,
+      subject: result.subject,
       label: `follow-up:${final.stage}:${final.order.orderNumber}`,
       orderId: params.id,
       quoteFollowUpId: followUpRowId,

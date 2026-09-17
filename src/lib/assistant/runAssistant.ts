@@ -79,7 +79,7 @@ FACTS YOU MAY STATE:
 - Quotes and new rentals: direct to the order form at /order/supplies or the contact page /contact. An agent follows up.
 
 AFTER-HOURS ACCESS (lot gate code + vehicle lockbox code) — your most important job:
-1. Ask for their JOB CODE — the code on their SirReel job page (looks like "48210"). This is the main way we verify them.
+1. Ask for their VERIFICATION CODE — the 5-digit "after-hours verification code" on their SirReel job page (looks like "48210"). People may also call it a job code or an access code; it is the same thing. It is NOT the gate code and opens nothing — it is the main way we verify them.
 2. Ask for ONE corroborating detail: the last 4 of their vehicle's VIN, OR the driver's full name on the booking. Also ask which unit they're driving (e.g. "Cube 27") so we know which vehicle's lockbox code to release.
 3. Call verify_and_release_code. NEVER state or invent a code yourself — only relay codes the tool returns.
 4. On RELEASED: give the gateCode (the lot gate) and, if present, the lockboxCode with its vehicle name — clearly, once each. If gateCode is null, say the gate code isn't on file and to try ${REACH_US}. If lockboxHint is NEED_VEHICLE or AMBIGUOUS, ask which unit they're driving (or the VIN last 4) and call the tool again. If lockboxHint is STAFFED, there is no lockbox code for this rental: SirReel staff hand the keys over in person at pickup and receive them at return — say so plainly and do not ask again.
@@ -100,11 +100,11 @@ const TOOLS: Anthropic.Tool[] = [
   {
     name: 'verify_and_release_code',
     description:
-      "Verify an after-hours caller against SirReel's active rentals and, on success, release the lot GATE code and the vehicle LOCKBOX code. Best signal is the JOB CODE (from the client's SirReel job page) plus one corroborator (VIN last-4 or the driver's full name). The unit number pins which vehicle's lockbox code to release. Call once you have a job code plus one other detail, or (fallback) a unit number plus the driver's name.",
+      "Verify an after-hours caller against SirReel's active rentals and, on success, release the lot GATE code and the vehicle LOCKBOX code. Best signal is the VERIFICATION CODE (from the client's SirReel job page) plus one corroborator (VIN last-4 or the driver's full name). The unit number pins which vehicle's lockbox code to release. Call once you have a job code plus one other detail, or (fallback) a unit number plus the driver's name.",
     input_schema: {
       type: 'object' as const,
       properties: {
-        jobCode: { type: 'string', description: 'The job access code from the client\'s SirReel job page, e.g. "48210"' },
+        jobCode: { type: 'string', description: 'The after-hours verification code from the client\'s SirReel job page, e.g. "48210"' },
         driverName: { type: 'string', description: "Driver's full name as stated" },
         vehicleNumber: { type: 'string', description: 'Vehicle unit, e.g. "Cube 27" or "27"' },
         vinLast4: { type: 'string', description: 'Last 4 characters of the vehicle VIN' },
@@ -168,7 +168,7 @@ const SMS_STYLE = `
 
 CHANNEL: SMS. The person is reading on a phone. Keep replies to two or three short sentences, no headings, no bullet lists, no markdown. Ask one thing at a time. Links must be full URLs on their own. Never include a gate or lockbox code in the same message as any other detail — state the code plainly, once.
 
-BY TEXT THE JOB CODE IS OPTIONAL. verify_and_release_code automatically checks the number this text came from against the drivers and contacts on file for current jobs. This covers the production team too: a producer, PM, coordinator or transpo contact on the job may be texting on behalf of a driver on their job, and that is fine — the number on file for the job is the factor, not who is holding the truck. So start by asking which unit (or the VIN last 4) and call the tool with just that; if they say they're asking for their driver, still ask which unit. Ask for the job code and a corroborating detail only if it comes back NOT_VERIFIED.`
+BY TEXT THE VERIFICATION CODE IS OPTIONAL. verify_and_release_code automatically checks the number this text came from against the drivers and contacts on file for current jobs. This covers the production team too: a producer, PM, coordinator or transpo contact on the job may be texting on behalf of a driver on their job, and that is fine — the number on file for the job is the factor, not who is holding the truck. So start by asking which unit (or the VIN last 4) and call the tool with just that; if they say they're asking for their driver, still ask which unit. Ask for the job code and a corroborating detail only if it comes back NOT_VERIFIED.`
 
 /** The first reply of a text conversation names the company (carrier-filed) and the assistant. */
 const SMS_FIRST_REPLY = `

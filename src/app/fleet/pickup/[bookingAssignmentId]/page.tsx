@@ -21,7 +21,7 @@ import { prisma } from '@/lib/prisma'
 import { PickupDriverForm } from '@/components/fleet/PickupDriverForm'
 import { VehicleBlindToggle } from '@/components/fleet/VehicleBlindToggle'
 import { CheckoutAddOnsCard } from '@/components/orders/CheckoutAddOnsCard'
-import { ordersForBooking } from '@/lib/fleet/blindHandoff'
+import { blindForVehicle, ordersForBooking } from '@/lib/fleet/blindHandoff'
 
 export const dynamic = 'force-dynamic'
 
@@ -59,6 +59,9 @@ export default async function FleetPickupPage({ params }: Params) {
     select: {
       id: true,
       startDate: true,
+      // This unit's own blind answer, when sales set one (Jose 2026-09-16).
+      blindPickup: true,
+      blindReturn: true,
       asset: {
         select: {
           unitName: true, make: true, model: true, licensePlate: true,
@@ -105,6 +108,23 @@ export default async function FleetPickupPage({ params }: Params) {
   const booking = assignment.bookingItem.booking
   const checkout = assignment.checkoutRecords[0] ?? null
 
+  // The job's live bookings — which orders speak for THIS unit's booking
+  // (lib/fleet/blindHandoff), for the toggle here and the add-on order below.
+  const liveBookingIds = new Set(
+    booking.jobId
+      ? (
+          await prisma.booking.findMany({
+            where: { jobId: booking.jobId, status: { notIn: ['CANCELLED', 'ARCHIVED'] }, archivedAt: null },
+            select: { id: true },
+          })
+        ).map((b) => b.id)
+      : [],
+  )
+  const blindEffective = blindForVehicle(
+    ordersForBooking(booking.job?.orders ?? [], booking.id, liveBookingIds),
+    assignment,
+  )
+
   const header = (
     <header className="mb-5">
       <div className="text-amber-500 text-xs font-semibold uppercase tracking-wide mb-1">Vehicle handover</div>
@@ -123,6 +143,9 @@ export default async function FleetPickupPage({ params }: Params) {
       {/* Nobody meeting the driver? Say so here — it opens the driver's
           own check-out and the codes on their /drive page. */}
       <VehicleBlindToggle
+        jobId={booking.jobId}
+        assignmentId={assignment.id}
+        effective={{ blindPickup: blindEffective.blindPickup, blindReturn: blindEffective.blindReturn }}
         orders={booking.job?.orders ?? []}
         kinds={['blindPickup', 'blindReturn']}
         tone="dark"
@@ -174,16 +197,6 @@ export default async function FleetPickupPage({ params }: Params) {
   // Which order the driver's add-ons go on: the order carrying THIS
   // vehicle's booking (lib/fleet/blindHandoff's binding rule), newest live
   // one first. Straps for Cube 28 belong on Cube 28's order.
-  const liveBookingIds = new Set(
-    booking.jobId
-      ? (
-          await prisma.booking.findMany({
-            where: { jobId: booking.jobId, status: { notIn: ['CANCELLED', 'ARCHIVED'] }, archivedAt: null },
-            select: { id: true },
-          })
-        ).map((b) => b.id)
-      : [],
-  )
   const addOnOrder =
     ordersForBooking(booking.job?.orders ?? [], booking.id, liveBookingIds)
       .filter((o) => !['RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED', 'CANCELLED'].includes(o.status))

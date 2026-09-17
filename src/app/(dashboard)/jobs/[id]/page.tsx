@@ -78,6 +78,7 @@ import { rollupCoiState } from '@/lib/coi/coiState';
 import { AlertTriangle, CalendarDays, Check, User } from 'lucide-react'
 import { useSession } from 'next-auth/react';
 import { canCreateOrders } from '@/lib/permissions';
+import { jobBlindRollup } from '@/lib/fleet/blindRule';
 import type { UserRole } from '@prisma/client';
 
 /**
@@ -318,7 +319,7 @@ interface MarketOption { id: string; name: string; slug: string }
 interface JobDetail {
   id: string;
   jobCode: string;
-  /** 5-digit after-hours access code clients read to the assistant to verify. */
+  /** 5-digit after-hours verification code clients read to the assistant to verify. */
   assistantAuthCode: string | null;
   name: string;
   status: JobStatus;
@@ -471,6 +472,9 @@ interface JobBooking {
       startDate: string;
       endDate: string;
       status: 'ASSIGNED' | 'CHECKED_OUT' | 'RETURNED' | 'SWAPPED';
+      /** Per-vehicle blind override — null follows the order (lib/fleet/blindRule). */
+      blindPickup?: boolean | null;
+      blindReturn?: boolean | null;
       asset: { id: string; unitName: string };
     }>;
   }>;
@@ -1606,7 +1610,7 @@ const driverTone = (d: any): string => {
               {job.assistantAuthCode && (
                 <span
                   className="inline-flex items-center gap-1.5 text-[14px] font-mono font-bold tracking-[0.15em] text-amber-700 bg-amber-50 border border-amber-300 rounded px-2.5 py-1"
-                  title="Client access code — clients read this to the after-hours assistant to verify their identity"
+                  title="Client verification code (not the gate code) — clients read this to the after-hours assistant to verify their identity"
                 >
                   <span className="text-[10px] font-sans font-semibold uppercase tracking-wider text-amber-700">Access</span>
                   {job.assistantAuthCode}
@@ -2033,8 +2037,17 @@ const driverTone = (d: any): string => {
                     light: true,
                     // Blind handoff outranks the stage here too, so the
                     // strip and the job's bar on the board are one color.
-                    blindPickup: liveOrders.some((o) => o.blindPickup),
-                    blindReturn: liveOrders.some((o) => o.blindReturn),
+                    // Any order flag, or any vehicle overridden blind.
+                    ...jobBlindRollup(
+                      liveOrders,
+                      liveB.flatMap((b: any) =>
+                        (b.items ?? []).flatMap((i: any) =>
+                          (i.assignments ?? [])
+                            .filter((a: any) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT')
+                            .map((a: any) => ({ blindPickup: a.blindPickup ?? null, blindReturn: a.blindReturn ?? null })),
+                        ),
+                      ),
+                    ),
                   })}
                   aria-hidden="true"
                 />

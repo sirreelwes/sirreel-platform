@@ -24,6 +24,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { TaskRefused } from '@/lib/admin/taskRefused'
 import { ensureVendorPortalToken, vendorAccountUrl } from '@/lib/sub-rentals/vendorAccount'
 import { VSM_PLANET, VSM_PLANET_ALIASES, VSM_PLANET_NAME, VSM_PLANET_ROSTER } from '@/lib/sub-rentals/photoShootRoster'
 import type { ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
@@ -35,13 +36,11 @@ export const RECEIVE_METHODS: readonly ReceiveMethodKey[] = [
   'WILL_CALL', 'DELIVERY', 'DELIVER_TO_SIRREEL', 'PICKUP',
 ]
 
-/** A refusal the operator can act on — never a stack trace on a phone. */
-export class SeedRefused extends Error {
-  constructor(message: string, readonly fix: string) {
-    super(message)
-    this.name = 'SeedRefused'
-  }
-}
+/** A refusal the operator can act on — never a stack trace on a phone.
+ *  The class itself lives in admin/taskRefused.ts so every maintenance task
+ *  throws the same one; this name is kept for the callers that already use it. */
+export { TaskRefused as SeedRefused }
+const SeedRefused = TaskRefused
 
 export interface SeedVsmOptions {
   /** Report what would happen and write NOTHING. */

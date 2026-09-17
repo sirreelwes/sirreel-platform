@@ -38,7 +38,7 @@ import { ensureJobPaperworkBooking } from '@/lib/paperwork/ensurePaperworkBookin
 import { adoptJobPaperworkRequest } from '@/lib/paperwork/livePaperworkBooking'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobLcdwUrl, portalJobUrl, portalV2Url } from '@/lib/portal/portalUrl'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { parseCcList } from '@/lib/email/ccList'
 import { agentReplyTo, withTeamCc } from '@/lib/email/teamVisibility'
@@ -130,7 +130,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const cc = await withTeamCc(manualCc, composition.to.email)
 
-  const result = await sendAgreementEmail({
+  const result = await sendOnJobThread({
+    jobId: params.id,
+    staffEmail: session.user.email,
     to: [composition.to.email],
     cc: cc.length ? cc : undefined,
     replyTo: agentReplyTo(session.user.email) ?? undefined,
@@ -152,7 +154,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     await recordEmailDelivery({
       resendMessageId: result.id,
       toAddress: composition.to.email,
-      subject: composition.subject,
+      subject: result.subject,
       label: 'paperwork-summary',
       orderId: composition.orderId,
     }).catch((e) => console.error('[paperwork-summary] delivery record failed', e))
@@ -172,7 +174,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           sentBy: session.user.email,
           to: composition.to.email,
           cc,
-          subject: composition.subject,
+          subject: result.subject,
           outstanding: composition.summary.outstanding.map((i) => i.key),
         },
       },

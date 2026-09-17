@@ -26,7 +26,9 @@ scripts/*
 !scripts/onboard-power-trip.ts
 !scripts/onboard-battery-partners.ts
 !scripts/onboard-vsm-planet.ts
+!scripts/cargo-vans-no-lift-gate.ts
 !scripts/add-partner-prospect-columns.ts
+!scripts/add-assignment-blind-columns.ts
 !scripts/add-partner-photo-columns.ts
 !scripts/add-cars-suvs-section.ts
 !scripts/add-will-call-receive-method.ts

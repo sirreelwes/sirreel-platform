@@ -36,6 +36,14 @@ export interface RecordOutboundInput {
   subject: string
   bodyText: string | null
   bodyHtml: string | null
+  /**
+   * The Message-ID the send actually carried (job-thread sends mint one)
+   * and what it replied to. Stored so the next send can reference this
+   * one and a client's reply can prove its membership through
+   * hasKnownConversationLink. Omitted = a legacy send with no header.
+   */
+  rfc822MessageId?: string | null
+  inReplyTo?: string | null
 }
 
 /**
@@ -86,6 +94,8 @@ export async function recordOutboundOnThread(
         // Synthetic id — there is no Gmail message. Prefixed so the row is
         // recognizable and can never collide with a real Gmail id.
         gmailMessageId: `hq-reply-${randomUUID()}`,
+        rfc822MessageId: input.rfc822MessageId ?? null,
+        inReplyTo: input.inReplyTo ?? null,
         fromAddress: parseEmailAddress(input.staffEmail),
         toAddresses: input.toAddresses.map((a) => a.trim().toLowerCase()).filter(Boolean),
         subject: input.subject,

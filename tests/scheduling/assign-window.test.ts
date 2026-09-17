@@ -19,6 +19,7 @@
 process.env.TZ = 'America/Los_Angeles'
 
 import {
+  blockCapacity,
   coverageOfBlock,
   quotedBlocks,
   resolveAssignWindow,
@@ -145,6 +146,52 @@ console.log('\n— the van in the yard —')
   // The window the write used before this change — the whole order span.
   const onOrderSpan = computeUnitStates(asset, vma, d('2026-09-28'), d('2026-09-30'), 1)[0]
   eq('on the old order-span window: refused outright', onOrderSpan.state, 'booked')
+}
+
+// ── Is the block full? ONE answer for the picker and the write ───────
+console.log('\n— block capacity —')
+{
+  // Jose, 2026-09-17, Mad Minds (SR-JOB-0389): Cargo 35 is on the hold for
+  // 9/18 → 9/23 and Cargo 45 is on the same job with overlapping days. The
+  // hold itself says quantity 1. Changing Cargo 35 was refused "fully
+  // assigned" because the write counted Cargo 45's OVERLAP against the
+  // hold's 1, while the picker counted exact coverage against the quote.
+  const block = { start: d('2026-09-18'), end: d('2026-09-23') }
+  const blocks = quotedBlocks([line('2026-09-18', '2026-09-23')])
+  const cargo35 = span('2026-09-18', '2026-09-23')
+  const cargo45 = span('2026-09-18', '2026-09-21')
+
+  const full = blockCapacity({ window: block, blocks, assignments: [cargo35, cargo45], itemQuantity: 1 })
+  eq('with Cargo 35 on it the block is full (1 of 1)', [full.assignedCount, full.quantity, full.remaining], [1, 1, 0])
+
+  // The swap steps Cargo 35 aside; what stands is Cargo 45, which overlaps
+  // but is not ON this block. Room for the replacement.
+  const swapping = blockCapacity({ window: block, blocks, assignments: [cargo45], itemQuantity: 1 })
+  eq('with Cargo 35 stepping aside, the overlap does not count', [swapping.assignedCount, swapping.remaining], [0, 1])
+
+  // The quote grew: two cargo vans on the block, the hold still says 1.
+  // The picker reads "1 of 2"; the write must agree there is a slot.
+  const grown = blockCapacity({ window: block, blocks: quotedBlocks([line('2026-09-18', '2026-09-23', 2)]), assignments: [cargo35], itemQuantity: 1 })
+  eq('quoted quantity wins over the hold\'s when the window is a block', [grown.quantity, grown.remaining], [2, 1])
+
+  // No quoted lines (a bare hold): the hold's own quantity and overlap.
+  const bare = blockCapacity({ window: block, blocks: [], assignments: [cargo45], itemQuantity: 1 })
+  eq('no block: the hold\'s quantity, overlap counts', [bare.block, bare.quantity, bare.assignedCount, bare.remaining], [null, 1, 1, 0])
+
+  // A window that matches no block reads the same way.
+  const other = blockCapacity({ window: { start: d('2026-09-19'), end: d('2026-09-20') }, blocks, assignments: [cargo45], itemQuantity: 2 })
+  eq('window off every block: item quantity, overlap', [other.block, other.quantity, other.assignedCount], [null, 2, 1])
+
+  // A line zeroed out but still on the order quotes a block of 0. That is
+  // not a block to be exact against, or every window would read full.
+  const zeroed = blockCapacity({ window: block, blocks: quotedBlocks([line('2026-09-18', '2026-09-23', 0)]), assignments: [], itemQuantity: 1 })
+  eq('a zero-quantity block falls back to the hold', [zeroed.block, zeroed.quantity, zeroed.remaining], [null, 1, 1])
+
+  // ADV Carrera, the other direction: the 9/28 van overlaps the 9/29 block
+  // and must not fill it.
+  const later = { start: d('2026-09-29'), end: d('2026-09-30') }
+  const adv = blockCapacity({ window: later, blocks: advBlocks, assignments: [span('2026-09-28', '2026-09-30')], itemQuantity: 3 })
+  eq('ADV Carrera: the earlier van does not fill the later block', [adv.quantity, adv.assignedCount, adv.remaining], [2, 0, 2])
 }
 
 console.log(fail === 0 ? '\nall assign-window checks passed' : `\n${fail} FAILED`)

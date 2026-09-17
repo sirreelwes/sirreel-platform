@@ -623,7 +623,7 @@ export default function AssistantAdminPage() {
   async function regen(job: Job) {
     if (
       !confirm(
-        `Generate a NEW after-hours code for ${job.jobCode} (${job.name})?\n\nThe old code stops working immediately, and the client will see the new one on their job page.`,
+        `Generate a NEW after-hours verification code for ${job.jobCode} (${job.name})?\n\nThe old code stops working immediately, and the client will see the new one on their job page.`,
       )
     )
       return
@@ -659,7 +659,7 @@ export default function AssistantAdminPage() {
     <div className="p-6 max-w-5xl mx-auto">
       <h1 className="text-2xl font-semibold text-lt-fg">AHA — After Hours Assistant</h1>
       <p className="mt-1 text-sm text-lt-fg2">
-        Manage the standing lot gate code, the per-job access codes clients use to verify after
+        Manage the standing lot gate code, the per-job verification codes clients use to verify after
         hours, and review the release log.
       </p>
 
@@ -819,7 +819,7 @@ export default function AssistantAdminPage() {
           </Panel>
 
           {/* Per-job codes */}
-          <Panel title="Per-job access codes" summary={`${data.jobs.length} job${data.jobs.length === 1 ? '' : 's'}`}>
+          <Panel title="Per-job verification codes" summary={`${data.jobs.length} job${data.jobs.length === 1 ? '' : 's'}`}>
             <div className="flex items-center justify-end gap-3">
               <input
                 value={query}
