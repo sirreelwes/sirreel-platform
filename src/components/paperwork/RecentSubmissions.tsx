@@ -33,6 +33,18 @@
  * and says nothing about an order-signed contract — so a rental agreement
  * you clicked in this feed simply could not be read from here. View opens
  * it, Download saves it.
+ *
+ * PORTRAIT: the row is a two-column flex — text, then the actions — and
+ * the actions column cannot shrink (Skip + a verdict chip + Review is
+ * ~200px). On a phone that left the text column a few characters wide:
+ * the label truncated to "C…", and the flag box wrapped one word per
+ * line down half the screen (Wes, 2026-09-17, with a screenshot). So
+ * below `sm` the row STACKS — full-width text, actions on their own
+ * line, wrapping — and the chevron gutter, which is desktop indentation,
+ * is dropped. Same for the group header (wraps, Latest gets its own
+ * line) and the search box (full width). Anything added here must keep
+ * the one-column portrait shape: a new fixed-width action beside the
+ * text re-creates exactly this.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
@@ -243,7 +255,7 @@ export default function RecentSubmissions() {
   return (
     <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden">
       <div className="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center gap-2 justify-between">
-        <div>
+        <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold text-gray-900">Recent submissions</h2>
           <p className="text-[11px] text-gray-500 mt-0.5">
             The last 50 pieces of client paperwork to land — plus everything still waiting on a
@@ -261,7 +273,7 @@ export default function RecentSubmissions() {
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search job, client, signer…"
-          className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs w-56 focus:outline-none focus:border-gray-400"
+          className="px-3 py-2 sm:py-1.5 border border-gray-200 rounded-lg text-base sm:text-xs w-full sm:w-56 focus:outline-none focus:border-gray-400"
         />
       </div>
 
@@ -287,7 +299,7 @@ export default function RecentSubmissions() {
                   type="button"
                   onClick={() => toggle(g.kind)}
                   aria-expanded={expanded}
-                  className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
+                  className="w-full flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left hover:bg-gray-50 transition-colors"
                 >
                   <ChevronRight
                     size={14}
@@ -307,7 +319,7 @@ export default function RecentSubmissions() {
                       {g.pending} to review
                     </span>
                   )}
-                  <span className="ml-auto shrink-0 text-[11px] text-gray-500">
+                  <span className="basis-full sm:basis-auto sm:ml-auto shrink-0 pl-[26px] sm:pl-0 text-[11px] text-gray-500">
                     {g.latest && (
                       <>
                         Latest {fmtWhen(g.latest)}
@@ -377,13 +389,15 @@ function SubmissionRow({
   }, [menuOpen])
 
   const body = (
-    <div className="flex items-start gap-3 pl-10 pr-4 py-3">
+    <div className="flex items-start gap-3 pl-4 sm:pl-10 pr-4 py-3">
       <div className="min-w-0 flex-1">
-        <div className="text-[13px] font-medium text-gray-900 truncate">
+        {/* Portrait has no room to truncate a label to nothing ("C…"):
+            it wraps to two lines instead. Desktop keeps one line. */}
+        <div className="text-[13px] font-medium text-gray-900 line-clamp-2 sm:truncate">
           {r.label}
           {r.detail && <span className="ml-2 font-normal text-gray-500">{r.detail}</span>}
         </div>
-        <div className="text-[11px] text-gray-500 mt-0.5 truncate">
+        <div className="text-[11px] text-gray-500 mt-0.5 line-clamp-2 sm:truncate">
           {r.jobId ? (
             <>
               <span className="font-semibold text-gray-700">{r.jobName}</span>
@@ -426,7 +440,7 @@ function SubmissionRow({
 
   return (
     <li
-      className={`flex items-stretch hover:bg-gray-50 transition-colors ${
+      className={`flex flex-col sm:flex-row sm:items-stretch hover:bg-gray-50 transition-colors ${
         r.dismissal ? 'opacity-60' : ''
       }`}
     >
@@ -441,7 +455,7 @@ function SubmissionRow({
       </div>
       {/* Review lives OUTSIDE the link: the row still navigates to
           the job, but a COI can be judged without leaving here. */}
-      <div className="shrink-0 flex items-center gap-2 pr-4 pl-1">
+      <div className="shrink-0 flex flex-wrap items-center gap-2 px-4 pb-3 empty:hidden sm:px-0 sm:pb-0 sm:pl-1 sm:pr-4">
         {/* Skip — for the resubmits and the ones handled elsewhere. It
             writes a dismissal, never a verdict: the certificate stays
             PENDING everywhere else in HQ. */}
@@ -451,7 +465,7 @@ function SubmissionRow({
               onClick={() => onSkip(r, null)}
               disabled={busy}
               title="Put this back on the review queue"
-              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+              className="flex items-center gap-1 px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-lg text-[12px] sm:text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
             >
               <Undo2 size={12} />
               Undo
@@ -462,12 +476,12 @@ function SubmissionRow({
                 onClick={() => setMenuOpen((v) => !v)}
                 disabled={busy}
                 aria-expanded={menuOpen}
-                className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
+                className="px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-lg text-[12px] sm:text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors disabled:opacity-50"
               >
                 Skip
               </button>
               {menuOpen && (
-                <div className="absolute right-0 top-full mt-1 z-20 w-56 rounded-xl border border-lt-hairline bg-white shadow-lg py-1">
+                <div className="absolute left-0 sm:left-auto sm:right-0 top-full mt-1 z-20 w-56 max-w-[calc(100vw-3rem)] rounded-xl border border-lt-hairline bg-white shadow-lg py-1">
                   <div className="px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-lt-fg3">
                     Needs nothing because…
                   </div>
@@ -532,7 +546,7 @@ function SubmissionRow({
         {r.kind === 'COI' ? (
           <button
             onClick={() => onReviewCoi(r.sourceId)}
-            className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold transition-colors ${
+            className={`px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-lg text-[12px] sm:text-[11px] font-semibold transition-colors ${
               r.flag || r.reviewState === 'PENDING'
                 ? 'bg-gray-900 text-white hover:bg-gray-700'
                 : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -550,7 +564,7 @@ function SubmissionRow({
               href={r.documentHref}
               target="_blank"
               rel="noopener noreferrer"
-              className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-900 text-white hover:bg-gray-700 transition-colors"
+              className="px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-lg text-[12px] sm:text-[11px] font-semibold bg-gray-900 text-white hover:bg-gray-700 transition-colors"
             >
               View
             </a>
@@ -558,7 +572,7 @@ function SubmissionRow({
               <a
                 href={r.downloadHref}
                 download
-                className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+                className="px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-lg text-[12px] sm:text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
               >
                 Download
               </a>
@@ -567,7 +581,7 @@ function SubmissionRow({
         ) : r.href ? (
           <Link
             href={r.href}
-            className="px-2.5 py-1.5 rounded-lg text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
+            className="px-3 py-2 sm:px-2.5 sm:py-1.5 rounded-lg text-[12px] sm:text-[11px] font-semibold bg-gray-100 text-gray-700 hover:bg-gray-200 transition-colors"
           >
             {r.kind === 'CONTRACT_REVIEW' && !r.needsReview ? 'Open' : 'Review'}
           </Link>
