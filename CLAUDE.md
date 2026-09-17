@@ -1426,6 +1426,45 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   job newer than our newest send). The rail shows a "Client replied" chip.
   The order page shows a link to the job's conversation and no composer —
   one place to write.
+- **The Chat page — /chat, every conversation YOU are in (2026-09-17 —
+  Wes: "a chat tab on the left menu … all chats, no matter which job, will
+  show up here … another way to communicate if you're not already in the
+  job", then at once "the chats shouldn't be for everyone. It should be
+  for everyone who is included in that chat. In other words if it was
+  directly @billing, it wouldn't show up in Hugo's and vice versa").**
+  - **INCLUSION, not a listing.** `chatInboxFor(actor)` in
+    `src/lib/email/chatInbox.ts` collects jobs by REASON and the row NAMES
+    the reason: `mentioned` (@you in a note) · `holding` (you hold the
+    claim) · `wrote` (your note, or mail from/to you on the thread) ·
+    `rep` (you are `Job.agentId`) · `desk` (handed to Billing, or it
+    landed in billing@/payments@/ana@, and you ARE the billing desk —
+    `isBillingDesk`, role BILLING or one of those inboxes). **Seniority is
+    not a reason**: an ADMIN sees what they are in, nothing more. If you
+    cannot see why a job is in your list, the rule is wrong.
+  - Scoped SERVER-side off the session (`GET /api/chat` passes no user id
+    and has no "all" mode). Bounded: 45-day window, ≤60 jobs, capped
+    sub-queries. Cc-only participation is NOT a reason — `EmailMessage`
+    has no cc column (Cc lives in `routingHeaders` JSON), and jobs@ is on
+    every send anyway.
+  - **Order is attention, not time** (`chatTier` / `sortChatRows`, pure):
+    urgent-for-you → tagged-you → client waiting → the rest, newest first
+    inside each. "Still on you" is DERIVED — tagged and you have not
+    written since; there is no read/unread table and this did not add one.
+  - **Replies here are INTERNAL NOTES only** (Wes asked which way; the
+    split is by risk). A note's context is the note, so it answers inline
+    — and it POSTs to the job's own notes route, so it is ONE record that
+    "shows up simultaneously in the chat page and the job internal notes",
+    never a copy. Urgent + @chips work the same as on the job. **A client
+    email needs the job**: that message quotes dates and money that live
+    on the job page, and the two-tap confirm lives there too — one
+    composer, so the guard rails cannot drift. Every row carries "Open the
+    job to email the client".
+  - **Company + job on every row AND above the reply box** (Wes: "it needs
+    to be very clear what company and job it is referring to") — the
+    header scrolls away on a phone, so the box repeats it.
+  - Nav: `CHAT_ITEM` in permissions.ts is in ALL FOUR branches (sales,
+    billing, yard, the fixed IA) — the yard gets tagged as often as sales.
+    A shared nav row is not a shared view; the page scopes it.
 - NOT built: an attachment picker in the composer; a mention notification;
   the role gate on the Billing lane (Wes's recommendation was to leave it
   visible); the New inbound column link; Phase 3 (Gmail-native sending).
