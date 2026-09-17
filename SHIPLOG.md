@@ -26,7 +26,7 @@ Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a 
 
 ### Today is the yard's date, not UTC's
 
-`d43ef21` every staff screen's "today" now comes from `pacificYmd()` in lib/dates/pacificDay.ts — Wes at 5:40pm: "HQ thinks today is 9/18". A dozen screens took the date from a UTC timestamp, which rolls over at 5pm Pacific, so the reservations board's today column, the jobs board's "picking up today / tomorrow", the calendar ring, the dashboards and a new reservation's default start were a day ahead every evening (and the board's was frozen at page load). `cadenceDays()` reads the same helper; the board reads it each render. `npm run test:pacific-day` pins the clock at the reported moment and at the 5pm PDT / 4pm PST boundary.
+`fa44f09` every staff screen's "today" now comes from `pacificYmd()` in lib/dates/pacificDay.ts — Wes at 5:40pm: "HQ thinks today is 9/18". A dozen screens took the date from a UTC timestamp, which rolls over at 5pm Pacific, so the reservations board's today column, the jobs board's "picking up today / tomorrow", the calendar ring, the dashboards and a new reservation's default start were a day ahead every evening (and the board's was frozen at page load). `cadenceDays()` reads the same helper; the board reads it each render. `npm run test:pacific-day` pins the clock at the reported moment and at the 5pm PDT / 4pm PST boundary.
 
 ## 2026-09-17
 
