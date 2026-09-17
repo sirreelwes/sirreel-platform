@@ -954,6 +954,39 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## "Approved — book it" names the order and takes you to it (2026-09-17 — Wes)
+- Wes, on SR-JOB-0312: "It says that the production supply order is booked
+  but it does not give me any other options there. On the tile it says
+  that I need to book it." Both surfaces were right, about DIFFERENT
+  orders — the job carried one booked order and one still APPROVED.
+- **The header badge cannot tell APPROVED from BOOKED, on purpose.**
+  `cadenceForOrder` in `src/lib/jobs/cadence.ts` maps both to the state
+  `booked`, because a new `CadenceState` would re-tier the board's
+  colours, legend and sort (the same reason `approvedUnbooked` is carried
+  as its own COUNT in `/api/jobs`, not as a state). So the badge is NOT
+  changing. What was missing is the qualifier beside it.
+- **The job page now carries a `#book-it` prompt** under the quick-action
+  row (where JobWelcomeButton already lives), rendered when any live order
+  is APPROVED. It NAMES each order with its content summary and puts
+  `MarkBookedButton` beside it — "which order?" was the whole complaint,
+  and a count on a tile can never answer it.
+- **The tile chip navigates now.** It was plain text inside the row's
+  `<Link>`, so pressing it landed a rep at the top of a long job page
+  whose header reads BOOKED. It is a `<button>` that pushes
+  `/jobs/<id>?book=1`; the job page expands every approved order and
+  scrolls the prompt into view, once per landing.
+- **One name per act, across all three surfaces.** Before: the tile said
+  "Approved — book it", the job page said "Record client approval", the
+  order page said "Mark booked". Now the label follows the STATUS —
+  APPROVED already has the client's yes on file, so the only act left is
+  **Book it**; from DRAFT / QUOTE_SENT the yes is not on file and
+  recording it is half the point, so it is **Record client approval**.
+  The confirm button inside the panel always says Book it. The order
+  page's own APPROVED action was already "Book it" and is unchanged.
+- Nothing about the booking mechanics moved: `POST /api/orders/[id]/
+  mark-booked` and `bookOrder()` are untouched, and `MARK_BOOKABLE` /
+  `BOOKABLE_FROM` still agree on DRAFT / QUOTE_SENT / APPROVED.
+
 ## The reservation follows the order's dates (2026-09-17 — Wes)
 - Wes, on Someday Studios' passenger van: "I changed it in the order, but
   that did not change it on the reservation as we had planned for it to

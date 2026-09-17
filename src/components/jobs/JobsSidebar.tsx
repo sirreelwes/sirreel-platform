@@ -35,7 +35,7 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useJobsList } from './JobsListProvider'
 import {
   BOARD_PHASES,
@@ -269,6 +269,10 @@ function JobTile({
   // HQ day-to-day, this keeps the red band from re-accreting one row
   // at a time.
   const [marking, setMarking] = useState(false)
+  // The "Approved — book it" chip navigates itself (see the chip). The
+  // row is a <Link>, so the chip cannot be one too — it preventDefaults
+  // and pushes, the same shape the phase buttons use.
+  const router = useRouter()
 
   const phase = jobPhase(state)
 
@@ -540,13 +544,26 @@ function JobTile({
                 Client redlined the agreement{redlines > 1 ? ` ×${redlines}` : ''}
               </span>
             )}
+            {/* It TAKES you there now (Wes 2026-09-17). As plain text
+                inside the row's link this chip told a rep to book
+                something and then dropped them at the top of a long job
+                page, where the header badge says BOOKED — the rollup maps
+                APPROVED and BOOKED to one state — and nothing named the
+                order. `?book=1` opens the approved orders and scrolls the
+                prompt into view. */}
             {toBook > 0 && (
-              <span
-                title={`${toBook} approved order${toBook === 1 ? '' : 's'} waiting to be booked`}
-                className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded bg-amber-600 text-white"
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  router.push(`/jobs/${j.id}?book=1`)
+                }}
+                title={`${toBook} approved order${toBook === 1 ? '' : 's'} waiting to be booked — open the job and book ${toBook === 1 ? 'it' : 'them'}`}
+                className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded bg-amber-600 text-white hover:bg-amber-500 transition-colors"
               >
                 Approved — book it{toBook > 1 ? ` ×${toBook}` : ''}
-              </span>
+              </button>
             )}
             {clientWaiting && (
               <span
