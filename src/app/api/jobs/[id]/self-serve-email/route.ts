@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { can } from '@/lib/permissions'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { composeSelfServeNextSteps, selfServeEmailLabel } from '@/lib/sales/selfServeNextSteps'
 
 export const dynamic = 'force-dynamic'
@@ -64,7 +64,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     )
   }
 
-  const res = await sendAgreementEmail({
+  const res = await sendOnJobThread({
+    jobId: params.id,
+    staffEmail: me.email,
     to: [d.to],
     cc: d.cc,
     replyTo: d.replyTo ?? undefined,

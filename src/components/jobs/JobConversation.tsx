@@ -23,7 +23,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Lock, Mail, Send, StickyNote, UserCheck, Users } from 'lucide-react'
+import { Lock, Mail, Send, StickyNote, UserCheck, UserPlus, Users } from 'lucide-react'
+import { splitCcInput } from '@/lib/email/ccList'
 
 type Lane = 'SALES' | 'BILLING'
 
@@ -196,6 +197,23 @@ export function JobConversation({
   const say = (m: string) => {
     setFlash(m)
     setTimeout(() => setFlash(null), 3500)
+  }
+
+  // Wes 2026-09-17: "the option to CC all from the job as a button. In the
+  // CC field if I pull the dropdown, it should offer other people from the
+  // job so that I can continually add specific people." The box stays
+  // free-text for an outside address; these two controls fill it from the
+  // job's own contacts — whoever is not already in To or Cc.
+  const ccAddable = useMemo(() => {
+    if (!draft) return []
+    const have = new Set([to.trim().toLowerCase(), ...splitCcInput(cc).valid])
+    return draft.contacts.filter((c) => !have.has(c.email))
+  }, [draft, to, cc])
+
+  const addCc = (emails: string[]) => {
+    const current = splitCcInput(cc).valid
+    const merged = [...current, ...emails.filter((e) => !current.includes(e))]
+    setCc(merged.join(', '))
   }
 
   const send = async () => {
@@ -487,6 +505,38 @@ export function JobConversation({
                 <Lock size={9} aria-hidden /> filed to {data?.job.jobCode ?? 'this job'}
               </span>
             </label>
+            {ccAddable.length > 0 && (
+              <div className="flex items-center gap-2 pl-10">
+                <label className="relative inline-flex items-center min-w-0">
+                  <UserPlus size={11} aria-hidden className="absolute left-2 text-lt-fg3 pointer-events-none" />
+                  <select
+                    value=""
+                    onChange={(e) => {
+                      if (e.target.value) addCc([e.target.value])
+                    }}
+                    aria-label="Cc someone from the job"
+                    className="rounded-md border border-lt-hairline bg-lt-inner pl-6 pr-2 py-1 text-[16px] sm:text-[11.5px] text-lt-fg2 max-w-[220px]"
+                  >
+                    <option value="">Cc someone on the job…</option>
+                    {ccAddable.map((c) => (
+                      <option key={c.id} value={c.email}>
+                        {c.name} · {c.role}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {ccAddable.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => addCc(ccAddable.map((c) => c.email))}
+                    className="inline-flex items-center gap-1 rounded-md border border-lt-hairline bg-lt-card px-2 py-1 text-[11.5px] font-medium text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner shrink-0"
+                    title={ccAddable.map((c) => c.name).join(', ')}
+                  >
+                    <Users size={11} aria-hidden /> Cc everyone on the job ({ccAddable.length})
+                  </button>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-2 text-lt-fg3">
               <span className="w-8">Subj</span>
               <span className="truncate" title="Fixed for this job — one thread, so the client sees a single conversation.">

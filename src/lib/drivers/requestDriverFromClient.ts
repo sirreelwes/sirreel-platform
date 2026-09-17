@@ -18,7 +18,7 @@
 import { prisma } from '@/lib/prisma'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { withTeamCc } from '@/lib/email/teamVisibility'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { buildDriverRequestEmail } from '@/lib/email/templates/driverRequest'
@@ -138,7 +138,8 @@ export async function requestDriverFromClient(args: { jobId: string; contactId?:
     repEmail: job.agent?.email || null,
   })
   const cc = await withTeamCc([], email)
-  const result = await sendAgreementEmail({
+  const result = await sendOnJobThread({
+    jobId: job.id,
     label: 'driver/request',
     to: [email],
     cc: cc.length ? cc : undefined,

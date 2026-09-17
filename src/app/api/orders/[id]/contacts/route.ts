@@ -3,7 +3,7 @@ import { markRepVisibleToClient } from '@/lib/sales/repVisibility'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { issueJobMagicLink } from '@/lib/portal/jobMagicLink'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
 import type { JobRole } from '@prisma/client'
@@ -161,7 +161,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       // The client is being emailed with this rep named on it — that act is
       // what establishes them, so the portal should agree with the email.
       await markRepVisibleToClient(order.id)
-      emailResult = await sendAgreementEmail({
+      emailResult = await sendOnJobThread({
+        jobId: order.jobId,
         label: 'orders/contacts/invite',
         to: [person.email],
         // The invite names the rep; a reply should reach their watched

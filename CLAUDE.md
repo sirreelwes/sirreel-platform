@@ -1282,6 +1282,29 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   nothing) so the review modal shows what will go out. NOT wired: the
   cadence runner (`sendCadenceEmail`, its own Resend path, gated OFF by
   `CADENCE_SENDING_ENABLED`) and the pre-job sales welcome (no job yet).
+- **Wired (2026-09-17, Wes: "when I do something like send a paperwork
+  request or a COI request … does that automatically fall within the same
+  email thread? If it doesn't let's make sure it does") — EVERY remaining
+  client-facing send that knows its job, 27 sites:** card authorization
+  request + the client's handoff of it, self-serve "what's next", thank-you,
+  the paperwork portal link (re-sent from the order, re-sent from the
+  portal, the invite to a contact added on the order, the colleague a client
+  approves), negotiated agreement ready to sign, counter-proposal notice,
+  agreement re-issue, the signed copies of the rental agreement and the
+  stage contract, stage contract ready to sign, updated quote on change
+  (LCDW / check-out), final invoice + payment options, payment details
+  (job-aware caller only; the admin and inquiry callers pass no job and
+  send plain), the client's payment-details share to their A/P, after-hours
+  access / share / vehicle pickup, driver request, COI "more needed" and
+  "approved" (job-scoped COIs; a company-level COI has no job and sends
+  plain), the client's COI-requirements mail to their BROKER (client Cc'd +
+  Reply-To, so the broker's answer files to the job), and the sub-rental
+  estimate when it names a job. `sendOnJobThread` takes a null `jobId` and
+  sends plain, so a helper with an optional job needs no branch. Every label
+  has a name in `systemLabel` (the test pins the list) — a new client-facing
+  send needs BOTH the wrapper and a label line, or it reads "Sent by HQ".
+  The survey that found them: `sendAgreementEmail(` still has ~55 call
+  sites, all staff/partner/driver/HQ notices or pre-job sends (no job).
 - **Ingest (`/api/gmail/pubsub`) files an anchored thread to its job by
   itself** — `resolveJobForIngest()`: job address on To/Cc/Delivered-To/
   X-Original-To first, then the References chain against stored ids
@@ -1351,7 +1374,12 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   it shipped); a sender outside `@sirreel.com` falls back to SirReel HQ.
   Subject is the job's and read-only; the job address is implicit ("filed
   to SR-JOB-…" chip). ⌘↵ sends. No attachment picker yet — the Send quote /
-  Send invoice buttons still carry the documents.
+  Send invoice buttons still carry the documents. **Cc from the job (Wes
+  2026-09-17):** under the free-text Cc box, "Cc someone on the job…" lists
+  the job's contacts not already in To/Cc (pick one, it re-lists the rest)
+  and "Cc everyone on the job (N)" adds them all; the box stays free-text
+  for an outside address. Both feed the same comma list the route parses
+  (`MAX_JOB_EMAIL_CC` 15).
 - **Placement** (`/jobs/[id]/page.tsx`): the page's outer wrapper is a
   2-column grid at `xl` (1280px+) — the job's column plus a 400px
   `<aside>` holding the panel, sticky, full height. Below `xl` a

@@ -58,6 +58,21 @@ check('portal invite', systemLabel('portal/invite') === 'Portal invite')
 check('invoice', systemLabel('send-invoice:INV-1042') === 'Invoice sent')
 check('pre-invoice', systemLabel('send-pre-invoice:INV-1042') === 'Pre-invoice sent')
 check('unknown label still reads', systemLabel('something-new') === 'Sent by HQ' && systemLabel(null) === 'Sent by HQ')
+// 2026-09-17: every client-facing send on a known job rides the thread, so
+// each of the labels those sites stamp needs a name — none may fall through.
+const WIRED_LABELS = [
+  'resend-quote-on-change:check-out:S260912-003', 'card-auth-request', 'card-auth-handoff', 'self-serve:S260912-003',
+  'thank-you:S260912-003', 'orders/agreement/resend-link', 'portal/resend-link:S260912-003', 'orders/contacts/invite',
+  'portal/authorize-approved-invite', 'orders/contract-review/accept', 'contract-review/counter-notice',
+  'agreement/reissue:S260912-003', 'portal/agreement/sign', 'portal/v2/stage-sign client confirmation',
+  'stage-ready-to-sign', 'final-invoice-payment-options', 'payment-info-operator-send', 'payment-share',
+  'job/after-hours', 'job/after-hours-share', 'job/vehicle-pickup', 'driver/request', 'coi-request-fix',
+  'coi-approved', 'coi-requirements:S260912-003', 'sub-rental-estimate',
+]
+check('every wired send label has its own name', WIRED_LABELS.every((l) => systemLabel(l) !== 'Sent by HQ'), WIRED_LABELS.filter((l) => systemLabel(l) === 'Sent by HQ'))
+check('after-hours share is not read as after-hours access', systemLabel('job/after-hours-share') !== systemLabel('job/after-hours'))
+check('final invoice, payment details and payment share are Billing', ['final-invoice-payment-options', 'payment-info-operator-send', 'payment-share'].every((l) => laneFor({ kind: 'system', fromAddress: 'notifications@sirreel.com', label: l }) === 'BILLING'))
+check('card authorization is Sales', laneFor({ kind: 'system', fromAddress: 'notifications@sirreel.com', label: 'card-auth-request' }) === 'SALES')
 check('detail is the last segment', labelDetail('send-quote:S260912-003') === 'S260912-003' && labelDetail('follow-up:STAGE_2:S260912-003') === 'S260912-003' && labelDetail('job-welcome') === null)
 
 console.log('\n— claim —')

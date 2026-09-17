@@ -48,7 +48,7 @@ export function kindFor(args: { direction: string | null | undefined; fromAddres
 }
 
 /** Send labels (EmailPayload.label) that belong to billing's lane. */
-const BILLING_LABEL_RE = /^(send-invoice|send-pre-invoice|final-invoice|collections|invoice)/i
+const BILLING_LABEL_RE = /^(send-invoice|send-pre-invoice|final-invoice|collections|invoice|payment-info|payment-share)/i
 
 /**
  * Which lane a row sits in. Lanes keep the stream tidy and route the
@@ -100,8 +100,35 @@ export function systemLabel(label: string | null | undefined): string {
   if (l.startsWith('follow-up')) return 'Follow-up'
   if (l.startsWith('portal/invite') || l.startsWith('portal-invite')) return 'Portal invite'
   if (l.startsWith('send-pre-invoice')) return 'Pre-invoice sent'
-  if (l.startsWith('send-invoice') || l.startsWith('final-invoice')) return 'Invoice sent'
+  if (l.startsWith('send-invoice')) return 'Invoice sent'
+  if (l.startsWith('final-invoice')) return 'Final invoice sent'
   if (l.startsWith('cadence/')) return 'Follow-up (automatic)'
+  // 2026-09-17 (Wes: "does that automatically fall within the same email
+  // thread? If it doesn't let's make sure it does") — every client-facing
+  // send on a known job rides the thread now, so each needs a name here.
+  if (l.startsWith('resend-quote-on-change')) return 'Updated quote sent'
+  if (l.startsWith('card-auth-request')) return 'Card authorization sent'
+  if (l.startsWith('card-auth-handoff')) return 'Card authorization handed to a colleague'
+  if (l.startsWith('self-serve')) return 'What happens next'
+  if (l.startsWith('thank-you')) return 'Thank-you sent'
+  if (l.startsWith('orders/agreement/resend-link') || l.startsWith('portal/resend-link')) return 'Portal link re-sent'
+  if (l.startsWith('orders/contacts/invite') || l.startsWith('portal/authorize')) return 'Portal invite'
+  if (l.startsWith('orders/contract-review/accept')) return 'Agreement ready to sign'
+  if (l.startsWith('contract-review/counter-notice')) return 'Counter-proposal sent'
+  if (l.startsWith('agreement/reissue')) return 'Agreement re-issued to sign'
+  if (l.startsWith('portal/agreement/sign')) return 'Rental agreement signed — copy sent'
+  if (l.startsWith('portal/v2/stage-sign')) return 'Stage contract signed — copy sent'
+  if (l.startsWith('stage-ready-to-sign')) return 'Stage contract ready to sign'
+  if (l.startsWith('payment-info')) return 'Payment details sent'
+  if (l.startsWith('payment-share')) return 'Payment details shared'
+  if (l.startsWith('job/after-hours-share')) return 'After-hours link shared'
+  if (l.startsWith('job/after-hours')) return 'After-hours access sent'
+  if (l.startsWith('job/vehicle-pickup')) return 'Vehicle pickup instructions sent'
+  if (l.startsWith('driver/request')) return 'Driver details requested'
+  if (l.startsWith('coi-request-fix')) return 'COI — more needed'
+  if (l.startsWith('coi-approved')) return 'COI approved'
+  if (l.startsWith('coi-requirements')) return 'COI requirements sent to the broker'
+  if (l.startsWith('sub-rental-estimate')) return 'Estimate sent'
   return 'Sent by HQ'
 }
 
