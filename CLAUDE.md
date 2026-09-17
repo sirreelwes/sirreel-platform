@@ -585,6 +585,45 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - NOT done: the pick-list floor (`/warehouse/pick/[id]`) still records
     only `PickListItem.scannedCode`; no write-back to RW; no camera
     scanning (wedge/keyboard only, as before).
+## Walk-around photos: date on every frame, Save, out-beside-back (2026-09-17 — Hugo)
+- Hugo's three notes on the Damage ID build (HQ's vehicle check in/out,
+  `/reports/vehicles` + the filed record `/reports/vehicles/[inspectionId]`):
+  time and date at the bottom of each photo; save a photo from HQ for a
+  damage report; scroll through check-out and check-in photos side by side.
+- **One wording for a photo's time: `src/lib/fleet/photoStamp.ts`** (pure).
+  `photoStampWhen` ("Sep 16, 2026 · 2:14 PM PT", Pacific, says so), the
+  short badge form, the numbered slot title ("5. Driver side rear" — the
+  crew's DamageID number), the caption a saved copy carries, and the saved
+  file's name (`Cube-27_check-out_05-driver-side-rear_2026-09-16_14-14.jpg`).
+  The record page, the compare viewer, the return capture screen's "Out"
+  badge and the burned-in stamp all read it. Nothing else formats a
+  photo's time.
+- **WHICH time changed underneath.** `InspectionPhoto.createdAt` used to be
+  the moment the whole form was FILED (`createMany` at finalize), so every
+  photo on a walk-around carried the same time to the minute. All four
+  attach loops (staff check-out/return routes, driver `selfCheckout` /
+  `selfReturn`) now write `createdAt: blob.uploadedAt` — the moment the
+  photo landed in the store from the yard, seconds after the shutter for an
+  in-app shot, server-of-record. No schema change. Older rows keep the
+  filing time; nothing reads camera EXIF on purpose (the phone's word).
+- **Save = a stamped COPY, never the original.** `GET /api/fleet/photos/
+  [photoId]?download=1` reads the private blob, draws the caption along the
+  bottom with `@napi-rs/canvas` (`src/lib/fleet/stampPhoto.ts`) and the
+  Liberation Sans Bold that pdfjs-dist ships (a lambda has no system fonts
+  — text drawn with none is silently blank; both traced into the route in
+  next.config.js), and returns it as an attachment. HEIC or any decode
+  failure → the raw file under the same good name (`X-Photo-Stamped: 0`).
+  **`loadImage` applies EXIF orientation itself** — do not apply it again
+  (the first cut did, and portrait shots came out upside down).
+- **Out beside back: `/reports/vehicles/[inspectionId]/compare`** (+
+  `?slot=`), `WalkaroundCompare` over `buildCompareRecord()` in
+  `src/lib/fleet/comparePairs.ts` (pure). Check-out is ALWAYS the left frame
+  whichever end was opened; Julian's slots in walk order, then each end's
+  close-ups and extras (out first). Arrow keys, filmstrip, Save on each
+  frame. `filedInspection().counterpart` now carries its `inspectorName`,
+  `damagePhotos` and `otherPhotos` for it. Read-only, yard-gated.
+- `npm run test:photo-stamp`.
+
 ## Job welcome email — "here is your link" (2026-09-11)
 - Wes: after the team replies with a quote, "remind us to send the welcome
   email" — on the job tile or page or both. Both: the /jobs tile carries a

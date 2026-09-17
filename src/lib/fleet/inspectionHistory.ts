@@ -208,7 +208,12 @@ export interface FiledInspectionDetail {
     inspectionId: string
     edge: InspectionEdge
     inspectedAt: Date
+    inspectorName: string | null
     mileage: number | null
+    /** Its close-ups and extras, so the side-by-side viewer can walk
+     *  both ends' loose photos without a second load. */
+    damagePhotos: FiledPhoto[]
+    otherPhotos: FiledPhoto[]
   } | null
   /** Odometer difference across the rental, when both ends recorded one. */
   milesDriven: number | null
@@ -286,6 +291,9 @@ export async function filedInspection(inspectionId: string): Promise<FiledInspec
           type: true,
           inspectionDate: true,
           mileageAtInspection: true,
+          inspectorName: true,
+          inspectedByUser: { select: { name: true } },
+          inspectedByDriver: { select: { firstName: true, lastName: true } },
           photos: { select: { id: true, position: true, createdAt: true }, orderBy: { createdAt: 'asc' } },
         },
         orderBy: { inspectionDate: 'desc' },
@@ -372,7 +380,10 @@ export async function filedInspection(inspectionId: string): Promise<FiledInspec
           inspectionId: other.id,
           edge: edgeOf(other.type),
           inspectedAt: other.inspectionDate,
+          inspectorName: inspectorOf(other).name,
           mileage: other.mileageAtInspection,
+          damagePhotos: other.photos.filter((p) => p.position === DAMAGE_POSITION).map(shape),
+          otherPhotos: other.photos.filter((p) => !p.position).map(shape),
         }
       : null,
     milesDriven: outMiles != null && backMiles != null ? backMiles - outMiles : null,
