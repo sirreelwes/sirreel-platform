@@ -14,26 +14,25 @@
  * lands (the /line-items and /from-parse routes already run the kit
  * reconciler on every add — the only thing missing was the link).
  *
- * WHY THE FLUID ROW IS FOUND BY NAME, NOT BY CODE. The catalog row for the
- * fluid was hand-entered with its NAME as its code, typo included ("DF50
- * Hazer Fuid"), and the June export is the last time it was written down
- * anywhere in this repo — codes minted since (RVHAZER, FOG1) appear in no
- * export at all. A pinned code that no longer matches would make the task
- * refuse forever; a pattern finds the row whatever it is called today, and
- * the task REFUSES when the pattern finds nothing or too much, naming what
- * it found so a person can fix the catalog rather than have a guess written.
- *
- * WATER vs OIL. The DF-50 exists as three catalog rows (the EFX row, a
- * water-based one, an oil-based one — same three the pick-list check
- * covers) and the fluids for the two chemistries are NOT interchangeable.
- * Today the catalog carries ONE fluid row and it goes on all three; if a
- * second row ever appears, each machine takes the fluid whose name says
- * the same chemistry, and a machine that cannot be matched without a guess
- * is refused, not guessed.
+ * WHICH FLUID. The catalog carries TWO fluid rows: `DF50FLUID` "DF50 Hazer
+ * Fluid, 1 Gallon" and an older hand-entered row whose code is its own
+ * name, typo included ("DF50 Hazer Fuid"). The first run of this task
+ * found both and refused to choose. Wes 2026-09-17: "make it suggest DF-50
+ * haze fluid, 1 gallon, as the only option." So the gallon row is PINNED by
+ * code and goes on all three machines — the EFX row, water-based and
+ * oil-based alike (the same three the pick-list check covers). The name
+ * search below is only the fallback for the day that code is gone: one
+ * fluid-named row is taken, more than one is refused rather than guessed.
+ * The typo'd row is left alone — it may sit on old order lines — and the
+ * task says so in its log.
  */
 
 /** The DF-50 catalog rows — the same three the pick-list check names. */
 export const DF50_HAZER_CODES = ['EFX-DF50-HAZER', '104417', '104418'] as const
+
+/** The fluid that goes out with every DF-50: "DF50 Hazer Fluid, 1 Gallon"
+ *  (Wes 2026-09-17, "as the only option"). */
+export const DF50_FLUID_CODE = 'DF50FLUID'
 
 const DF50 = /\bdf\s*-?\s*50\b/i
 const FLUID = /\b(fluid|fuid|juice)\b/i
@@ -51,49 +50,26 @@ export function isDf50MachineRow(row: { code: string; description: string | null
   return DF50.test(text) && !FLUID.test(text)
 }
 
-export type Chemistry = 'water' | 'oil' | null
-
-/** "Water Based" / "Oil Based" off a name; null when the name does not say. */
-export function chemistryOf(row: { code: string; description: string | null }): Chemistry {
-  const text = `${row.code} ${row.description ?? ''}`
-  const water = /\bwater\b/i.test(text)
-  const oil = /\boil\b/i.test(text)
-  if (water && !oil) return 'water'
-  if (oil && !water) return 'oil'
-  return null
-}
-
-export interface Pairing<T> {
-  parent: T
-  piece: T | null
-  /** Why no piece — the refusal text for this machine. */
-  reason?: string
+export interface FluidChoice<T> {
+  fluid: T | null
+  /** How it was chosen, for the log — or why it was not. */
+  reason: string
 }
 
 /**
- * Which fluid goes on which machine. One fluid row → every machine. More
- * than one → by chemistry, and a machine that cannot be matched without
- * guessing gets `piece: null` with the reason.
+ * The one fluid row every DF-50 takes. The pinned gallon wins whenever it
+ * is present; otherwise a lone fluid-named row is taken; otherwise nothing,
+ * with the candidates named so a person can fix the catalog.
  */
-export function pairFluidsToMachines<T extends { code: string; description: string | null }>(
-  machines: T[],
-  fluids: T[],
-): Pairing<T>[] {
-  if (fluids.length === 0) return machines.map((parent) => ({ parent, piece: null, reason: 'no DF-50 fluid row in the catalog' }))
-  if (fluids.length === 1) return machines.map((parent) => ({ parent, piece: fluids[0] }))
+export function chooseDf50Fluid<T extends { code: string; description: string | null }>(rows: T[]): FluidChoice<T> {
   const name = (r: T) => `${r.code} "${r.description ?? ''}"`
-  return machines.map((parent) => {
-    const chem = chemistryOf(parent)
-    const same = fluids.filter((f) => chemistryOf(f) === chem)
-    if (same.length === 1) return { parent, piece: same[0] }
-    // A machine whose name does not say, against fluids that do: nothing
-    // to go on. A machine that says, against fluids that do not: same.
-    const unsaid = fluids.filter((f) => chemistryOf(f) === null)
-    if (chem !== null && same.length === 0 && unsaid.length === 1) return { parent, piece: unsaid[0] }
-    return {
-      parent,
-      piece: null,
-      reason: `${fluids.length} fluid rows (${fluids.map(name).join(', ')}) and no way to tell which is for ${name(parent)}${chem ? ` (${chem}-based)` : ''}`,
-    }
-  })
+  const pinned = rows.find((r) => r.code.trim().toUpperCase() === DF50_FLUID_CODE)
+  if (pinned) return { fluid: pinned, reason: `pinned by code ${DF50_FLUID_CODE}` }
+  const named = rows.filter(isDf50FluidRow)
+  if (named.length === 1) return { fluid: named[0], reason: `the only row named as DF-50 fluid (${DF50_FLUID_CODE} not found)` }
+  if (named.length === 0) return { fluid: null, reason: `no row coded ${DF50_FLUID_CODE} and none named as DF-50 fluid` }
+  return {
+    fluid: null,
+    reason: `no row coded ${DF50_FLUID_CODE}, and ${named.length} rows named as DF-50 fluid (${named.map(name).join(', ')})`,
+  }
 }
