@@ -149,7 +149,10 @@ export const PARTNER_SECTIONS: readonly PartnerSectionMeta[] = [
     key: 'PHOTO_SHOOT',
     title: 'Photo Shoot Rentals',
     short: 'Photo shoot',
-    blurb: 'Strobes and light modifiers, cameras, seamless and painted backdrops, stands and grip for stills and studio shoots — packaged for the shoot and ready for pickup or delivery.',
+    // The loaded van earns its own clause (Wes 2026-09-17): it is the one
+    // thing in this section a client cannot picture from the heading, and
+    // it is gear SirReel does not otherwise carry.
+    blurb: 'Strobes and light modifiers, cameras, seamless and painted backdrops, stands and grip for stills and studio shoots — down to cargo vans that turn up already loaded with the package. Ready for pickup or delivery.',
     anchor: 'photo-shoot',
     noun: 'item',
     order: 80,

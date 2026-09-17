@@ -3992,8 +3992,16 @@ export default function OrderDetailPage() {
 
       {/* Line Items */}
       <div className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden mb-6">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-lt-hairline">
-          <div className="flex items-center gap-3">
+        {/* WRAPS. This card is overflow-hidden, and the header used to be a
+            single non-wrapping row: title + grouping toggle on the left,
+            three buttons on the right. On a phone in portrait the row was
+            wider than the card, so the LAST button — "+ Add Item", the one
+            that builds the order — was clipped clean off the right edge with
+            nothing to say it existed. Wes 2026-09-17: "you have to turn it
+            horizontal just to see that button". Both groups wrap now, so the
+            buttons drop to a second row instead of leaving the card. */}
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3 px-4 sm:px-6 py-4 border-b border-lt-hairline">
+          <div className="flex flex-wrap items-center gap-3">
             <h2 className="text-lg font-semibold text-lt-fg">Line Items</h2>
             {/* Grouping. Department is the default so the page matches the
                 Quote PDF the client is commenting on. */}
@@ -4018,7 +4026,7 @@ export default function OrderDetailPage() {
             </div>
           </div>
           {isEditable && (
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {/* Partner ancillaries (driver, mileage, generator, supplies) —
                   without this they never reach the order and the quote goes
                   out short by more than the vehicle line itself. */}
@@ -4042,7 +4050,7 @@ export default function OrderDetailPage() {
         </div>
 
         {showAddForm && isEditable && (
-          <div className="px-6 py-4 bg-lt-inner/50 border-b border-lt-hairline space-y-4">
+          <div className="px-4 sm:px-6 py-4 bg-lt-inner/50 border-b border-lt-hairline space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
               <div className="sm:col-span-2">
                 <label className="block text-xs text-lt-fg3 mb-1">Type</label>
@@ -5270,6 +5278,17 @@ export default function OrderDetailPage() {
       <QuoteFollowUpPanel orderId={orderId} isQuoteSent={order.status === "QUOTE_SENT"} />
 
       <EmailDeliveriesPanel deliveries={order.emailDeliveries} />
+      {/* One thread per job: the client conversation lives on the JOB — no
+          second composer here, one place to write (Phase 2). */}
+      {order.job && (
+        <div className="text-[12px] text-lt-fg3 px-1">
+          Client conversation:{' '}
+          <Link href={`/jobs/${order.job.id}?tab=conversation`} className="font-semibold text-amber-700 hover:text-amber-600">
+            open it on the job →
+          </Link>{' '}
+          — every email on this order rides the job&rsquo;s one thread.
+        </div>
+      )}
 
       {/* Cadence (CRH) */}
       {cadence && (

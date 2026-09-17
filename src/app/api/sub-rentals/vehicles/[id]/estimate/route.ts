@@ -30,6 +30,7 @@ import { prisma } from '@/lib/prisma'
 import { requireSubVehicleAccess } from '@/lib/sub-rentals/auth'
 import { composeEstimateEmail } from '@/lib/sub-rentals/estimateEmail'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { sendPartnerMail } from '@/lib/sub-rentals/partnerMail'
 import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import { createPotentialSubRental, vendorPagePath } from '@/lib/sub-rentals/potentialSubRental'
@@ -104,7 +105,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const teamCc = await withTeamCc([], to)
-  const result = await sendAgreementEmail({
+  // On the job's thread when the estimate names a job; plain otherwise.
+  const result = await sendOnJobThread({
+    jobId,
+    staffEmail: user.email,
     to: [to],
     cc: teamCc,
     // agentReplyTo, not user.email raw — it restricts to our own domain so a

@@ -26,7 +26,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { SEND_FROM, sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { buildThankYouEmail } from '@/lib/email/templates/thankYouTemplate'
 import { orderPhotoProxyUrl } from '@/lib/orders/orderPhotoProxy'
 import { ThankYouStatus } from '@prisma/client'
@@ -61,6 +62,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       id: true,
       orderNumber: true,
       endDate: true,
+      jobId: true,
       jobContact: { select: { firstName: true, lastName: true, email: true } },
       job: { select: { name: true } },
       agent: { select: { id: true, name: true, email: true, displayTitle: true, phone: true } },
@@ -131,7 +133,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     personalNote: body.personalNote ?? null,
   })
 
-  const result = await sendAgreementEmail({
+  const result = await sendOnJobThread({
+    jobId: order.jobId,
+    staffEmail: session.user.email,
     to: [to],
     replyTo: order.agent.email,
     subject: rendered.subject,

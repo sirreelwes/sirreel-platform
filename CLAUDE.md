@@ -877,9 +877,14 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   rate with Vic, and model detail is kept loose ("Pro pack & head kit — 2400
   W/s", never a SKU) so a call CORRECTS a row instead of discovering it was
   invented. **Rates are EMPTY** — Vic proposes from his page, HQ accepts.
-- **Their Sprinter van packages are deliberately NOT on the roster** — that
-  is our own fleet's lane (the GreenLite caveat). If Wes wants them they go
-  under Specialty Vehicles or Cars & SUVs, never under Photo Shoot Rentals.
+- **Their Sprinter Cargo Van Packages ARE ours to sell, and they belong in
+  Photo Shoot Rentals** (Wes 2026-09-17: "VSM cargo vans come preloaded with
+  gear that we don't carry so keep them"). This file first excluded them as
+  competing with our own vans — the GreenLite caveat — which read the VAN as
+  the product. It is not: the van is the wrapper and the preloaded package is
+  the thing, and none of it is gear SirReel holds. So they are NOT a
+  Specialty Vehicle or a Car & SUV; they are a photo package that happens to
+  arrive on wheels. **Do not "correct" them back out.**
 - **WILL_CALL is the partner default**, set on the Vendor and left NULL on
   every unit so it is one edit on the Portals row. A stills rental house is a
   counter business: DELIVERY would ask Vic for a window and a contact he
@@ -1095,12 +1100,23 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   and every real run writes an AuditLog `admin.maintenance_run` carrying the
   CREATED IDS, which is what keeps "cleanup by captured id only" workable
   when the run happened on a phone with no journal file.
-- **No schema changes here, on purpose.** `MaintenanceCategory` has no DDL
-  member so the type system refuses one. The `add-*-columns` / `add-*-table`
-  / `ALTER TYPE` scripts stay on a laptop: the live DB carries objects no
-  schema file knows and their failure mode is a half-migrated production
-  database. Tasks that DEPEND on a migration preflight it and refuse with a
-  fix line (see the PHOTO_SHOOT enum check) rather than 500-ing a page.
+- **No schema changes here, on purpose — with ONE exception (2026-09-17,
+  Wes: "It's not possible to do any of this from my phone").**
+  `category: 'schema'` may run ONLY `CREATE TABLE / INDEX … IF NOT EXISTS`:
+  the task carries its statements as `ddl` (plain data, e.g.
+  `src/lib/email/jobThreadTableSql.ts`), `isAdditiveStatement` in
+  `src/lib/admin/additiveDdl.ts` is the gate — the registry test applies it
+  at build time and `runAdditiveDdl` refuses at run time — and the runner
+  logs each table's columns afterwards so a phone screen proves it took. A
+  brand-new table has no half-run state, which is why this class is safe
+  where an ALTER is not. The `add-*-columns` / `ALTER TYPE` scripts STAY on
+  a laptop: the live DB carries objects no schema file knows and their
+  failure mode is a half-migrated production database. Tasks that DEPEND on
+  such a migration preflight it and refuse with a fix line (see the
+  PHOTO_SHOOT enum check) rather than 500-ing a page. First schema task:
+  `job-conversation-tables` — the Phase 2 Conversation tables; the CLI
+  `scripts/add-job-thread-tables.ts` is a thin wrapper over the same
+  `JOB_THREAD_TABLES_DDL`.
 - Page is built for a phone: 16px inputs (anything smaller makes iOS Safari
   zoom on focus), full-width controls, dry run as the primary button, "Run
   for real" behind a second tap. Nav: Admin → **Run a Task**.
@@ -1311,6 +1327,29 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   nothing) so the review modal shows what will go out. NOT wired: the
   cadence runner (`sendCadenceEmail`, its own Resend path, gated OFF by
   `CADENCE_SENDING_ENABLED`) and the pre-job sales welcome (no job yet).
+- **Wired (2026-09-17, Wes: "when I do something like send a paperwork
+  request or a COI request … does that automatically fall within the same
+  email thread? If it doesn't let's make sure it does") — EVERY remaining
+  client-facing send that knows its job, 27 sites:** card authorization
+  request + the client's handoff of it, self-serve "what's next", thank-you,
+  the paperwork portal link (re-sent from the order, re-sent from the
+  portal, the invite to a contact added on the order, the colleague a client
+  approves), negotiated agreement ready to sign, counter-proposal notice,
+  agreement re-issue, the signed copies of the rental agreement and the
+  stage contract, stage contract ready to sign, updated quote on change
+  (LCDW / check-out), final invoice + payment options, payment details
+  (job-aware caller only; the admin and inquiry callers pass no job and
+  send plain), the client's payment-details share to their A/P, after-hours
+  access / share / vehicle pickup, driver request, COI "more needed" and
+  "approved" (job-scoped COIs; a company-level COI has no job and sends
+  plain), the client's COI-requirements mail to their BROKER (client Cc'd +
+  Reply-To, so the broker's answer files to the job), and the sub-rental
+  estimate when it names a job. `sendOnJobThread` takes a null `jobId` and
+  sends plain, so a helper with an optional job needs no branch. Every label
+  has a name in `systemLabel` (the test pins the list) — a new client-facing
+  send needs BOTH the wrapper and a label line, or it reads "Sent by HQ".
+  The survey that found them: `sendAgreementEmail(` still has ~55 call
+  sites, all staff/partner/driver/HQ notices or pre-job sends (no job).
 - **Ingest (`/api/gmail/pubsub`) files an anchored thread to its job by
   itself** — `resolveJobForIngest()`: job address on To/Cc/Delivered-To/
   X-Original-To first, then the References chain against stored ids
@@ -1334,6 +1373,80 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   wes@ LINKED filter — anchors add proof, nothing else. `startThreadForJob`
   in recordOutboundOnThread.ts has no callers now; the root thread comes
   from `jobThreadContext()`.
+
+## The job Conversation — Phase 2 SHIPPED 2026-09-17 (Wes: "Build Phase 2")
+- **Schema change — NOT `prisma db push`.** Two tables by additive SQL,
+  from a phone on /admin/maintenance → "Create the job Conversation tables"
+  (`job-conversation-tables`, the first `schema` task) or on a laptop
+  `npx tsx scripts/add-job-thread-tables.ts` — both run
+  `JOB_THREAD_TABLES_DDL` (`sr_job_threads` — the claim, one row per job;
+  `sr_job_thread_notes` — internal notes). Until it has run, the panel still
+  shows the emails, notes/claim read as none, and a note or claim POST
+  answers 503 naming the task. Models
+  `JobThreadState` / `JobThreadNote`, plain columns, no relations (the Job
+  and User models are untouched).
+- **The panel is `src/components/jobs/JobConversation.tsx`**, fed by
+  `GET /api/jobs/[id]/conversation` (`src/lib/email/jobConversation.ts`):
+  every `EmailMessage` on a thread with this `jobId`, canonical copies only
+  (`duplicateOfId: null`), merged with the notes by time. It is a READ — no
+  second copy of the mail. Four row kinds: client (left; quoted history
+  stripped by `stripQuotedReply`), staff (right, by name — a
+  `@sirreel.com` sender whatever the direction, so a Gmail reply Jose
+  sent shows as his), system (the notifications@ sender, one compact line
+  reading the send label back out of `triageNotes` — `recordOutboundOnThread`
+  now writes `label:<EmailPayload.label>` there; unknown label → "Sent by
+  HQ"), and note (violet, dashed, "Internal · never sent").
+- **Lanes are derived on read, no column** (`laneFor` in
+  `src/lib/email/conversationRules.ts`, pure, `npm run test:job-conversation`):
+  system → by label (invoice/pre-invoice = BILLING); staff → BILLING role
+  or a billing inbox; client → the inbox it landed in (`routingHeaders.
+  deliveredTo`, To, Cc) — billing@/payments@/ana@ = BILLING. Filter chips
+  All / Sales / Billing in the panel header; notes always show.
+- **Claim:** "<name> is answering" / "Handed to Billing" / "Handed to
+  Sales" / Release — `POST …/conversation/claim`, `applyClaim` is the pure
+  transition (a new claim replaces the old; a hand leaves nobody holding
+  it and points the lane). **Hand to Billing emails `COPY_RECIPIENTS.
+  billing`** with a link to `/jobs/[id]?tab=conversation` (label
+  `job-thread-handoff`). Audited `job.thread_claimed|handed|released`.
+- **Notes:** `POST …/conversation/notes`, `cleanNote` (4000 chars),
+  `@First` / `@First Last` mentions matched against HQ users into
+  `mentions` (ids). Nothing notifies a mentioned person yet — the chip row
+  under the box is the nudge. Audited `job.note_added`. Do NOT use the
+  legacy `job_messages` table for this.
+- **The composer is the Phase 1 send** (`POST /api/jobs/[id]/email`), now
+  **From = the author** (`Jose Pacheco <jose@sirreel.com>` through Resend's
+  verified domain — the cadence runner has sent as the agent that way since
+  it shipped); a sender outside `@sirreel.com` falls back to SirReel HQ.
+  Subject is the job's and read-only; the job address is implicit ("filed
+  to SR-JOB-…" chip). ⌘↵ sends. No attachment picker yet — the Send quote /
+  Send invoice buttons still carry the documents. **Cc from the job (Wes
+  2026-09-17):** under the free-text Cc box, "Cc someone on the job…" lists
+  the job's contacts not already in To/Cc (pick one, it re-lists the rest)
+  and "Cc everyone on the job (N)" adds them all; the box stays free-text
+  for an outside address. Both feed the same comma list the route parses
+  (`MAX_JOB_EMAIL_CC` 15).
+- **Placement** (`/jobs/[id]/page.tsx`): the page's outer wrapper is a
+  2-column grid at `xl` (1280px+) — the job's column plus a 400px
+  `<aside>` holding the panel, sticky, full height. Below `xl` a
+  `ConversationTabs` strip (Details | Conversation, with a dot when the
+  client is waiting) sits at the top of the page and the panel takes the
+  full width when the tab is on. **The panel is mounted ONCE** and
+  shown/hidden by class, so it loads once and its summary reaches the tab.
+  `?tab=conversation` is the deep link (same pattern as
+  `/jobs?panel=incoming`). The header's old "Email client" button is now
+  "Conversation" — switches the tab and focuses the box
+  (`job-conversation:focus` window event). `JobEmailThreads` is gone from
+  the job page (still used by /rentalworks/reconcile); `JobEmailButton`
+  stays for the counter-proposal panel.
+- **Rail:** `/api/jobs` rows carry `conversation: { awaitingReply,
+  lastInboundAt }` from ONE `emailThread.groupBy` over the page
+  (`conversationSummaryForJobs`: newest inbound on any thread filed to the
+  job newer than our newest send). The rail shows a "Client replied" chip.
+  The order page shows a link to the job's conversation and no composer —
+  one place to write.
+- NOT built: an attachment picker in the composer; a mention notification;
+  the role gate on the Billing lane (Wes's recommendation was to leave it
+  visible); the New inbound column link; Phase 3 (Gmail-native sending).
 
 ## Active Roadmap
 1. AI fleet optimization

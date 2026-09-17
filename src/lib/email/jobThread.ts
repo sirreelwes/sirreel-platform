@@ -239,6 +239,7 @@ export async function sendOnJobThread(input: SendOnJobThreadInput): Promise<Send
     bodyHtml: payload.html ?? null,
     rfc822MessageId: messageId,
     inReplyTo: headers['In-Reply-To'] ?? null,
+    label: payload.label ?? null,
   })
 
   return { ...result, subject, threadId: recorded ? ctx.threadId : null, messageId }

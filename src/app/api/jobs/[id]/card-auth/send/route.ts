@@ -26,7 +26,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { composeCardAuthEmail } from '@/lib/email/preview/composeCardAuthEmail'
 import { ensureJobPaperworkBooking } from '@/lib/paperwork/ensurePaperworkBooking'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { parseCcList } from '@/lib/email/ccList'
 import { agentReplyTo, withTeamCc } from '@/lib/email/teamVisibility'
 import { portalV2Url } from '@/lib/portal/portalUrl'
@@ -94,7 +94,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
   const cc = await withTeamCc(manualCc, composition.to.email)
 
-  const result = await sendAgreementEmail({
+  // On the job's one thread (lib/email/jobThread) — Wes 2026-09-17.
+  const result = await sendOnJobThread({
+    jobId: params.id,
+    staffEmail: session.user.email,
     to: [composition.to.email],
     cc: cc.length ? cc : undefined,
     replyTo: agentReplyTo(session.user.email) ?? undefined,

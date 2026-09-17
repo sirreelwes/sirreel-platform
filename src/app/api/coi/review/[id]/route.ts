@@ -11,7 +11,7 @@ import { deriveCoiScope } from '@/lib/coi/jobScope'
 import { buildCoiFixDraft } from '@/lib/coi/fixRequest'
 import { signCoiToken } from '@/lib/coi/coiUploadToken'
 import { coiUploadUrl } from '@/lib/portal/portalUrl'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { renderEmailShell, renderEmailText, p as emailP, detailTable } from '@/lib/email/templates/shell'
 
 export const dynamic = 'force-dynamic'
@@ -391,7 +391,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const jobLabel = existing.job ? `${existing.job.name} (${existing.job.jobCode})` : null
-    const sent = await sendAgreementEmail({
+    // A job-scoped COI rides the job's thread; a company-level one (no
+    // job) sends plain — sendOnJobThread does that itself on a null jobId.
+    const sent = await sendOnJobThread({
+      jobId: existing.job?.id ?? null,
+      staffEmail: session.user.email,
       to: [to],
       // Replies belong with the reviewer, not notifications@ — they are the
       // one who read the certificate and can answer the broker's question.
@@ -511,7 +515,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         emailP('Your certificate of insurance has been reviewed and <strong>approved</strong>. It is on file for this job &mdash; there is nothing further you need to send.') +
         (rows.length ? detailTable(rows) : '') +
         emailP('If anything on the policy changes before the rental, reply to this email and we will get the updated certificate on file.')
-      const sent = await sendAgreementEmail({
+      const sent = await sendOnJobThread({
+        jobId: existing.job?.id ?? null,
+        staffEmail: session.user.email,
         to: [notifyTo],
         // The reviewer read the certificate and can answer a broker's
         // question about it; notifications@ cannot.
