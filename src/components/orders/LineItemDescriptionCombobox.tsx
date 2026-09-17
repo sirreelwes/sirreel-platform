@@ -41,6 +41,7 @@ import {
   useMemo, useRef, useState, type ForwardedRef, type KeyboardEvent,
 } from 'react'
 import { createPortal } from 'react-dom'
+import { placeDropdown, readVisibleViewport, type DropdownPlacement } from '@/lib/ui/dropdownPlacement'
 
 export type CatalogHitType = 'INVENTORY' | 'ASSET_CATEGORY' | 'PACKAGE' | 'SUB_VEHICLE'
 
@@ -158,7 +159,7 @@ function LineItemDescriptionComboboxInner(
   // input's rect. Null until the first measure (also keeps the portal
   // out of SSR — `open` starts false so this branch never runs server-
   // side).
-  const [coords, setCoords] = useState<{ top: number; left: number; width: number } | null>(null)
+  const [coords, setCoords] = useState<DropdownPlacement | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   // Expose the underlying input ref to parent for focus management
   // (new-quote uses this to focus the freshly-appended row).
@@ -201,10 +202,7 @@ function LineItemDescriptionComboboxInner(
       // keeps it pinned on scroll/resize thereafter.
       if (hits.length > 0) {
         const el = inputRef.current
-        if (el) {
-          const r = el.getBoundingClientRect()
-          setCoords({ top: r.bottom, left: r.left, width: r.width })
-        }
+        if (el) setCoords(placeDropdown(el.getBoundingClientRect(), readVisibleViewport(window)))
       }
       setResults(hits)
       setOpen(hits.length > 0)
@@ -231,12 +229,13 @@ function LineItemDescriptionComboboxInner(
   }, [value, dismissed, runSearch])
 
   // Pin the portalled dropdown to the input while it's open; follow
-  // scroll/resize so it never drifts off the field.
+  // scroll/resize so it never drifts off the field. Placement (below or
+  // above, and how tall) is decided against the VISIBLE viewport — the
+  // part a phone keyboard has not covered — see lib/ui/dropdownPlacement.
   const updateCoords = useCallback(() => {
     const el = inputRef.current
     if (!el) return
-    const r = el.getBoundingClientRect()
-    setCoords({ top: r.bottom, left: r.left, width: r.width })
+    setCoords(placeDropdown(el.getBoundingClientRect(), readVisibleViewport(window)))
   }, [])
 
   useIsomorphicLayoutEffect(() => {
@@ -247,9 +246,17 @@ function LineItemDescriptionComboboxInner(
     // just the window.
     window.addEventListener('scroll', onMove, true)
     window.addEventListener('resize', onMove)
+    // The keyboard opening or closing fires on the visual viewport, NOT on
+    // window.resize (iOS Safari) — without this the list stays where it
+    // was placed before the keys came up.
+    const vv = window.visualViewport
+    vv?.addEventListener('resize', onMove)
+    vv?.addEventListener('scroll', onMove)
     return () => {
       window.removeEventListener('scroll', onMove, true)
       window.removeEventListener('resize', onMove)
+      vv?.removeEventListener('resize', onMove)
+      vv?.removeEventListener('scroll', onMove)
     }
   }, [open, updateCoords])
 
@@ -412,14 +419,19 @@ function LineItemDescriptionComboboxInner(
           role="listbox"
           // Pinned to the input's viewport rect; grows up to ~480px so
           // long item names render in full, wrapping rather than
-          // ellipsizing.
+          // ellipsizing. Below the input when the visible screen has room
+          // there, above it when a phone keyboard has eaten that room —
+          // and never taller than the space it was given, so the list
+          // scrolls inside the panel rather than off the screen.
           style={{
             position: 'fixed',
-            top: coords.top + 4,
+            top: coords.top,
+            bottom: coords.bottom,
             left: coords.left,
-            minWidth: coords.width,
+            minWidth: coords.minWidth,
             width: 'max-content',
-            maxWidth: '480px',
+            maxWidth: coords.maxWidth,
+            maxHeight: coords.maxHeight,
             zIndex: 60,
             // Explicit SOLID fill (lt-card = #FFFFFF). The panel portals
             // into <body>, floating over the line-item rows — it must be
@@ -427,7 +439,7 @@ function LineItemDescriptionComboboxInner(
             // it can't resolve to a transparent/utility edge case.
             backgroundColor: '#FFFFFF',
           }}
-          className="bg-lt-card border border-lt-hairline rounded shadow-xl max-h-72 overflow-auto"
+          className="bg-lt-card border border-lt-hairline rounded shadow-xl overflow-auto"
         >
           {results.map((r, idx) => (
             <li

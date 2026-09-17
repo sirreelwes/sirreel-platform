@@ -1585,15 +1585,15 @@ const driverTone = (d: any): string => {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[14px] font-mono font-bold tracking-wide text-zinc-900 bg-zinc-100 border border-zinc-300 rounded px-2.5 py-1">{job.jobCode}</span>
+              <span className="text-[14px] font-mono font-bold tracking-wide whitespace-nowrap text-zinc-900 bg-zinc-100 border border-zinc-300 rounded px-2.5 py-1">{job.jobCode}</span>
               <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${STAGE_CHIP[stage]}`}
+                className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wider whitespace-nowrap ${STAGE_CHIP[stage]}`}
                 title={STAGE_HINT[stage]}
               >
                 {STAGE_LABEL[stage]}
               </span>
               <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${CADENCE_BADGE[cadenceState]}`}
+                className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider whitespace-nowrap ${CADENCE_BADGE[cadenceState]}`}
                 title={
                   job.status === 'LOST' || job.status === 'WRAPPED'
                     ? `Job is ${job.status.toLowerCase()} — that overrides what the orders say`
@@ -1604,11 +1604,14 @@ const driverTone = (d: any): string => {
               </span>
               {job.returnedAt && (
                 <span
-                  className="text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider bg-emerald-50 text-emerald-700 border-emerald-200"
+                  className="text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider whitespace-nowrap bg-emerald-50 text-emerald-700 border-emerald-200"
                   title={`Physically returned ${fmtDateTime(job.returnedAt)}${job.returnedBy ? ` · marked by ${job.returnedBy.name}` : ''}`}
                 >
                   Returned
                 </span>
+              )}
+              {job.archivedAt && (
+                <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-0.5">Archived</span>
               )}
               {/* Solid, not outlined, and a link rather than a label: a
                   redline is a client waiting on an answer, and the answer is
@@ -1650,6 +1653,15 @@ const driverTone = (d: any): string => {
                 </>
               )}
             </div>
+            {/* When and by whom — the Returned chip above says THAT it came
+                back; this says when. Under the badges, in the column that
+                wraps, never in the shrink-0 menu column (see there). */}
+            {job.returnedAt && (
+              <div className="mt-1.5 text-[12px] text-emerald-700 font-semibold">
+                Returned {fmtDateTime(job.returnedAt)}
+                {job.returnedBy && <span className="text-zinc-700 font-normal"> · {job.returnedBy.name}</span>}
+              </div>
+            )}
             <h1
               className="font-display text-[30px] leading-tight text-zinc-900 mt-2 truncate"
               style={{ letterSpacing: '-0.02em' }}
@@ -1797,9 +1809,15 @@ const driverTone = (d: any): string => {
             )}
           </div>
 
+          {/* Only the menu lives here. This column is shrink-0 so the
+              button never collapses, which means EVERYTHING in it sets a
+              floor on its width — the "Returned … · name" line used to sit
+              here and, on a phone, claimed ~300px and squeezed the badges
+              and title into a sliver (Wes 2026-09-17). That line and the
+              Archived chip now sit under the badges in the wrapping column.
+              The white S logo that sat above the button is gone too: white
+              on a white card, it painted nothing and pushed the menu down. */}
           <div className="flex flex-col items-end gap-3 flex-shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/s-logo-white.png" alt="SirReel" className="h-8 w-auto opacity-90 select-none" />
             <div className="flex items-center gap-2">
               <div className="relative">
                 <button
@@ -1882,15 +1900,6 @@ const driverTone = (d: any): string => {
                 )}
               </div>
             </div>
-            {job.returnedAt && (
-              <div className="text-[12px] text-emerald-700 font-semibold text-right">
-                Returned {fmtDateTime(job.returnedAt)}
-                {job.returnedBy && <span className="text-zinc-700 font-normal"> · {job.returnedBy.name}</span>}
-              </div>
-            )}
-            {job.archivedAt && (
-              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-0.5">Archived</span>
-            )}
           </div>
         </div>
 
