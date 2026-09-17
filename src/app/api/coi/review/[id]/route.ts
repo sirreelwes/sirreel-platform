@@ -16,6 +16,7 @@ import {
   readCoiBroker,
 } from '@/lib/coi/broker'
 import { signCoiBrokerToken } from '@/lib/coi/brokerReviewToken'
+import { brokersForCompany, recordBroker } from '@/lib/coi/brokerDirectory'
 import { signCoiToken } from '@/lib/coi/coiUploadToken'
 import { coiBrokerReviewUrl, coiUploadUrl } from '@/lib/portal/portalUrl'
 import { sendOnJobThread } from '@/lib/email/jobThread'
@@ -158,8 +159,14 @@ async function loadCoi(id: string) {
   return prisma.coiCheck.findUnique({ where: { id }, select: coiSelect })
 }
 
-/** One shape, used by both GET and POST so the client never re-fetches. */
-function serialize(coi: NonNullable<CoiRow>) {
+/** One shape, used by both GET and POST so the client never re-fetches.
+ *
+ *  Async since 2026-09-17: it carries `knownBrokers`, the directory's answer
+ *  for THIS client (src/lib/coi/brokerDirectory.ts). That read is what makes
+ *  the list worth keeping — the desk can reach the right agent on a
+ *  certificate whose producer box did not read, which is exactly the
+ *  certificate most likely to need correcting. Empty until the tables exist. */
+async function serialize(coi: NonNullable<CoiRow>) {
   const ai = (coi.aiResponse || null) as Record<string, unknown> | null
   const candidates = candidateNames(coi)
   const match = evaluateInsuredMatch(coi.namedInsured, candidates)
@@ -329,6 +336,8 @@ function serialize(coi: NonNullable<CoiRow>) {
     signedAgreements,
     contacts,
     fixDraft,
+    /** Brokers we already know for this client, most recently useful first. */
+    knownBrokers: await brokersForCompany(coi.job?.companyId ?? coi.company?.id ?? null),
     /** The broker off the certificate, plus the draft that goes to them. */
     broker: { ...broker, label: brokerLabel(broker) },
     brokerDraft,
@@ -355,7 +364,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ id:
   if (!coi || coi.deletedAt) {
     return NextResponse.json({ error: 'not found' }, { status: 404 })
   }
-  return NextResponse.json({ ok: true, coi: serialize(coi) })
+  return NextResponse.json({ ok: true, coi: await serialize(coi) })
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
@@ -397,7 +406,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: outcome.error }, { status: outcome.error === 'not found' ? 404 : 502 })
     }
     const fresh = await loadCoi(id)
-    return NextResponse.json({ ok: true, coi: serialize(fresh!) })
+    return NextResponse.json({ ok: true, coi: await serialize(fresh!) })
   }
 
   // Ask the client to fix it — the third option beside Approve/Reject.
@@ -457,7 +466,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       },
     })
     const after = await loadCoi(id)
-    return NextResponse.json({ ok: true, coi: serialize(after!), sentTo: to })
+    return NextResponse.json({ ok: true, coi: await serialize(after!), sentTo: to })
   }
 
   // Send the BROKER a link to a read-only review of their own certificate
@@ -565,8 +574,32 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       })
       .catch((err) => console.error('[coi/review] audit write failed:', err))
 
+    // Keep the list (Wes 2026-09-17: "start keeping a list of brokers").
+    // The address we actually SENT to is the fact worth filing — it is the
+    // one a person chose, over whatever the producer box read. Best-effort
+    // and after the send: a directory write must never cost an email that
+    // has already gone out, and it is a no-op until the tables exist.
+    const ai = (existing.aiResponse || null) as Record<string, unknown> | null
+    const fromCert = readCoiBroker(ai)
+    await recordBroker({
+      facts: {
+        email: to,
+        // Only carry the certificate's name/agency onto this address when
+        // they belong to it. A producer block read off a DIFFERENT agent
+        // would file the wrong person under the address we typed.
+        ...(fromCert.email === to.toLowerCase()
+          ? { name: fromCert.contactName, agency: fromCert.agency, phone: fromCert.phone, address: fromCert.address }
+          : {}),
+      },
+      source: 'CONTACTED',
+      contacted: true,
+      companyId: existing.job?.companyId ?? existing.company?.id ?? null,
+      insuredName: existing.namedInsured,
+      actorUserId: reviewer?.id ?? null,
+    })
+
     const afterBroker = await loadCoi(id)
-    return NextResponse.json({ ok: true, coi: serialize(afterBroker!), sentTo: to, cc: cc || null, reviewUrl })
+    return NextResponse.json({ ok: true, coi: await serialize(afterBroker!), sentTo: to, cc: cc || null, reviewUrl })
   }
 
   const decision = typeof body.decision === 'string' ? body.decision.toUpperCase() : ''
@@ -696,5 +729,5 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   }
 
   const fresh = await loadCoi(id)
-  return NextResponse.json({ ok: true, coi: serialize(fresh!), notified })
+  return NextResponse.json({ ok: true, coi: await serialize(fresh!), notified })
 }

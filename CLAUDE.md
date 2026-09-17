@@ -232,8 +232,75 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - `COI_INBOX` ('rentals@') moved into `requirements.ts` — the portal's broker
   email and this page name one mailbox. `npm run test:coi-broker`.
 - NOT done: nothing yet nudges when a broker has had the link for days with
-  no new certificate, and the broker is not offered anywhere outside the
-  review desk (no chip on the job page, no company-level broker on file).
+  no new certificate, and the broker is not offered on the job page. **The
+  "no company-level broker on file" half is now done** — see "A list of
+  brokers" above.
+
+## A list of brokers, not just a name on a certificate (2026-09-17 — Wes)
+- Wes: "Please start keeping a list of brokers — for example on the Mega COI
+  review we sent to the broker, whose name is Barbara Wagner and her email is
+  barbara@worthingtoninsur.com." `readCoiBroker()` reads ONE certificate's
+  producer box; that is the right home for a fact about a document and the
+  wrong home for a LIST. Nothing could answer "who is this client's broker"
+  when the producer box did not read — which is exactly the certificate most
+  likely to need correcting.
+- **Two tables, additive SQL, NEVER `db push`:** `sr_brokers` (one row per
+  broker, keyed by EMAIL) and `sr_broker_clients` (which of our clients each
+  acts for, and how we learned it: CERTIFICATE / CONTACTED / MANUAL). From a
+  phone: /admin/maintenance → **"Create the broker directory tables"**; on a
+  laptop `npx tsx scripts/add-broker-tables.ts`. Models `Broker` /
+  `BrokerClient` carry **no relations** and the DDL no foreign keys — the
+  job-Conversation shape, for the same reason (a live DB with known drift,
+  and a constraint that can fail a COI review is worse than a dead link row
+  the reader skips). **Until it has run everything behaves exactly as
+  before**: every read returns empty and every write is a no-op on P2021/P2022.
+- **Two rules carry the weight** (`src/lib/coi/brokerDirectory.ts`, pure half
+  in `normalizeBrokerFacts` / `mergeBrokerFacts`, `npm run
+  test:broker-directory`):
+  1. **The email is the identity.** No readable email, no row — a directory
+     keyed on a name a model read off a scan is a list of misspellings that
+     looks like a directory.
+  2. **A typed fact outranks a read one, and a blank never wins.** MANUAL
+     (a person editing /admin/brokers) may REPLACE a field; CERTIFICATE and
+     CONTACTED only FILL a blank. Otherwise the next certificate whose
+     producer box says "Certificates Dept" silently reverts a name someone
+     corrected — wrong in the way nobody notices, because the row still looks
+     filled in.
+- **It fills itself.** `recordBroker()` runs on the client COI drop
+  (`/api/coi/[token]` — the arrival path for most certificates, called AFTER
+  the job resolves so a job-only token still files under that job's client),
+  on the desk's AI re-run (the path that back-fills older certificates), and
+  on `EMAIL_BROKER` with `contacted: true` (the address a PERSON chose, which
+  outranks whatever the producer box read — the certificate's name/agency
+  ride along only when they belong to that same address). Every call is
+  best-effort: a stored COI or a sent email must never be lost to a list.
+- **The payoff is on the review desk.** `serialize()` is async now and
+  carries `knownBrokers` — the directory's answer for THIS client. The
+  compose panel offers them as chips, seeds the To box from the directory
+  when the certificate named nobody, and the broker card reads "Not read off
+  this certificate — but Barbara Wagner is on file for this client."
+- **/admin/brokers** (nav: Admin → Brokers, under COIs) lists them with their
+  clients, last seen, and how often we have written. Add and edit by hand;
+  removal is `isActive false`, never a delete. Staff-gated, not ADMIN-only —
+  the people who chase certificates are sales and billing.
+- **Barbara Wagner is seeded, not hardcoded into a code path.**
+  `src/lib/coi/knownBrokers.ts` is the registry (the partnerProspects shape);
+  /admin/maintenance → **"File the brokers we already know"** or `npx tsx
+  scripts/seed-known-brokers.ts --write` files her, matched on email so a
+  second run never duplicates. Her client is found by the name hint "mega"
+  and linked ONLY on exactly one match — an ambiguous or missing match is
+  reported, because a broker filed under the wrong client is how one
+  production's insurance question reaches another's agent.
+- **Her agency is deliberately BLANK.** `barbara@worthingtoninsur.com`
+  obviously suggests "Worthington Insurance", and `COI_PROMPT` tells the model
+  in as many words never to infer an agency from an email domain. The same
+  guess typed by hand, into the row a rep reads before emailing a stranger, is
+  the same mistake with a person's hand on it. It fills itself from the
+  producer box of the next certificate she issues.
+- NOT done: a broker is never tied to a client from the page (links form
+  themselves from certificates and sends, or from the seed's hint); nothing
+  merges two rows for one person at two addresses; and the directory is not
+  offered anywhere outside the COI review desk and its own page.
 
 ## After-hours VEHICLE pickup email (2026-09-10)
 - Wes: "an easy button for sales to send this summary" — Jose's hand-typed

@@ -850,6 +850,11 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // this row up with a count of trucks due for service.
         { id: 'run-task', label: 'Run a Task', icon: 'Terminal', href: '/admin/maintenance' },
         { id: 'cois', label: 'COIs', icon: 'ShieldCheck', href: '/admin/cois' },
+        // The people behind those certificates (Wes 2026-09-17: "start
+        // keeping a list of brokers"). Directly under COIs — it is the
+        // same errand, and a broker is looked up while a certificate is
+        // open.
+        { id: 'brokers', label: 'Brokers', icon: 'UserCheck', href: '/admin/brokers' },
         { id: 'fleet-pricing', label: 'Pricing', icon: 'DollarSign', href: '/admin/asset-categories' },
         { id: 'fees', label: 'Fees', icon: 'Receipt', href: '/admin/fees' },
         { id: 'spaces', label: 'Spaces', icon: 'Building2', href: '/admin/spaces' },

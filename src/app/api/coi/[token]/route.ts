@@ -4,6 +4,7 @@ import { verifyCoiToken } from '@/lib/coi/coiUploadToken'
 import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 import { coiCheckWriteFields } from '@/lib/coi/checks'
+import { brokerFactsFromReview, recordBroker } from '@/lib/coi/brokerDirectory'
 import { COI_SCOPE_SELECT, deriveCoiScope } from '@/lib/coi/jobScope'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
@@ -137,10 +138,23 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     jobId
       ? prisma.job.findUnique({
           where: { id: jobId },
-          select: { name: true, jobCode: true, company: { select: { name: true } } },
+          select: { name: true, jobCode: true, companyId: true, company: { select: { name: true } } },
         })
       : Promise.resolve(null),
   ])
+
+  // File the broker this certificate names (Wes 2026-09-17: "start keeping a
+  // list of brokers"). This is the arrival path for most certificates, so it
+  // is where the directory actually fills up. AFTER the job is resolved on
+  // purpose: a token minted with only a job still files the broker under
+  // that job's client. Best-effort — a stored COI must never be lost to a
+  // list, and it is a no-op until the tables exist.
+  await recordBroker({
+    facts: brokerFactsFromReview(ai),
+    source: 'CERTIFICATE',
+    companyId: companyId ?? job?.companyId ?? null,
+    insuredName: typeof ai?.namedInsured === 'string' ? ai.namedInsured : null,
+  })
 
   // Does the certificate insure the production this link was minted for? The
   // uploader is standing right here, so this is the cheapest possible moment
