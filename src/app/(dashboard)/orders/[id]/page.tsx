@@ -70,6 +70,7 @@ import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { SwitchVehicleClassModal, type SwitchClassLine } from '@/components/orders/SwitchVehicleClassModal';
 import { GearLoadOnCard, type ReservedUnitChoice } from '@/components/orders/GearLoadOnCard';
 import { closureOn, calendarDayLabel } from '@/lib/site/yardHours';
+import { splitHoldUnits, daysDiffer, type ClaimLine } from '@/lib/orders/lineUnitClaim';
 
 /** A driver fee line ("Driver (covers 10 hrs)") — the only line that carries an estimated day. */
 const isDriverLine = (li: { description?: string | null; type: string; parentLineItemId?: string | null }) =>
@@ -678,6 +679,8 @@ export default function OrderDetailPage() {
   /** The LINE the picker was opened from — the unit picked is that line's. */
   const [assignForLine, setAssignForLine] = useState<{ orderId: string; lineId: string } | null>(null);
   const [unitNotice, setUnitNotice] = useState<string | null>(null);
+  /** The assignment mid-attach, so its chip can say so and not be double-pressed. */
+  const [claimingAssignmentId, setClaimingAssignmentId] = useState<string | null>(null);
 
   const [liStartDate, setLiStartDate] = useState("");
   const [liEndDate, setLiEndDate] = useState("");
@@ -942,6 +945,14 @@ export default function OrderDetailPage() {
   // formatter, so every call site below redacts unchanged.
   const fmt = useMoneyFormatter();
   const canSeeMoney = useMoneyVisible();
+
+  /** "Sep 21" — UTC, never local: these are @db.Date values and reading
+   *  them in Pacific prints the day before (lib/dates/calendarDate.ts). */
+  const fmtDayShort = (d: string) => {
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d);
+    if (!m) return d;
+    return new Date(`${m[0]}T00:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+  };
 
   const fmtDate = (d: string | null) => {
     if (!d) return "--";
@@ -2271,18 +2282,58 @@ export default function OrderDetailPage() {
    *  dates match the line's block, capped at the line's quantity. Mirrors
    *  lib/orders/lineUnits.ts, which is what the delete and edit paths
    *  release by — so what the row shows is what the row would give back. */
-  const unitsForLine = (li: LineItem): { hold: HoldItem; units: HoldItem['assignments']; exact: boolean } | null => {
+  const claimShape = (li: LineItem): ClaimLine => ({
+    id: li.id, quantity: li.quantity, pickupDate: li.pickupDate, returnDate: li.returnDate,
+  });
+
+  const unitsForLine = (
+    li: LineItem,
+  ): { hold: HoldItem; units: HoldItem['assignments']; exact: boolean; unclaimed: HoldItem['assignments']; shape: ClaimLine } | null => {
     const hold = holdForLine(li);
     if (!hold) return null;
-    const live = hold.assignments.filter((a) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT');
-    const stamped = live.filter((a) => a.orderLineItemId === li.id);
-    if (stamped.length > 0) return { hold, units: stamped, exact: true };
-    const day = (v: string) => v.slice(0, 10);
-    const mine = live
-      .filter((a) => a.orderId === orderId && !a.orderLineItemId)
-      .filter((a) => day(a.startDate) === day(li.pickupDate) && day(a.endDate) === day(li.returnDate))
-      .slice(0, Math.max(0, li.quantity));
-    return { hold, units: mine, exact: false };
+    // The OTHER lines of this order on the same hold — an unstamped truck
+    // sitting on a sibling's block is that sibling's, not spare.
+    const siblingLines = (order?.lineItems ?? [])
+      .filter((x) => !x.parentLineItemId && holdForLine(x)?.id === hold.id)
+      .map(claimShape);
+    const shape = claimShape(li);
+    const { mine, stamped, unclaimed } = splitHoldUnits({
+      assignments: hold.assignments,
+      orderId,
+      line: shape,
+      siblingLines,
+    });
+    return { hold, units: mine, exact: stamped, unclaimed, shape };
+  };
+
+  /** "That truck is this line's." Index Films (Wes 2026-09-17): the board
+   *  will not guess which of two orders a unit belongs to, so on a
+   *  multi-order job it binds the truck to the hold and stamps nothing —
+   *  and both order lines then read "Held · no unit" while the header
+   *  above them lists the trucks under Reserved units. This is how a rep
+   *  answers the question after the fact. The stamp is what the row
+   *  prints and what a delete or a trim gives back (lineUnits.ts). */
+  const claimUnitForLine = async (assignmentId: string, lineId: string, unitName: string) => {
+    setClaimingAssignmentId(assignmentId);
+    setUnitNotice(null);
+    try {
+      const res = await fetch(`/api/scheduling/assignments/${assignmentId}/line`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderLineItemId: lineId }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok || !json.ok) {
+        setUnitNotice(json.reason || json.error || `Could not attach ${unitName} (${res.status})`);
+        return;
+      }
+      setUnitNotice(`${unitName} is now reserved for this line.`);
+      await fetchOrder();
+    } catch (e) {
+      setUnitNotice(e instanceof Error ? e.message : String(e));
+    } finally {
+      setClaimingAssignmentId(null);
+    }
   };
 
   /** Every LIVE reservation on the job — the vehicles a gear order may
@@ -3012,11 +3063,20 @@ export default function OrderDetailPage() {
           if (li.parentLineItemId || li.type === 'FEE' || li.type === 'DISCOUNT') return null;
           const forLine = unitsForLine(li);
           if (!forLine) return null;
-          const { hold, units, exact } = forLine;
+          const { hold, units, exact, unclaimed, shape } = forLine;
           // THIS line's shortfall — its own quantity against its own
           // trucks, not the shared hold's. Removing the line gives back
           // exactly these units (lineUnits.ts), so the row says which.
           const remaining = Math.max(0, li.quantity - units.length);
+          // What is still short AFTER every spare truck below is attached.
+          // A line wanting two with one spare standing by is both offered
+          // the spare and told it is still a truck down.
+          const shortfall = Math.max(0, remaining - unclaimed.length);
+          // A truck whose days are not the line's days. It still goes out;
+          // the row says so rather than printing a name that implies the
+          // reservation agrees with the quote when it does not.
+          const offDates = (a: HoldItem['assignments'][number]) =>
+            daysDiffer(a, shape) ? ` · ${fmtDayShort(a.startDate)}–${fmtDayShort(a.endDate)}` : '';
           return (
             <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
               {units.map((a) => (
@@ -3027,12 +3087,46 @@ export default function OrderDetailPage() {
                     : 'Reserved on this order for these dates (bound before lines carried their unit) — internal only, never on the quote.'}
                   className="inline-flex items-center gap-1 rounded bg-lt-inner border border-lt-hairline px-1.5 py-0.5 font-semibold text-lt-fg"
                 >
-                  {a.asset.unitName}
+                  {a.asset.unitName}{offDates(a)}
                 </span>
               ))}
-              {remaining > 0 && (
+              {/* SHORT A TRUCK — but is one actually standing there?
+                  The booking is job-level, so a job with two orders shares
+                  one hold, and a unit picked on the BOARD carries no order
+                  and no line (assignUnitToBookingItem will not guess between
+                  two live orders). Both lines used to read "Held · no unit"
+                  while the header card above them listed both trucks under
+                  Reserved units — Index Films, Wes 2026-09-17. Say what is
+                  really there and let the rep name it. Never claim one
+                  automatically: with two spare trucks and two lines wanting
+                  one each, nothing but a person can tell them apart. */}
+              {shortfall > 0 && (
                 <span className="rounded border border-dashed border-chip-warn-fg/40 bg-chip-warn-bg px-1.5 py-0.5 font-semibold text-chip-warn-fg">
-                  {hold.holdRank > 1 ? `${hold.holdRank === 2 ? '2nd' : '3rd'} hold · no unit` : `Held · ${units.length > 0 ? `${remaining} more ` : ''}no unit`}
+                  {hold.holdRank > 1
+                    ? `${hold.holdRank === 2 ? '2nd' : '3rd'} hold · no unit`
+                    : `Held · ${units.length > 0 || unclaimed.length > 0 ? `${shortfall} more ` : ''}no unit`}
+                </span>
+              )}
+              {remaining > 0 && unclaimed.length > 0 && canManageSubRentals && (
+                <>
+                  <span className="text-lt-fg3">Reserved on this job, on no line yet —</span>
+                  {unclaimed.map((a) => (
+                    <button
+                      key={a.id}
+                      type="button"
+                      disabled={claimingAssignmentId === a.id}
+                      onClick={() => void claimUnitForLine(a.id, li.id, a.asset.unitName)}
+                      title={`${a.asset.unitName} is on this job's reservation with no order line named. Press to make it this line's unit — it will print here and come off the reservation if the line goes.`}
+                      className="inline-flex items-center gap-1 rounded border border-dashed border-violet-400 bg-violet-50 px-1.5 py-0.5 font-semibold text-violet-800 hover:bg-violet-100 disabled:opacity-50"
+                    >
+                      {claimingAssignmentId === a.id ? 'Attaching…' : `${a.asset.unitName}${offDates(a)} → this line`}
+                    </button>
+                  ))}
+                </>
+              )}
+              {remaining > 0 && unclaimed.length > 0 && !canManageSubRentals && (
+                <span className="rounded border border-dashed border-violet-400 bg-violet-50 px-1.5 py-0.5 font-semibold text-violet-800">
+                  Reserved on this job, on no line yet: {unclaimed.map((a) => a.asset.unitName).join(', ')}
                 </span>
               )}
               {canManageSubRentals && (
@@ -4705,16 +4799,22 @@ export default function OrderDetailPage() {
             and a discount off the total. There is nothing left of
             either once the amounts are redacted, so the yard crew gets
             no empty shell where a panel used to be. */}
+        {/* Which truck landed on which line. Names only, no money — and
+            outside the canSeeMoney gate on purpose: it is the answer to
+            an action anyone who can bind a unit just took, and
+            useMoneyVisible reads false while the session is still
+            loading, which was long enough to swallow it. */}
+        {unitNotice && (
+          <div className="px-6 pb-2">
+            <div className="flex items-start justify-between gap-3 rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-xs text-lt-fg">
+              <span>{unitNotice}</span>
+              <button type="button" onClick={() => setUnitNotice(null)} className="text-lt-fg3 hover:text-lt-fg">Dismiss</button>
+            </div>
+          </div>
+        )}
         {canSeeMoney && (
           <div className="px-6 pb-4">
             <LcdwPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />
-            {unitNotice && (
-              <div className="mt-2 flex items-start justify-between gap-3 rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-xs text-lt-fg">
-                <span>{unitNotice}</span>
-                <button type="button" onClick={() => setUnitNotice(null)} className="text-lt-fg3 hover:text-lt-fg">Dismiss</button>
-              </div>
-            )}
-
             {/* The driver's logged hours, priced by the same ladder the
                 quote used. Applying is what puts them on the invoice. */}
             <DriverTrueUpPrompt orderId={orderId} canEdit={isMoneyEditableForOrder} onChanged={fetchOrder} />

@@ -32,8 +32,11 @@
  */
 import { prisma } from '@/lib/prisma'
 import { releaseBookingItem, type ReleaseActor } from '@/lib/scheduling/releaseBookingItem'
+import { splitHoldUnits, LIVE_UNIT_STATUSES } from '@/lib/orders/lineUnitClaim'
 
-export const LIVE_ASSIGNMENT_STATUSES = ['ASSIGNED', 'CHECKED_OUT'] as const
+/** Re-exported from the pure rule so there is one list, not two —
+ *  lineUnitClaim.ts owns it and the order page reads it too. */
+export const LIVE_ASSIGNMENT_STATUSES = LIVE_UNIT_STATUSES
 const LIVE_ITEM_STATUSES = ['REQUESTED', 'ASSIGNED'] as const
 
 const HOLD_DEPARTMENTS = new Set(['VEHICLES', 'STAGES'])
@@ -104,7 +107,9 @@ export async function liveUnitsForLine(args: {
   lineId: string
   categoryId: string
   quantity: number
-  window?: { start: Date; end: Date } | null
+  /** The line's block. The legacy fallback matches on it, so an omitted
+   *  window finds no unstamped truck — every caller passes one. */
+  window: { start: Date; end: Date } | null
 }): Promise<{ item: { id: string; quantity: number; holdRank: number; status: string } | null; units: LineUnit[] }> {
   const item = await holdItemForLine({ orderId: args.orderId, categoryId: args.categoryId })
   if (!item) return { item: null, units: [] }
@@ -116,19 +121,25 @@ export async function liveUnitsForLine(args: {
     },
     orderBy: { createdAt: 'asc' },
   })
-  const toUnit = (r: (typeof rows)[number], stamped: boolean): LineUnit => ({
-    assignmentId: r.id, assetId: r.assetId, unitName: r.asset.unitName, status: r.status,
-    startDate: r.startDate, endDate: r.endDate, stamped,
+  // ONE rule, shared with the order page's readout (lineUnitClaim.ts) —
+  // what the row prints has to be what a delete or a trim gives back.
+  const { mine, stamped } = splitHoldUnits({
+    assignments: rows,
+    orderId: args.orderId,
+    line: {
+      id: args.lineId,
+      quantity: args.quantity,
+      pickupDate: args.window?.start ?? null,
+      returnDate: args.window?.end ?? null,
+    },
   })
-  const stamped = rows.filter((r) => r.orderLineItemId === args.lineId)
-  if (stamped.length > 0) return { item, units: stamped.map((r) => toUnit(r, true)) }
-
-  const day = (d: Date) => d.toISOString().slice(0, 10)
-  const legacy = rows
-    .filter((r) => r.orderId === args.orderId && !r.orderLineItemId)
-    .filter((r) => !args.window || (day(r.startDate) === day(args.window.start) && day(r.endDate) === day(args.window.end)))
-    .slice(0, Math.max(0, Math.floor(args.quantity)))
-  return { item, units: legacy.map((r) => toUnit(r, false)) }
+  return {
+    item,
+    units: mine.map((r) => ({
+      assignmentId: r.id, assetId: r.assetId, unitName: r.asset.unitName, status: r.status,
+      startDate: r.startDate, endDate: r.endDate, stamped,
+    })),
+  }
 }
 
 export interface LineReleaseOutcome {
