@@ -2513,26 +2513,33 @@ export function GanttBoard() {
             </div>
 
             {/* Blind pickup / return — sales flips it right here; the bar
-                goes violet on the refresh. Writes the job's live orders. */}
+                goes violet on the refresh. The top chips write the whole
+                job; the per-vehicle rows (Jose 2026-09-16) flip one unit. */}
             {selected.bookingId && (
               <BlindHandoffToggles
+                jobId={selected.jobId ?? null}
                 orders={Array.isArray(selected.orders) ? selected.orders : []}
+                vehicles
                 // Deliberately NOT gated on the sales permission (Wes
                 // 2026-09-15: "always allow the fleet guy to change to a
                 // blind pickup"). Whoever is standing in front of the
                 // truck knows first; the board is staff-only anyway.
                 canEdit
                 onChanged={(next) => {
-                  setSelected((prev: any) =>
-                    prev
-                      ? {
-                          ...prev,
-                          orders: next,
-                          blindPickup: next.some((o) => o.status !== 'CANCELLED' && o.blindPickup),
-                          blindReturn: next.some((o) => o.status !== 'CANCELLED' && o.blindReturn),
-                        }
-                      : prev,
-                  )
+                  setSelected((prev: any) => {
+                    if (!prev) return prev
+                    // A unit bar wears ITS vehicle's answer; a job-view bar
+                    // wears any vehicle's. The refresh below repaints the
+                    // board from the server either way.
+                    const mine = prev.assignmentId ? next.vehicles.find((v) => v.assignmentId === prev.assignmentId) : null
+                    const blindPickup = mine
+                      ? mine.effective.blindPickup
+                      : next.vehicles.some((v) => v.effective.blindPickup) || next.orders.some((o) => o.status !== 'CANCELLED' && o.blindPickup)
+                    const blindReturn = mine
+                      ? mine.effective.blindReturn
+                      : next.vehicles.some((v) => v.effective.blindReturn) || next.orders.some((o) => o.status !== 'CANCELLED' && o.blindReturn)
+                    return { ...prev, orders: next.orders, blindPickup, blindReturn }
+                  })
                   refreshTimeline()
                 }}
               />

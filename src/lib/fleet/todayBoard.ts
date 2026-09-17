@@ -23,6 +23,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { blindForVehicle, ordersForBooking } from '@/lib/fleet/blindRule'
 import { companyLabel } from '@/lib/scheduling/infoGaps'
 
 /** Pacific-day and window helpers live in a prisma-free module so they
@@ -61,6 +62,13 @@ export interface FleetMovement {
    * job says so — the same rule the reservations board paints violet.
    */
   liveOrders: Array<{ id: string; orderNumber: string; status: string; blindPickup: boolean; blindReturn: boolean }>
+  /**
+   * THIS unit's effective blind answer (lib/fleet/blindHandoff): its own
+   * override where sales set one (Jose 2026-09-16: only some of a job's
+   * vehicles are blind), else the orders that speak for its booking.
+   * The row's toggle flips this unit alone.
+   */
+  blind: { blindPickup: boolean; blindReturn: boolean }
   /**
    * The calendar day THIS edge falls on, as YYYY-MM-DD. Same value the
    * caller matched on, carried back on the row so a multi-day read can
@@ -108,6 +116,8 @@ export async function fleetMovementsBetween(
       id: true,
       startDate: true,
       endDate: true,
+      blindPickup: true,
+      blindReturn: true,
       order: { select: { id: true, orderNumber: true, status: true } },
       asset: { select: { unitName: true } },
       bookingItem: {
@@ -115,6 +125,7 @@ export async function fleetMovementsBetween(
           category: { select: { name: true } },
           booking: {
             select: {
+              id: true,
               bookingNumber: true,
               jobId: true,
               jobName: true,
@@ -125,7 +136,7 @@ export async function fleetMovementsBetween(
                 select: {
                   orders: {
                     where: { status: { not: 'CANCELLED' } },
-                    select: { id: true, orderNumber: true, status: true, blindPickup: true, blindReturn: true },
+                    select: { id: true, orderNumber: true, status: true, bookingId: true, blindPickup: true, blindReturn: true },
                     orderBy: { createdAt: 'asc' },
                   },
                 },
@@ -160,6 +171,23 @@ export async function fleetMovementsBetween(
         }
       : null
 
+  // Which orders speak for each unit's booking needs the job's LIVE
+  // bookings (an order bound to a cancelled twin still counts).
+  const jobIds = [...new Set(rows.map((r) => r.bookingItem.booking.jobId).filter((j): j is string => !!j))]
+  const liveBookings = jobIds.length
+    ? await prisma.booking.findMany({
+        where: { jobId: { in: jobIds }, status: { notIn: ['CANCELLED', 'ARCHIVED'] }, archivedAt: null },
+        select: { id: true, jobId: true },
+      })
+    : []
+  const liveByJob = new Map<string, Set<string>>()
+  for (const b of liveBookings) {
+    if (!b.jobId) continue
+    const set = liveByJob.get(b.jobId) ?? new Set<string>()
+    set.add(b.id)
+    liveByJob.set(b.jobId, set)
+  }
+
   return rows.map((r) => {
     const insp = r.inspections.find((i) => i.type === 'CHECKOUT')
     const ret = r.inspections.find((i) => i.type === 'RETURN')
@@ -178,6 +206,15 @@ export async function fleetMovementsBetween(
       pickupTime: r.bookingItem.booking.pickupTime,
       attachedOrder: attachedOrderOf(r.order, r.bookingItem.booking.job?.orders ?? []),
       liveOrders: r.bookingItem.booking.job?.orders ?? [],
+      blind: (() => {
+        const jobId = r.bookingItem.booking.jobId
+        const orders = r.bookingItem.booking.job?.orders ?? []
+        const eff = blindForVehicle(
+          ordersForBooking(orders, r.bookingItem.booking.id, (jobId && liveByJob.get(jobId)) || new Set<string>()),
+          r,
+        )
+        return { blindPickup: eff.blindPickup, blindReturn: eff.blindReturn }
+      })(),
       inspection: shape(insp),
       returnInspection: shape(ret),
     }

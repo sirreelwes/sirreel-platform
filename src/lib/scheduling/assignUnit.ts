@@ -105,7 +105,7 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
       // occupies nothing, and one for another date block is not in the way.
       assignments: {
         where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } },
-        select: { id: true, assetId: true, startDate: true, endDate: true, status: true, orderId: true },
+        select: { id: true, assetId: true, startDate: true, endDate: true, status: true, orderId: true, blindPickup: true, blindReturn: true },
       },
     },
   })
@@ -128,7 +128,16 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
   // Resolved first: it must not count against capacity, must not crowd
   // the window resolver into a different block, and its order is what
   // the replacement inherits.
-  let outgoing: { id: string; assetId: string; status: string; orderId: string | null; startDate: Date; endDate: Date } | null = null
+  let outgoing: {
+    id: string
+    assetId: string
+    status: string
+    orderId: string | null
+    startDate: Date
+    endDate: Date
+    blindPickup: boolean | null
+    blindReturn: boolean | null
+  } | null = null
   if (args.replaceAssetId) {
     const found = bookingItem.assignments.find((a) => a.assetId === args.replaceAssetId)
     if (!found) {
@@ -414,6 +423,11 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
         endDate: windowEnd,
         status: 'ASSIGNED',
         orderId: attachOrderId,
+        // A per-vehicle blind answer (lib/fleet/blindHandoff) is about the
+        // handoff — the driver, the lockbox — so like the driver below it
+        // goes with the job, not the van. Null on a fresh pick.
+        blindPickup: outgoing?.blindPickup ?? null,
+        blindReturn: outgoing?.blindReturn ?? null,
       },
       select: {
         id: true,

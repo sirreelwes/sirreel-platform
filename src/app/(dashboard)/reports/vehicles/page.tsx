@@ -308,8 +308,16 @@ function VehicleRow({ row, edge }: { row: FleetMovement; edge: 'out' | 'back' })
         )}
         {/* Blind pickup on the going-out lane, blind return on the coming-
             back lane — the handoff THIS end of the arc is about. Violet
-            when set, same as the bar on the reservations board. */}
-        <VehicleBlindToggle orders={row.liveOrders} kind={edge === 'out' ? 'blindPickup' : 'blindReturn'} />
+            when set, same as the bar on the reservations board. Flips
+            THIS unit only (Jose 2026-09-16) — the whole-job switch is on
+            the reservation and the order. */}
+        <VehicleBlindToggle
+          jobId={row.jobId}
+          assignmentId={row.assignmentId}
+          effective={row.blind}
+          orders={row.liveOrders}
+          kind={edge === 'out' ? 'blindPickup' : 'blindReturn'}
+        />
       </div>
 
       {done ? (

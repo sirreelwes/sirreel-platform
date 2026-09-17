@@ -78,6 +78,7 @@ import { rollupCoiState } from '@/lib/coi/coiState';
 import { AlertTriangle, CalendarDays, Check, User } from 'lucide-react'
 import { useSession } from 'next-auth/react';
 import { canCreateOrders } from '@/lib/permissions';
+import { jobBlindRollup } from '@/lib/fleet/blindRule';
 import type { UserRole } from '@prisma/client';
 
 /**
@@ -471,6 +472,9 @@ interface JobBooking {
       startDate: string;
       endDate: string;
       status: 'ASSIGNED' | 'CHECKED_OUT' | 'RETURNED' | 'SWAPPED';
+      /** Per-vehicle blind override — null follows the order (lib/fleet/blindRule). */
+      blindPickup?: boolean | null;
+      blindReturn?: boolean | null;
       asset: { id: string; unitName: string };
     }>;
   }>;
@@ -2033,8 +2037,17 @@ const driverTone = (d: any): string => {
                     light: true,
                     // Blind handoff outranks the stage here too, so the
                     // strip and the job's bar on the board are one color.
-                    blindPickup: liveOrders.some((o) => o.blindPickup),
-                    blindReturn: liveOrders.some((o) => o.blindReturn),
+                    // Any order flag, or any vehicle overridden blind.
+                    ...jobBlindRollup(
+                      liveOrders,
+                      liveB.flatMap((b: any) =>
+                        (b.items ?? []).flatMap((i: any) =>
+                          (i.assignments ?? [])
+                            .filter((a: any) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT')
+                            .map((a: any) => ({ blindPickup: a.blindPickup ?? null, blindReturn: a.blindReturn ?? null })),
+                        ),
+                      ),
+                    ),
                   })}
                   aria-hidden="true"
                 />

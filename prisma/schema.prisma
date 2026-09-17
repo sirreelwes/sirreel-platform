@@ -1272,6 +1272,24 @@ model BookingAssignment {
   orderId String? @map("order_id")
   order   Order?  @relation("AssignmentOrder", fields: [orderId], references: [id], onDelete: SetNull)
 
+  // BLIND PICKUP / RETURN FOR THIS VEHICLE ONLY.
+  //
+  // Jose, 2026-09-16: "we only have the option of making the entire order
+  // blind. Sometimes jobs have multiple vehicles and we need the ability
+  // to only mark certain vehicles as blind pickups or returns."
+  //
+  // Order.blindPickup / blindReturn stay the job-wide default (they are
+  // also what the client portal instructions and the closed-day prompt
+  // key on). These two are the per-vehicle override: NULL follows the
+  // order, TRUE/FALSE speaks for this unit. One reader —
+  // src/lib/fleet/blindHandoff.ts — decides the effective answer for the
+  // driver page, the lockbox release, the check list and the board.
+  // Written only by POST /api/jobs/[id]/blind-handoff; the job-wide
+  // toggle there resets these to NULL so "whole job blind" means it.
+  // Added by scripts/add-assignment-blind-columns.ts (additive SQL).
+  blindPickup Boolean? @map("blind_pickup")
+  blindReturn Boolean? @map("blind_return")
+
   createdAt DateTime @default(now()) @map("created_at")
 
   // Relations
