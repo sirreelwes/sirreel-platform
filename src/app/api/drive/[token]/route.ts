@@ -217,6 +217,16 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     where: { bookingAssignmentId: asg.id, type: { in: ['CHECKOUT', 'RETURN'] } },
   })
 
+  // Did SirReel already walk this vehicle around? That one fact decides
+  // how much the driver is asked for (Julian 2026-09-17 — see
+  // driverCheckoutDuty). A driver's OWN check-out row does not count:
+  // the question is whether the yard got to it first.
+  const priorWalkaround = await prisma.inspection.findFirst({
+    where: { bookingAssignmentId: asg.id, type: 'CHECKOUT', inspectedByDriverId: null },
+    orderBy: { inspectionDate: 'desc' },
+    select: { mileageAtInspection: true },
+  })
+
   // The driver's own check-out (blind pickup). What they already did, if
   // anything, and whether the step is open — see lib/drivers/selfCheckout.
   const selfCheckout = await (async () => {
@@ -236,6 +246,7 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       isBlindPickup,
       driver: da.driver,
       done,
+      walkaround: { onFile: !!priorWalkaround, mileage: priorWalkaround?.mileageAtInspection ?? null },
     })
   })()
 

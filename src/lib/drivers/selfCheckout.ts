@@ -13,10 +13,12 @@
  * against and the report reads the same either way.
  *
  * Two things differ from the staff form, on purpose:
- *   - The four sides are REQUIRED, not prompted. The staff form is a
- *     prompt because a tech must be able to record what they can see at
- *     6am; the driver's version exists precisely so that a truck never
- *     leaves unattended without its four sides on file.
+ *   - The four sides are REQUIRED, not prompted — but only when nobody
+ *     has walked the vehicle around already. See `driverCheckoutDuty`
+ *     below; that qualifier is Julian's (2026-09-17) and it is the whole
+ *     rule. The staff form is a prompt because a tech must be able to
+ *     record what they can see at 6am; the driver's version exists
+ *     precisely so that a truck never leaves unattended with NO record.
  *   - Mileage is a typed number OR an odometer photo. Wes's words. The
  *     photo is the stronger record; the number is what the return
  *     compares against, so either is accepted and both are welcome.
@@ -57,6 +59,72 @@ const ALLOWED_PHOTO_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'i
 export const stagedPrefixFor = (bookingAssignmentId: string) =>
   `fleet-inspections/staged/${bookingAssignmentId}/`
 
+/** What the yard already recorded on this vehicle before the driver arrived. */
+export interface WalkaroundOnFile {
+  /** A CHECKOUT inspection filed by SIRREEL (not by a driver) exists. */
+  onFile: boolean
+  /** Its odometer reading, when it recorded one. */
+  mileage: number | null
+}
+
+export interface CheckoutDuty {
+  /** Slots the driver MUST fill before the vehicle is released. */
+  required: PhotoPosition[]
+  /** Offered, never demanded. */
+  optional: PhotoPosition[]
+  /** A typed number or an odometer photo is required. */
+  mileageRequired: boolean
+  /** Why the driver is or isn't being asked — for the page's one line. */
+  because: 'walkaround-on-file' | 'nothing-on-file'
+}
+
+/**
+ * How much the driver is asked to do, given what the yard already did.
+ *
+ * Julian, 2026-09-17: "we have no need to prompt drivers for checkout
+ * photos unless for some reason it is an unplanned pickup." His process
+ * checks the vehicle out the DAY BEFORE — the walk-around, the sheet, the
+ * photos — so on a planned blind pickup the condition is already on file
+ * before the driver is anywhere near the truck, and asking them to shoot
+ * four more sides in a dark yard buys nothing. It also costs something
+ * real: FRONT and REAR are the same slot on both lists, and the record
+ * renders the newest photo per slot, so the driver's pair DISPLACES the
+ * yard's on the filed record.
+ *
+ * "Unplanned" is not a flag anyone sets, and a flag nobody remembers to
+ * set is worse than no flag. It is DERIVED from the fact that decides it:
+ * whether SirReel walked this vehicle around at all. Nothing on file means
+ * nobody got the chance — which IS the unplanned pickup — and there the
+ * four sides stay required, because that truck would otherwise leave with
+ * no record of its condition in either direction.
+ *
+ * Mileage follows the same logic: the yard's reading stands for a parked
+ * truck overnight, so the driver is not made to re-enter it. With nothing
+ * on file they are, exactly as before.
+ *
+ * Pure — no prisma — so the page, the API and the test share one answer.
+ * `npm run test:driver-checkout-duty`.
+ */
+export function driverCheckoutDuty(walkaround: WalkaroundOnFile): CheckoutDuty {
+  if (!walkaround.onFile) {
+    return {
+      required: [...DRIVER_REQUIRED_POSITIONS],
+      optional: [...DRIVER_OPTIONAL_POSITIONS],
+      mileageRequired: true,
+      because: 'nothing-on-file',
+    }
+  }
+  return {
+    // Nothing is demanded, everything is still OFFERED: a driver who sees
+    // fresh damage in the yard must always be able to photograph it, and
+    // that is the one case where their shot is the valuable one.
+    required: [],
+    optional: [...DRIVER_REQUIRED_POSITIONS, ...DRIVER_OPTIONAL_POSITIONS],
+    mileageRequired: walkaround.mileage == null,
+    because: 'walkaround-on-file',
+  }
+}
+
 export interface SelfCheckoutDone {
   at: string
   mileage: number | null
@@ -73,6 +141,11 @@ export interface SelfCheckoutState {
   /** What the driver must photograph / may photograph. */
   required: PhotoPosition[]
   optional: PhotoPosition[]
+  /** Whether a mileage number or odometer photo is demanded. */
+  mileageRequired: boolean
+  /** SirReel already walked this vehicle around — the page says so, and
+   *  the driver is asked for nothing but the check-out itself. */
+  walkaroundOnFile: boolean
   /** A licence problem the driver has to fix before the button works. */
   licenseBlocker: string | null
   /** Licence is on file but staff have not checked it yet — recorded, not blocking. */
@@ -85,11 +158,16 @@ export function selfCheckoutState(input: {
   isBlindPickup: boolean
   driver: Parameters<typeof evaluateLicenseGate>[0]
   done: SelfCheckoutDone | null
+  /** What the yard already filed — see driverCheckoutDuty. */
+  walkaround: WalkaroundOnFile
 }): SelfCheckoutState {
   const gate = evaluateLicenseGate(input.driver)
+  const duty = driverCheckoutDuty(input.walkaround)
   const base = {
-    required: [...DRIVER_REQUIRED_POSITIONS],
-    optional: [...DRIVER_OPTIONAL_POSITIONS],
+    required: duty.required,
+    optional: duty.optional,
+    mileageRequired: duty.mileageRequired,
+    walkaroundOnFile: duty.because === 'walkaround-on-file',
     licenseBlocker: gate.code === 'NO_LICENSE' || gate.code === 'EXPIRED' ? driverFacingLicenseMessage(gate.code) : null,
     licenseUnchecked: gate.code === 'NOT_CHECKED',
     done: input.done,
@@ -209,8 +287,22 @@ export async function completeSelfCheckout(input: CompleteSelfCheckoutInput): Pr
     .filter((x): x is { p: StagedPhotoInput & { key: string }; blob: { pathname: string; url: string; uploadedAt: Date } } => !!x.blob)
   const photosMissing = requested.length - present.length
 
+  // What SirReel already filed on this vehicle decides how much is asked
+  // of the driver (Julian 2026-09-17 — see driverCheckoutDuty). Re-read
+  // here rather than trusted from the page: this is the gate that lets a
+  // truck leave, so it is settled server-side.
+  const priorWalkaround = await prisma.inspection.findFirst({
+    where: { bookingAssignmentId: asg.id, type: 'CHECKOUT', inspectedByDriverId: null },
+    orderBy: { inspectionDate: 'desc' },
+    select: { mileageAtInspection: true },
+  })
+  const duty = driverCheckoutDuty({
+    onFile: !!priorWalkaround,
+    mileage: priorWalkaround?.mileageAtInspection ?? null,
+  })
+
   const positionsOnFile = new Set(present.map((x) => normalizePosition(x.p.position)).filter(Boolean) as string[])
-  const missingSides = DRIVER_REQUIRED_POSITIONS.filter((s) => !positionsOnFile.has(s.id))
+  const missingSides = duty.required.filter((s) => !positionsOnFile.has(s.id))
   if (missingSides.length) {
     throw new SelfCheckoutError(
       `Still need a photo of: ${missingSides.map((s) => s.label.toLowerCase()).join(', ')}.`,
@@ -221,13 +313,15 @@ export async function completeSelfCheckout(input: CompleteSelfCheckoutInput): Pr
   const hasOdometerPhoto = positionsOnFile.has('ODOMETER')
   const mileage =
     input.mileage != null && Number.isFinite(input.mileage) ? Math.max(0, Math.floor(input.mileage)) : null
-  if (mileage == null && !hasOdometerPhoto) {
+  if (duty.mileageRequired && mileage == null && !hasOdometerPhoto) {
     throw new SelfCheckoutError('Type the mileage, or take a photo of the odometer.', 400, { missing: ['ODOMETER'] })
   }
 
   const now = new Date()
   const notes = [
-    'Driver self check-out (unattended pickup).',
+    duty.because === 'walkaround-on-file'
+      ? 'Driver self check-out (unattended pickup) — SirReel had already walked this vehicle around, so no photos were asked of the driver.'
+      : 'Driver self check-out (unattended pickup) — nothing was on file beforehand, so the driver shot the four sides.',
     input.damageNoted ? 'Driver reported existing damage — see close-ups.' : null,
     input.notes?.trim() ? input.notes.trim().slice(0, 2000) : null,
     gate.code === 'NOT_CHECKED' ? 'Licence on file but not yet checked by staff at the time of pickup.' : null,

@@ -663,6 +663,25 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   or the compare view). The driver's other shots (DRIVER_SIDE,
   PASSENGER_SIDE, ODOMETER, FUEL_GAUGE, INTERIOR) are legacy slots outside
   Julian's 23 and do not collide.
+- **Drivers are only asked for photos on an UNPLANNED pickup (2026-09-17 —
+  Julian: "we have no need to prompt drivers for checkout photos unless for
+  some reason it is an unplanned pickup").** His process walks the vehicle
+  around the DAY BEFORE, so on a planned blind pickup the condition is
+  already on file before the driver is near the truck and four more sides in
+  a dark yard buy nothing — they also DISPLACE the yard's front and rear on
+  the filed record (same slot ids, newest wins). "Unplanned" is NOT a flag
+  anyone sets: it is DERIVED from whether a CHECKOUT Inspection filed by
+  SIRREEL (`inspectedByDriverId: null`) exists on the assignment. None =
+  nobody got the chance = the four sides stay required, because that truck
+  would otherwise leave with no record either direction.
+  `driverCheckoutDuty()` in `src/lib/drivers/selfCheckout.ts` is the pure
+  rule; `selfCheckoutState` and `completeSelfCheckout` both read it, and the
+  server re-reads the fact rather than trusting the page — this is the gate
+  that lets a truck leave. Mileage follows the same logic (the yard's
+  overnight reading stands). **Photos are never taken AWAY, only
+  un-demanded** — every slot stays offered, because a driver who finds fresh
+  damage in the yard must be able to shoot it, and the notes line records
+  which way it went. `npm run test:driver-checkout-duty`.
 - NOT done: the driver's RETURN card still has no before/after (the staff
   form's `compareTo`), and nothing warns that a blind pickup is hours away
   with the driver's invite undelivered, never opened and no inspection
