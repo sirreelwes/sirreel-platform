@@ -32,6 +32,7 @@
 import { prisma } from '@/lib/prisma'
 import { Prisma } from '@prisma/client'
 import { resolveDisplayJobName } from '@/lib/jobs/displayName'
+import { resolveDataScope, jobScopeWhere } from '@/lib/auth/scope'
 import {
   bareAddress,
   chatPreview,
@@ -374,4 +375,66 @@ export async function chatInboxFor(actor: Actor): Promise<ChatInbox> {
     notesAvailable,
     truncated: sorted.length > MAX_JOBS,
   }
+}
+
+/**
+ * "We probably need a search field at top of chat to find jobs or clients
+ * that we want to message about" (Wes 2026-09-17).
+ *
+ * The box does two things at once. Typing filters the rows you already
+ * have, in the browser, with no round trip. THIS is the other half: jobs
+ * you are NOT yet in, so a conversation can be STARTED from the chat page
+ * rather than only continued — which is the whole point of "another way to
+ * communicate if you're not already in the job".
+ *
+ * Scoped exactly like the /jobs list (`resolveDataScope` + `jobScopeWhere`,
+ * the same two helpers that route uses), so this opens no door that page
+ * does not: a scope-OWN user searches their own jobs and nobody else's.
+ * Archived jobs stay out; they are not somewhere to start a conversation.
+ */
+export async function searchJobsForChat(args: {
+  q: string
+  /** Jobs already on the page — a row is in one list or the other, never both. */
+  excludeJobIds: string[]
+  limit?: number
+}): Promise<Array<{ jobId: string; jobCode: string; jobName: string; companyName: string | null }>> {
+  const q = args.q.trim()
+  if (q.length < 2) return []
+  const scope = await resolveDataScope()
+  const jobs = await prisma.job.findMany({
+    where: {
+      ...jobScopeWhere(scope),
+      archivedAt: null,
+      id: { notIn: args.excludeJobIds },
+      // Same four ways in as the /jobs search box: the production, the
+      // code, the CLIENT company, and a person on the job.
+      OR: [
+        { name: { contains: q, mode: 'insensitive' } },
+        { jobCode: { contains: q, mode: 'insensitive' } },
+        { company: { name: { contains: q, mode: 'insensitive' } } },
+        {
+          jobContacts: {
+            some: {
+              person: {
+                OR: [
+                  { firstName: { contains: q, mode: 'insensitive' } },
+                  { lastName: { contains: q, mode: 'insensitive' } },
+                  { email: { contains: q, mode: 'insensitive' } },
+                ],
+              },
+            },
+          },
+        },
+      ],
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: args.limit ?? 8,
+    select: { id: true, jobCode: true, name: true, company: { select: { name: true } } },
+  })
+  return jobs.map((j) => ({
+    jobId: j.id,
+    jobCode: j.jobCode,
+    jobName: resolveDisplayJobName({ jobName: j.name, companyName: j.company?.name ?? null }),
+    companyName: j.company?.name ?? null,
+  }))
 }

@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { ArrowRight, Mail, MessagesSquare, Siren, StickyNote, Users } from 'lucide-react'
+import { ArrowRight, Mail, MessagesSquare, Search, Siren, StickyNote, Users } from 'lucide-react'
 import { mentionsIn } from '@/lib/email/conversationRules'
 
 type Reason = 'mentioned' | 'holding' | 'wrote' | 'rep' | 'desk'
@@ -46,6 +46,7 @@ interface Inbox {
   ok: boolean
   me: { id: string; name: string | null; email: string }
   rows: Row[]
+  found: NoteTarget[]
   notesAvailable: boolean
   truncated: boolean
   error?: string
@@ -72,6 +73,15 @@ const KIND_WORD: Record<Row['lastKind'], string> = {
   note: 'Note',
 }
 
+/** Enough of a job to file a note against it: a row you are in, or one the
+ *  search turned up. The box needs nothing else. */
+interface NoteTarget {
+  jobId: string
+  jobCode: string
+  jobName: string
+  companyName: string | null
+}
+
 /** The reply box under one row. Internal notes only — by design. */
 function NoteReply({
   row,
@@ -79,7 +89,7 @@ function NoteReply({
   meId,
   onDone,
 }: {
-  row: Row
+  row: NoteTarget
   staff: { id: string; name: string }[]
   meId: string
   onDone: (msg: string) => void
@@ -193,10 +203,22 @@ export function ChatInbox() {
   const [openId, setOpenId] = useState<string | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
   const [staff, setStaff] = useState<{ id: string; name: string }[]>([])
+  // Wes 2026-09-17: "we probably need a search field at top of chat to find
+  // jobs or clients that we want to message about." The box does two things:
+  // it filters the rows you HAVE as you type (instant, in the browser), and
+  // it asks the server for jobs you are NOT in yet, so a conversation can be
+  // started here rather than only continued.
+  const [q, setQ] = useState('')
+  const [debouncedQ, setDebouncedQ] = useState('')
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(q.trim()), 250)
+    return () => clearTimeout(t)
+  }, [q])
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch('/api/chat')
+      const r = await fetch(`/api/chat${debouncedQ ? `?q=${encodeURIComponent(debouncedQ)}` : ''}`)
       const j = (await r.json()) as Inbox
       if (!j.ok) throw new Error(j.error || 'Could not load your chats.')
       setData(j)
@@ -204,7 +226,7 @@ export function ChatInbox() {
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Could not load your chats.')
     }
-  }, [])
+  }, [debouncedQ])
 
   useEffect(() => {
     void load()
@@ -230,11 +252,20 @@ export function ChatInbox() {
   }
 
   const rows = useMemo(() => {
-    const all = data?.rows ?? []
+    let all = data?.rows ?? []
+    const needle = q.trim().toLowerCase()
+    if (needle) {
+      all = all.filter((r) =>
+        `${r.companyName ?? ''} ${r.jobName} ${r.jobCode}`.toLowerCase().includes(needle),
+      )
+    }
     if (filter === 'needs-you') return all.filter((r) => r.taggedMe || r.urgentForMe)
     if (filter === 'waiting') return all.filter((r) => r.awaitingReply)
     return all
-  }, [data, filter])
+  }, [data, filter, q])
+
+  /** Jobs the search found that are NOT already in your list. */
+  const found = data?.found ?? []
 
   const counts = useMemo(() => {
     const all = data?.rows ?? []
@@ -256,6 +287,27 @@ export function ChatInbox() {
           here; to write to the client, open the job.
         </p>
       </header>
+
+      <label className="relative block mb-3">
+        <Search size={14} aria-hidden className="absolute left-2.5 top-1/2 -translate-y-1/2 text-lt-fg3 pointer-events-none" />
+        <input
+          value={q}
+          onChange={(e) => setQ(e.target.value)}
+          placeholder="Find a job or client to message about…"
+          aria-label="Find a job or client"
+          className="w-full rounded-lg border border-lt-hairline bg-lt-card pl-8 pr-8 py-2 text-[16px] sm:text-[13px] text-lt-fg focus:outline-none focus:ring-2 focus:ring-amber-500/40"
+        />
+        {q && (
+          <button
+            type="button"
+            onClick={() => setQ('')}
+            aria-label="Clear the search"
+            className="absolute right-2 top-1/2 -translate-y-1/2 text-[13px] text-lt-fg3 hover:text-lt-fg px-1"
+          >
+            ✕
+          </button>
+        )}
+      </label>
 
       <div className="flex items-center gap-1.5 mb-3 flex-wrap">
         {([
@@ -285,7 +337,7 @@ export function ChatInbox() {
         </div>
       )}
 
-      {data && rows.length === 0 && (
+      {data && rows.length === 0 && !q.trim() && (
         <div className="text-center text-[13px] text-lt-fg3 py-12">
           {counts.all === 0
             ? 'Nothing yet. A job lands here when someone tags you, hands it to you, or you write on it.'
@@ -365,6 +417,53 @@ export function ChatInbox() {
           )
         })}
       </ul>
+
+      {found.length > 0 && (
+        <div className="mt-4">
+          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-lt-fg3 mb-1.5">
+            Not in your chat — {found.length} match{found.length === 1 ? '' : 'es'}
+          </h2>
+          <ul className="space-y-2">
+            {found.map((f) => {
+              const open = openId === f.jobId
+              return (
+                <li key={f.jobId} className="rounded-xl border border-dashed border-lt-hairline bg-lt-card px-3 py-2.5">
+                  <Link
+                    href={`/jobs/${f.jobId}?tab=conversation`}
+                    className="text-[14px] font-semibold text-lt-fg hover:text-amber-700 break-words"
+                  >
+                    {f.companyName ? `${f.companyName} · ` : ''}
+                    {f.jobName}
+                  </Link>
+                  <span className="ml-1.5 font-mono text-[11px] text-lt-fg3">{f.jobCode}</span>
+                  <div className="mt-2 flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setOpenId(open ? null : f.jobId)}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-lt-hairline bg-lt-card px-2 py-1 text-[12px] font-medium text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner"
+                    >
+                      <StickyNote size={12} aria-hidden /> {open ? 'Close note' : 'Note to the team'}
+                    </button>
+                    <Link
+                      href={`/jobs/${f.jobId}?tab=conversation`}
+                      className="inline-flex items-center gap-1.5 rounded-md border border-lt-hairline bg-lt-card px-2 py-1 text-[12px] font-medium text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner"
+                    >
+                      <Mail size={12} aria-hidden /> Open the job to email the client <ArrowRight size={11} aria-hidden />
+                    </Link>
+                  </div>
+                  {open && data && <NoteReply row={f} staff={staff} meId={data.me.id} onDone={(m) => { say(m); void load() }} />}
+                </li>
+              )
+            })}
+          </ul>
+        </div>
+      )}
+
+      {q.trim().length >= 2 && rows.length === 0 && found.length === 0 && (
+        <p className="text-[12.5px] text-lt-fg3 text-center py-6">
+          Nothing matches &ldquo;{q.trim()}&rdquo; — try the company, the production or the job code.
+        </p>
+      )}
 
       {data?.truncated && (
         <p className="text-[11.5px] text-lt-fg3 mt-3">

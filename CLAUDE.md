@@ -213,6 +213,16 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `src/lib/assistant/phoneFactor.ts`, `npm run test:phone-factor`). Scoped
   to the live assignment — a number on another job unlocks nothing. Web
   chat never passes a number; the job-code paths are unchanged.
+- **A "no mobile" icon on the staff table** (Wes 2026-09-17, handed
+  Julian's cell and then "Who are you missing?"): /admin/assistant flags
+  every staff row with no `User.phone`, counts them in the panel summary
+  ("4 on call · 3 with no mobile") and says what the blank costs — an
+  URGENT job note emails that person instead of texting, and AHA cannot
+  recognise their texts as staff. **That table also used to list only
+  ADMIN / AGENT / MANAGER**, and it is the sole editor for `User.phone`,
+  so Ana (BILLING), Julian and the yard had no way to be reached and no
+  way to be given a number; it is every active staff row now, DRIVER and
+  CLIENT excluded.
 - **AHA knows who is texting, by number, server-side**
   (`src/lib/assistant/senderIdentity.ts`; the model never decides). STAFF =
   active User whose `phone` (set on /admin/assistant, "Mobile (texts AHA as
@@ -1561,6 +1571,16 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - **Company + job on every row AND above the reply box** (Wes: "it needs
     to be very clear what company and job it is referring to") — the
     header scrolls away on a phone, so the box repeats it.
+  - **Search at the top does TWO things** (Wes 2026-09-17: "we probably
+    need a search field at top of chat to find jobs or clients that we want
+    to message about"): it filters the rows you HAVE in the browser as you
+    type, and — debounced 250ms — asks `GET /api/chat?q=` for jobs you are
+    NOT in, listed under "Not in your chat" with the same two actions. That
+    is what lets a conversation be STARTED here, not only continued.
+    `searchJobsForChat` matches production / job code / CLIENT company /
+    a person on the job (the same four the /jobs box uses) and is scoped by
+    `resolveDataScope` + `jobScopeWhere` — the /jobs list's own helpers, so
+    chat opens no door that page does not. Archived jobs excluded.
   - Nav: `CHAT_ITEM` in permissions.ts is in ALL FOUR branches (sales,
     billing, yard, the fixed IA) — the yard gets tagged as often as sales.
     A shared nav row is not a shared view; the page scopes it. **FIRST in

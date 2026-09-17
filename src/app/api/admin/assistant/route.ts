@@ -107,8 +107,16 @@ export async function GET() {
   // checks read. Never fails the page: an empty list with a note beats a 500.
   const recognized = await listRecognizedNumbers().catch((err) => { console.error('[admin/assistant] recognized roster failed:', err); return [] })
 
+  // Every active STAFF row, not just the three sales/ops roles it used to
+  // list (Wes 2026-09-17, handed Julian's cell: "Who are you missing?").
+  // The table is the only editor for `User.phone`, and that field now does
+  // two jobs — AHA recognising a staff text, and an URGENT job note texting
+  // whoever it tags. A note can tag ANY active user, so a roster that
+  // stopped at ADMIN/AGENT/MANAGER left Ana (BILLING), Julian and the yard
+  // with no way to be reached and no way to be given a number. DRIVER and
+  // CLIENT stay out: they are not staff and are reached by other paths.
   const emergencyContacts = await prisma.user.findMany({
-    where: { isActive: true, role: { in: ['ADMIN', 'AGENT', 'MANAGER'] } },
+    where: { isActive: true, role: { notIn: ['DRIVER', 'CLIENT'] } },
     orderBy: [{ isEmergencyContact: 'desc' }, { name: 'asc' }],
     select: { id: true, name: true, role: true, isEmergencyContact: true, emergencyPhone: true, phone: true },
   })
