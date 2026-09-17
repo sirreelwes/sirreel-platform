@@ -22,7 +22,7 @@ import {
   type ServiceableAsset,
 } from '@/lib/scheduling/availability'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
-import { quotedBlocks, resolveAssignWindow, type ResolvedWindow } from '@/lib/scheduling/assignWindow'
+import { blockCapacity, quotedBlocks, resolveAssignWindow, type ResolvedWindow } from '@/lib/scheduling/assignWindow'
 import { quotedLinesForHold } from '@/lib/scheduling/quotedLines'
 import { formatCalendarDate, formatCalendarRange } from '@/lib/dates/calendarDate'
 
@@ -83,6 +83,8 @@ export type AssignUnitResult =
       window: { start: string; end: string; source: ResolvedWindow['source'] }
       /** The unit this one replaced, when the caller asked for a swap. */
       replacedAssetId: string | null
+      /** Driver invites carried from the replaced unit onto this one. */
+      driversMoved: number
     }
   | { ok: false; status: number; body: Record<string, unknown> }
 
@@ -141,6 +143,17 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
         ok: false,
         error: 'replace-checked-out',
         reason: 'that unit is checked out — use the return flow, not a pick change',
+      })
+    }
+    // A checkout record is the yard's paper on THAT unit going out; the
+    // FK on it is RESTRICT, so the swap's delete would fail after the
+    // capacity checks passed. Say why here instead.
+    const paperwork = await prisma.checkoutRecord.count({ where: { bookingAssignmentId: found.id } })
+    if (paperwork > 0) {
+      return refuse(409, {
+        ok: false,
+        error: 'replace-checked-out',
+        reason: 'that unit already has a check-out record — use the return flow, not a pick change',
       })
     }
     outgoing = found
@@ -229,11 +242,31 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
   if (occupying.some((a) => a.assetId === args.assetId)) {
     return refuse(409, { error: 'this asset is already assigned to this booking item for those dates' })
   }
-  if (occupying.length >= bookingItem.quantity) {
+  // "Full" by the SAME rule the picker shows (blockCapacity): the quoted
+  // block's count and exact coverage when the window is a quoted block.
+  // The old test here counted every overlapping assignment against the
+  // hold's quantity, so a second van on the job with overlapping days
+  // made this block read full while the picker read it open, and the rep
+  // was refused with nothing on screen to explain it (Jose, 2026-09-17).
+  const capacity = blockCapacity({
+    window: { start: windowStart, end: windowEnd },
+    blocks,
+    assignments: standingAssignments,
+    itemQuantity: bookingItem.quantity,
+  })
+  if (capacity.remaining === 0) {
+    const swappable = occupying.filter((a) => a.status === 'ASSIGNED').map((a) => a.assetId)
     return refuse(409, {
-      error: 'booking item is already fully assigned',
-      assignedCount: occupying.length,
-      quantity: bookingItem.quantity,
+      ok: false,
+      error: 'fully-assigned',
+      reason:
+        `Every unit for ${formatCalendarRange(windowStart, windowEnd)} is already assigned (${capacity.assignedCount} of ${capacity.quantity}).` +
+        (swappable.length ? ' Sending a different unit? Name the one it replaces and it swaps in.' : ' Its units are checked out — changing one is a return, not a pick change.'),
+      assignedCount: capacity.assignedCount,
+      quantity: capacity.quantity,
+      /** Units on this window a swap could take off — the picker offers these. */
+      swappableAssetIds: swappable,
+      window: { start: windowStart, end: windowEnd, source: resolved.source },
     })
   }
 
@@ -371,7 +404,8 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
 
   const result = await prisma.$transaction(async (tx) => {
     // Same transaction: the block is never left uncovered between the two.
-    if (outgoing) await tx.bookingAssignment.delete({ where: { id: outgoing.id } })
+    // The replacement is created FIRST so what hangs off the outgoing
+    // unit has somewhere to go before it is dropped.
     const created = await tx.bookingAssignment.create({
       data: {
         bookingItemId: bookingItem.id,
@@ -389,10 +423,32 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
         asset: { select: { id: true, unitName: true, tier: true } },
       },
     })
+    let driversMoved = 0
+    if (outgoing) {
+      // The DRIVER goes with the job, not the van. A driver named on the
+      // outgoing unit (by HQ or by the production from their portal) keeps
+      // their job page and its link; it now shows the replacement, whose
+      // lock box code is what that page releases. Without this the swap
+      // either failed on the driver row's FK or silently orphaned the
+      // driver's invite.
+      const moved = await tx.driverAssignment.updateMany({
+        where: { bookingAssignmentId: outgoing.id },
+        data: { bookingAssignmentId: created.id },
+      })
+      driversMoved = moved.count
+      // A walkaround is of the OLD van and stays on that asset's history;
+      // it must not be re-pointed at a unit nobody inspected. Detached
+      // explicitly rather than trusting the FK's SET NULL.
+      await tx.inspection.updateMany({
+        where: { bookingAssignmentId: outgoing.id },
+        data: { bookingAssignmentId: null },
+      })
+      await tx.bookingAssignment.delete({ where: { id: outgoing.id } })
+    }
     // Counted for THIS window — the item is "assigned" when the block being
     // booked has its trucks, not when some other date block does.
-    const newAssignedCount = occupying.length + 1
-    const covered = newAssignedCount >= bookingItem.quantity
+    const newAssignedCount = capacity.assignedCount + 1
+    const covered = newAssignedCount >= capacity.quantity
     let updatedItemStatus: string = bookingItem.status
     // A RELEASED line that someone is now picking a unit for is being
     // re-asserted — so say so on the line, don't leave the truck bound to
@@ -419,7 +475,7 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
       await tx.bookingItem.update({ where: { id: bookingItem.id }, data: { status: 'ASSIGNED' } })
       updatedItemStatus = 'ASSIGNED'
     }
-    return { created, newAssignedCount, updatedItemStatus }
+    return { created, newAssignedCount, updatedItemStatus, driversMoved }
   })
 
   // The mirror of 'booking_item.released'. A hold coming BACK is as much
@@ -455,10 +511,10 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
     assignment: result.created,
     bookingItem: {
       id: bookingItem.id,
-      quantity: bookingItem.quantity,
+      quantity: capacity.quantity,
       status: result.updatedItemStatus,
       assignedCount: result.newAssignedCount,
-      remaining: Math.max(0, bookingItem.quantity - result.newAssignedCount),
+      remaining: Math.max(0, capacity.quantity - result.newAssignedCount),
     },
     bufferOverrideUsed: state === 'buffer' && Boolean(args.bufferOverride),
     window: {
@@ -467,5 +523,6 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
       source: resolved.source,
     },
     replacedAssetId: outgoing?.assetId ?? null,
+    driversMoved: result.driversMoved,
   }
 }

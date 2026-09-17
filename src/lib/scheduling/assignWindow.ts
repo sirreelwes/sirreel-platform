@@ -105,6 +105,55 @@ export function coverageOfBlock(block: DateWindow, assignments: AssignmentSpan[]
   return assignments.filter((a) => sameDay(a.startDate, block.start) && sameDay(a.endDate, block.end)).length
 }
 
+export interface BlockCapacity {
+  /** Units this block asks for — the quoted count when the window IS a
+   *  quoted block, the hold's own quantity otherwise. */
+  quantity: number
+  assignedCount: number
+  remaining: number
+  /** The quoted block the window landed on, or null when none matches. */
+  block: QuotedBlock | null
+}
+
+/**
+ * HOW MANY units a window has, and how many it still wants — ONE rule for
+ * the picker and the write.
+ *
+ * Jose, 2026-09-17, on Mad Minds (SR-JOB-0389): changing Cargo 35 for
+ * another van was refused with "booking item is fully assigned". The
+ * picker in front of him counted EXACT-DAY coverage against the QUOTED
+ * quantity (the ADV Carrera rule above), while the write counted every
+ * OVERLAPPING assignment against the hold's own quantity. Two answers to
+ * "is this block full?" on one screen: the picker offered a plain assign
+ * or a swap on its numbers, and the server refused on its own.
+ *
+ * When the window is a quoted block, the block's quantity and exact
+ * coverage are the truth — that is what the quote sold and what the
+ * picker shows. With no quoted lines to read (a bare hold, a gantt drag
+ * on an order with no vehicle line) there is no block to be exact
+ * against, so it falls back to the hold's quantity and overlap, which is
+ * all either side ever had there.
+ */
+export function blockCapacity(args: {
+  window: DateWindow
+  blocks?: QuotedBlock[]
+  assignments?: AssignmentSpan[]
+  itemQuantity: number
+}): BlockCapacity {
+  const assignments = args.assignments ?? []
+  // A block quoting ZERO units (a line zeroed out but not removed) is no
+  // block to count against — it would read every window as full.
+  const block =
+    (args.blocks ?? []).find(
+      (b) => b.quantity > 0 && sameDay(b.start, args.window.start) && sameDay(b.end, args.window.end),
+    ) ?? null
+  const quantity = block ? block.quantity : Math.max(0, Math.floor(args.itemQuantity))
+  const assignedCount = block
+    ? coverageOfBlock(block, assignments)
+    : assignments.filter((a) => windowsOverlap({ start: a.startDate, end: a.endDate }, args.window)).length
+  return { quantity, assignedCount, remaining: Math.max(0, quantity - assignedCount), block }
+}
+
 export interface ResolveArgs {
   /** The hold's own window — the booking envelope. Always present. */
   hold: DateWindow

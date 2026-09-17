@@ -24,7 +24,7 @@ import { getCategoryAvailability } from '@/lib/scheduling/availability'
 import type { AssetTier } from '@prisma/client'
 import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
-import { coverageOfBlock, quotedBlocks, resolveAssignWindow } from '@/lib/scheduling/assignWindow'
+import { blockCapacity, coverageOfBlock, quotedBlocks, resolveAssignWindow } from '@/lib/scheduling/assignWindow'
 import { quotedLinesForHold } from '@/lib/scheduling/quotedLines'
 
 export const dynamic = 'force-dynamic'
@@ -104,10 +104,13 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     requested: { start: parseDay(url.searchParams.get('start')), end: parseDay(url.searchParams.get('end')) },
   })
 
-  const activeBlock =
-    blocks.find(
-      (b) => b.start.getTime() === window.start.getTime() && b.end.getTime() === window.end.getTime(),
-    ) ?? null
+  // Counted for the BLOCK in front of you, not for the whole item: a
+  // hold shared by two date blocks reads "1 of 2 assigned" for the days
+  // being filled, not "2 of 3" for the job. The SAME function the write
+  // refuses on — the picker and the button used to count differently
+  // (Jose, 2026-09-17), so a swap the picker never offered was the only
+  // thing the server would have accepted.
+  const capacity = blockCapacity({ window, blocks, assignments: liveAssignments, itemQuantity: bookingItem.quantity })
 
   // Exclude THIS booking item's own assignments + pending demand so the
   // unit it's already on isn't counted as a conflict against itself and the
@@ -199,11 +202,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     ok: true,
     bookingItem: {
       id: bookingItem.id,
-      // Counted for the BLOCK in front of you, not for the whole item: a
-      // hold shared by two date blocks reads "1 of 2 assigned" for the
-      // days being filled, not "2 of 3" for the job. Falls back to the
-      // item when there are no quoted lines to divide it by.
-      quantity: activeBlock?.quantity ?? bookingItem.quantity,
+      quantity: capacity.quantity,
       status: bookingItem.status,
       // Queue position. The picker needs it because a BACKUP is allowed
       // to bind to a unit that is already out — that is the whole point
@@ -211,12 +210,8 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
       // every booked candidate, so a 2nd hold could never be pointed at
       // the truck it was queued behind (Jose, 2026-09-16).
       holdRank: bookingItem.holdRank,
-      assignedCount: activeBlock ? coverageOfBlock(activeBlock, liveAssignments) : assignedAssetIds.size,
-      remaining: Math.max(
-        0,
-        (activeBlock?.quantity ?? bookingItem.quantity) -
-          (activeBlock ? coverageOfBlock(activeBlock, liveAssignments) : assignedAssetIds.size),
-      ),
+      assignedCount: capacity.assignedCount,
+      remaining: capacity.remaining,
     },
     booking: bookingItem.booking,
     orderId: order?.id ?? null,
