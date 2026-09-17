@@ -2543,11 +2543,36 @@ export default function OrderDetailPage() {
     if (editCatalogType) {
       body.type = resolveLineType(editCatalogType, (editDept || 'PRO_SUPPLIES') as LineItemDepartment);
     }
-    const res = await fetch(`/api/orders/${order?.id}/line-items/${lineId}`, {
+    const putLine = async (extra?: Record<string, unknown>) => fetch(`/api/orders/${order?.id}/line-items/${lineId}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      body: JSON.stringify({ ...body, ...(extra ?? {}) }),
     });
+    let res = await putLine();
+    // Capacity-conflict 409 — a quantity bump (or a re-pick onto another
+    // class) the fleet has no room for. Same confirm-and-retry as the
+    // add-line path: name who is in the way, and let the rep override.
+    // Until 2026-09-17 this fell into the generic alert below, so the
+    // only way past "would exceed available capacity" was to give up.
+    if (res.status === 409) {
+      const data = await res.json().catch(() => ({}));
+      if (data?.requiresConfirmation && Array.isArray(data.conflicts)) {
+        const conflictLines = (data.conflicts as Array<{ bookingNumber: string; jobName: string | null; startDate: string; endDate: string; quantity: number }>)
+          .map((c) => `  • ${c.bookingNumber}${c.jobName ? ' · ' + c.jobName : ''} · ${c.startDate}–${c.endDate} · qty ${c.quantity}`)
+          .join('\n');
+        const proceed = confirm(
+          `${data.reason}\n\n` +
+          (conflictLines ? `Conflicting bookings:\n${conflictLines}\n\n` : '') +
+          `Override and proceed anyway? The override is stamped on the BookingItem and visible to dispatch.`,
+        );
+        if (!proceed) { setSavingLineId(null); return; }
+        res = await putLine({ confirmConflict: true });
+      } else {
+        alert(data?.reason || data?.error || `Save failed (HTTP ${res.status})`);
+        setSavingLineId(null);
+        return;
+      }
+    }
     if (!res.ok) {
       const data = await res.json().catch(() => ({}));
       // Inverted-date guard, dept-gate, and capacity conflicts all
@@ -2567,9 +2592,14 @@ export default function OrderDetailPage() {
       | { blocked?: { reason: string }[]; tight?: { reason: string }[] }
       | null
       | undefined;
+    // ...and a quantity / class edit says what the hold did about it when
+    // the rep still has something to do (units already assigned, a class
+    // released).
+    const holdNote = (saved?.holds as { note?: string | null } | null | undefined)?.note;
     const notes = [
       ...(followed?.blocked ?? []).map((b) => b.reason),
       ...(followed?.tight ?? []).map((t) => t.reason),
+      ...(holdNote ? [holdNote] : []),
     ];
     if (notes.length > 0) alert(notes.join('\n'));
     setSavingLineId(null);

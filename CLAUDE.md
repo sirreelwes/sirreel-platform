@@ -970,8 +970,43 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   class lives on the catalog row). `holdCategoryForLine()` in
   holdOnQuoteSend.ts is now the exported, pure resolution the hold itself
   uses; resolve a line's class through it, never off `assetCategoryId`
-  alone. The qty-change branch of that route still gates the old way —
-  open, not touched here.
+  alone.
+- **The quantity / catalog-binding branch is closed too (same day).** It
+  gated on `newIsHold` off the line's own `assetCategoryId`, so a real van
+  edited 1 → 2 left the hold at 1 and the capacity confirm never fired.
+  Now: both class ids come from `holdCategoryForLine` (before and after the
+  edit — the order page sends both binding fields on EVERY save, so the
+  route compares against the row, not "present in the body");
+  `planHoldSyncOnLineEdit()` (pure, holdOnQuoteSend.ts, `npm run
+  test:quote-hold`) decides what the hold is owed; the WRITE is
+  `holdOnQuoteSend(orderId)` — SET to the peak, never the delta-summing
+  `syncHoldOnLineUpdate` (one van quoted for two separate weeks, one block
+  bumped to 2, is a hold of 2, not 3). The 409 `requiresConfirmation` is
+  kept (only the increase must fit; a class the line did not hold before
+  costs the whole quantity; checked on the line's NEW days), and
+  `saveEditLine` now does the add-line confirm-and-retry instead of a
+  dead-end alert. Response carries `holds { quantityBefore, quantityAfter,
+  releasedUnits, note }`; the page alerts `note`.
+- **Two limits of the recompute, both deliberate:** it never shrinks a hold
+  whose units are ASSIGNED (a quantity cut on a bound line leaves the hold
+  and says so in `holds.note` — release the truck on the reservation), and
+  it only visits classes still quoted, so a class the line LEFT is
+  released by asset via `releaseBookingItem` when `categoryStillQuoted()`
+  is false. **Never `syncHoldOnLineDelete` for that** — at zero it DELETES
+  the BookingItem and the FK cascade takes every unit on it. The line
+  DELETE handler still does exactly that, and still gates on
+  `assetCategoryId` (so for a catalog-bound van it releases nothing) —
+  OPEN. `syncHoldOnLineAdd/Update` now prefer a live rank-1 row and revive
+  a released one from zero (a re-added class used to grow the dead row:
+  released at 2, re-added 2, hold read 4).
+- **Overlaps an UNMERGED commit, `66bec271` "Order lines carry their
+  reserved truck"** (2026-09-16, on a detached HEAD in a scratch worktree,
+  on no branch as of this writing): it rewrites the same PUT/DELETE blocks
+  around a `BookingAssignment.orderLineItemId` stamp (quantity down
+  releases THAT truck, class change = 409 USE_SWITCH_CLASS, DELETE releases
+  by asset). Its holdsSync.ts hunk is applied here verbatim; the route will
+  conflict. When it lands, keep ITS unit handling and THIS section's
+  peak-SET write + class resolution.
 - **Which units follow:** the ones carrying the old block's days verbatim
   (the same rule coverage counts by), up to the moved line's quantity, this
   order's own before unstamped ones; a sibling order's unit never moves.
