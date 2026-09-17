@@ -34,6 +34,7 @@ scripts/*
 !scripts/add-will-call-receive-method.ts
 !scripts/add-deliver-to-sirreel-receive-method.ts
 !scripts/add-partner-sms-columns.ts
+!scripts/add-job-thread-tables.ts
 !scripts/add-collector-columns.ts
 !scripts/add-unit-scan-table.ts
 !scripts/add-unit-checks-columns.ts

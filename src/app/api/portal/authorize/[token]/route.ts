@@ -3,7 +3,7 @@ import { markRepVisibleToClient } from '@/lib/sales/repVisibility'
 import { prisma } from '@/lib/prisma'
 import { verifyAuthorizeToken } from '@/lib/portal/authorizeToken'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { buildPortalInviteEmail } from '@/lib/email/templates/portalInvite'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
 import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
@@ -45,6 +45,7 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
     where: { id: payload.orderId },
     select: {
       id: true,
+      jobId: true,
       portalSlug: true,
       job: { select: { name: true } },
       company: { select: { name: true } },
@@ -110,7 +111,8 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
   // The client is being emailed with this rep named on it — that act is
   // what establishes them, so the portal should agree with the email.
   await markRepVisibleToClient(order.id)
-  await sendAgreementEmail({
+  await sendOnJobThread({
+    jobId: order.jobId,
     label: 'portal/authorize-approved-invite',
     to: [newPerson.email],
     // The invite names the rep; a reply should reach their watched

@@ -211,6 +211,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     /** Attach this job's counter-proposal PDF (the "Send to client" button
      *  on the job page's counter-proposal card and the review desk). */
     counterReviewId?: unknown
+    /** The sender reviewed To / Cc / the message and pressed Send a second
+     *  time. Wes 2026-09-17: "things that are sent to the client need to
+     *  be confirmed." Required — a composer that skips the review cannot
+     *  send. */
+    confirmed?: unknown
+  }
+
+  if (payload.confirmed !== true) {
+    return NextResponse.json(
+      { ok: false, error: 'Review the message first — sends to the client are confirmed before they go out.' },
+      { status: 400 },
+    )
   }
 
   // Re-parsed server-side. The browser's validation is a convenience, not
@@ -285,9 +297,18 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   // filed (the client's inquiry, the quote…), the job address on Cc, the
   // job's subject. Recorded on the root thread by the helper, so the Job
   // page's "Email threads" shows our half without the old hand-filing.
+  // From = the AUTHOR (Phase 2, Wes 2026-09-17: the client sees Jose, not a
+  // system). Through Resend's verified sirreel.com domain — the cadence
+  // runner has sent as the agent this way since it shipped, so DKIM/SPF
+  // hold. Reply-To stays the agent's watched inbox as before. A sender
+  // outside the domain (a shared desk login) falls back to SirReel HQ.
+  const from = /@sirreel\.com$/i.test(me.email)
+    ? `${(me.name || 'SirReel').replace(/[<>"\r\n]/g, '').trim() || 'SirReel'} <${me.email}>`
+    : undefined
   const result = await sendOnJobThread({
     jobId: job.id,
     staffEmail: me.email,
+    from,
     to: [to],
     cc: ccWithTeam.length > 0 ? ccWithTeam : undefined,
     replyTo: agentReplyTo(me.email) ?? undefined,

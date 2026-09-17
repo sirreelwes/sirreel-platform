@@ -35,7 +35,7 @@
 
 import Link from 'next/link'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useJobsList } from './JobsListProvider'
 import {
   BOARD_PHASES,
@@ -269,6 +269,10 @@ function JobTile({
   // HQ day-to-day, this keeps the red band from re-accreting one row
   // at a time.
   const [marking, setMarking] = useState(false)
+  // The "Approved — book it" chip navigates itself (see the chip). The
+  // row is a <Link>, so the chip cannot be one too — it preventDefaults
+  // and pushes, the same shape the phase buttons use.
+  const router = useRouter()
 
   const phase = jobPhase(state)
 
@@ -353,6 +357,9 @@ function JobTile({
   // Quote out, welcome email not sent (Wes 2026-09-11: "remind us to send
   // the welcome email"). The send lives on the job page — this is the nudge.
   const welcomeDue = j.welcome?.state === 'due'
+  // One-thread-per-job: the client's newest message is newer than our newest
+  // send on any thread filed to this job. Answered from the job page.
+  const clientWaiting = !!j.conversation?.awaitingReply
   const billing = j.billing && BILLING_WORDS[j.billing.state] ? j.billing : null
   // Fleet handed back (Wes 2026-09-08: "the job tile also needs to have
   // released clearly readable and may be a red outline"). It outranks the
@@ -526,7 +533,7 @@ function JobTile({
         {/* Row 5 — what's in the way, and what's owed. Each is a
             sentence-chip, not an abbreviation. Omitted entirely when
             there is nothing to say. */}
-        {(readiness || toBook > 0 || redlines > 0 || welcomeDue || billing) && (
+        {(readiness || toBook > 0 || redlines > 0 || welcomeDue || billing || clientWaiting) && (
           <span className="flex items-center gap-1.5 flex-wrap pt-0.5">
             {redlines > 0 && (
               <span
@@ -537,12 +544,34 @@ function JobTile({
                 Client redlined the agreement{redlines > 1 ? ` ×${redlines}` : ''}
               </span>
             )}
+            {/* It TAKES you there now (Wes 2026-09-17). As plain text
+                inside the row's link this chip told a rep to book
+                something and then dropped them at the top of a long job
+                page, where the header badge says BOOKED — the rollup maps
+                APPROVED and BOOKED to one state — and nothing named the
+                order. `?book=1` opens the approved orders and scrolls the
+                prompt into view. */}
             {toBook > 0 && (
-              <span
-                title={`${toBook} approved order${toBook === 1 ? '' : 's'} waiting to be booked`}
-                className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded bg-amber-600 text-white"
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  router.push(`/jobs/${j.id}?book=1`)
+                }}
+                title={`${toBook} approved order${toBook === 1 ? '' : 's'} waiting to be booked — open the job and book ${toBook === 1 ? 'it' : 'them'}`}
+                className="text-[10.5px] font-semibold px-1.5 py-0.5 rounded bg-amber-600 text-white hover:bg-amber-500 transition-colors"
               >
                 Approved — book it{toBook > 1 ? ` ×${toBook}` : ''}
+              </button>
+            )}
+            {clientWaiting && (
+              <span
+                title={`The client wrote${j.conversation?.lastInboundAt ? ` ${fmtRelative(j.conversation.lastInboundAt)}` : ''} and nobody has answered yet. Open the job → Conversation.`}
+                className="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded bg-chip-warn-bg text-chip-warn-fg"
+              >
+                <Mail size={10} aria-hidden />
+                Client replied
               </span>
             )}
             {welcomeDue && (

@@ -1,9 +1,9 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
 import { useMoneyFormatter, useMoneyVisible } from '@/hooks/useMoney';
 import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { deriveJobDateRange, deriveOrderWindow, isoDate } from '@/lib/jobs/dateRange';
 import { buildReservedAssets, DEAD_ORDER_STATUSES } from '@/lib/jobs/reservedAssets';
@@ -34,7 +34,7 @@ import { notifyJobsChanged } from '@/components/jobs/JobsListProvider';
  * CompanyAgreement.autoCoverJobs — see src/lib/orders/annualCoverage.ts.
  */
 const SHOW_AGREEMENT_ON_FILE = true;
-import { JobEmailThreads } from '@/components/jobs/JobEmailThreads';
+import { JobConversation, ConversationTabs } from '@/components/jobs/JobConversation';
 import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { JobWelcomeButton } from '@/components/jobs/JobWelcomeButton';
 import { AddAssetButton } from '@/components/jobs/AddAssetButton';
@@ -52,7 +52,6 @@ import { TextButton } from '@/components/sms/TextButton';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
 import { SelfServeEmailButton } from '@/components/jobs/SelfServeEmailButton';
-import { JobEmailButton } from '@/components/jobs/JobEmailButton';
 import { MarkBookedButton } from '@/components/jobs/MarkBookedButton';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
@@ -75,7 +74,7 @@ import { STAGE_CHIP, STAGE_RAIL, readinessMeterStyle } from '@/lib/scheduling/st
 import { computeReadiness } from '@/lib/jobs/readiness';
 import { orderContentSummary } from '@/lib/orders/contentSummary';
 import { rollupCoiState } from '@/lib/coi/coiState';
-import { AlertTriangle, CalendarDays, Check, User } from 'lucide-react'
+import { AlertTriangle, CalendarDays, Check, User, Mail } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { canCreateOrders } from '@/lib/permissions';
 import { jobBlindRollup } from '@/lib/fleet/blindRule';
@@ -528,6 +527,32 @@ export default function JobDetailPage() {
   const canSeeMoney = useMoneyVisible();
   const params = useParams();
   const router = useRouter();
+  // One-thread-per-job (Phase 2): the Conversation is a pinned rail at
+  // 1280px+ and a Details | Conversation tab below that. `?tab=conversation`
+  // is the deep link a notification lands on (same pattern as
+  // /jobs?panel=incoming). The panel is mounted ONCE and shown/hidden by
+  // class, so it loads once and its "client replied" dot reaches the tab.
+  const searchParams = useSearchParams();
+  const tab: 'details' | 'conversation' = searchParams?.get('tab') === 'conversation' ? 'conversation' : 'details';
+  const setTab = useCallback(
+    (t: 'details' | 'conversation') => {
+      const q = new URLSearchParams(searchParams?.toString() ?? '');
+      if (t === 'conversation') q.set('tab', 'conversation');
+      else q.delete('tab');
+      router.replace(`${window.location.pathname}${q.toString() ? `?${q.toString()}` : ''}`, { scroll: false });
+    },
+    [router, searchParams],
+  );
+  const [convoAwaiting, setConvoAwaiting] = useState(false);
+  const onConvoSummary = useCallback((sum: { awaitingReply: boolean }) => setConvoAwaiting(sum.awaitingReply), []);
+  // `?book=1` — where the tile's "Approved — book it" chip lands. The chip
+  // used to be plain text inside the row's link, so pressing it dropped a
+  // rep at the top of a long page with nothing saying WHICH order it meant
+  // (Wes 2026-09-17). Now it opens the approved orders and puts the
+  // book-it prompt on screen. Once per landing: a rep who scrolls away is
+  // not yanked back on the next re-render.
+  const bookDeepLink = searchParams?.get('book') === '1';
+  const bookLandedRef = useRef(false);
   const id = params?.id as string;
 
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -662,6 +687,25 @@ export default function JobDetailPage() {
       next.has(oid) ? next.delete(oid) : next.add(oid);
       return next;
     });
+
+  // Land the `?book=1` deep link: open every approved-unbooked order and
+  // scroll the prompt into view. Runs after the job is in state, so the
+  // #book-it node it looks for has rendered.
+  useEffect(() => {
+    if (!bookDeepLink || !job || bookLandedRef.current) return;
+    const approved = job.orders.filter((o) => o.status === 'APPROVED');
+    if (approved.length === 0) return;
+    bookLandedRef.current = true;
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      for (const o of approved) next.add(o.id);
+      return next;
+    });
+    const raf = requestAnimationFrame(() => {
+      document.getElementById('book-it')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [bookDeepLink, job]);
 
   // Add-contact form on the Contacts card. Contacts previously attached only
   // through order flows; since the payment-options email routes by them
@@ -995,6 +1039,21 @@ export default function JobDetailPage() {
   // Phase 7 Pass A — at-a-glance engagement rollup. All derived from
   // the expanded payload; no extra API call.
   const liveOrders = job.orders.filter((o) => o.status !== 'CANCELLED');
+  // APPROVED AND NOT BOOKED — the one state where the ball is entirely in
+  // our court and the next move is a single press.
+  //
+  // Wes 2026-09-17, on SR-JOB-0312: "It says that the production supply
+  // order is booked but it does not give me any other options there. On
+  // the tile it says that I need to book it." Both were right about
+  // different orders. The header badge is `rollupCadence`, which maps
+  // APPROVED and BOOKED to the same 'booked' state (lib/jobs/cadence.ts)
+  // — deliberately, because a new CadenceState would re-tier the board's
+  // colours, legend and sort — so on a job carrying one booked order and
+  // one approved one the header reads BOOKED and prompts nothing, while
+  // the tile's `approvedUnbooked` count says book it. The badge is not
+  // changing; this prompt is the qualifier beside it, and it NAMES the
+  // order, which is what the tile could never say.
+  const approvedUnbooked = liveOrders.filter((o) => o.status === 'APPROVED');
   // A job has no dates of its own — see lib/jobs/dateRange. Show the span
   // its ORDERS cover instead of a separately-typed job range that drifts.
   // NOT displayed — a job has no dates of its own and HQ no longer shows a
@@ -1529,7 +1588,9 @@ const driverTone = (d: any): string => {
   const foldedChips = FOLD_META.filter((m) => sectionEmpty[m.key] && !openSections.has(m.key));
 
   return (
-    <div className="max-w-5xl mx-auto space-y-3 text-[15px]">
+    <div className="mx-auto max-w-5xl xl:max-w-[1480px] xl:grid xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-4 xl:items-start">
+      <ConversationTabs tab={tab} onChange={setTab} awaiting={convoAwaiting} />
+      <div className={`max-w-5xl mx-auto space-y-3 text-[15px] min-w-0 ${tab === 'conversation' ? 'hidden xl:block' : ''}`}>
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-zinc-100 border border-zinc-300 text-zinc-900 text-[15px] px-4 py-2 rounded-lg shadow-xl">
           {toast}
@@ -1566,15 +1627,15 @@ const driverTone = (d: any): string => {
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
-              <span className="text-[14px] font-mono font-bold tracking-wide text-zinc-900 bg-zinc-100 border border-zinc-300 rounded px-2.5 py-1">{job.jobCode}</span>
+              <span className="text-[14px] font-mono font-bold tracking-wide whitespace-nowrap text-zinc-900 bg-zinc-100 border border-zinc-300 rounded px-2.5 py-1">{job.jobCode}</span>
               <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wider ${STAGE_CHIP[stage]}`}
+                className={`text-[11px] font-bold px-2 py-0.5 rounded uppercase tracking-wider whitespace-nowrap ${STAGE_CHIP[stage]}`}
                 title={STAGE_HINT[stage]}
               >
                 {STAGE_LABEL[stage]}
               </span>
               <span
-                className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider ${CADENCE_BADGE[cadenceState]}`}
+                className={`text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider whitespace-nowrap ${CADENCE_BADGE[cadenceState]}`}
                 title={
                   job.status === 'LOST' || job.status === 'WRAPPED'
                     ? `Job is ${job.status.toLowerCase()} — that overrides what the orders say`
@@ -1585,11 +1646,14 @@ const driverTone = (d: any): string => {
               </span>
               {job.returnedAt && (
                 <span
-                  className="text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider bg-emerald-50 text-emerald-700 border-emerald-200"
+                  className="text-[11px] font-bold px-2 py-0.5 rounded border uppercase tracking-wider whitespace-nowrap bg-emerald-50 text-emerald-700 border-emerald-200"
                   title={`Physically returned ${fmtDateTime(job.returnedAt)}${job.returnedBy ? ` · marked by ${job.returnedBy.name}` : ''}`}
                 >
                   Returned
                 </span>
+              )}
+              {job.archivedAt && (
+                <span className="text-[11px] font-bold uppercase tracking-wider whitespace-nowrap text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-0.5">Archived</span>
               )}
               {/* Solid, not outlined, and a link rather than a label: a
                   redline is a client waiting on an answer, and the answer is
@@ -1631,6 +1695,15 @@ const driverTone = (d: any): string => {
                 </>
               )}
             </div>
+            {/* When and by whom — the Returned chip above says THAT it came
+                back; this says when. Under the badges, in the column that
+                wraps, never in the shrink-0 menu column (see there). */}
+            {job.returnedAt && (
+              <div className="mt-1.5 text-[12px] text-emerald-700 font-semibold">
+                Returned {fmtDateTime(job.returnedAt)}
+                {job.returnedBy && <span className="text-zinc-700 font-normal"> · {job.returnedBy.name}</span>}
+              </div>
+            )}
             <h1
               className="font-display text-[30px] leading-tight text-zinc-900 mt-2 truncate"
               style={{ letterSpacing: '-0.02em' }}
@@ -1724,7 +1797,17 @@ const driverTone = (d: any): string => {
                 )}
               </div>
             )}
-              <JobEmailButton jobId={job.id} />
+              <button
+                type="button"
+                onClick={() => {
+                  setTab('conversation');
+                  setTimeout(() => window.dispatchEvent(new CustomEvent('job-conversation:focus')), 60);
+                }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-semibold rounded-lg border border-lt-hairline bg-lt-card text-lt-fg2 hover:text-lt-fg"
+                title="Write to the client on this job's one thread"
+              >
+                <Mail size={13} aria-hidden /> Conversation
+              </button>
             </div>
             {/* In-Job creation — the ONLY place quotes/reservations are
                 created (canonical-Job consolidation). Job pre-seeded. */}
@@ -1747,6 +1830,44 @@ const driverTone = (d: any): string => {
                   nothing has welcomed them; quiet once sent. */}
               <JobWelcomeButton jobId={job.id} onSent={load} />
             </div>
+
+            {/* APPROVED, NOT BOOKED — named, with the press beside it.
+                The header badge cannot say this (see `approvedUnbooked`
+                above), so it is said here, in the row that already
+                carries the other "this is due" actions. One line per
+                order: a job can carry more than one, and "which order?"
+                was the whole complaint. */}
+            {approvedUnbooked.length > 0 && (
+              <div
+                id="book-it"
+                className="mt-3 scroll-mt-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5"
+              >
+                <div className="text-[12px] font-semibold text-amber-900">
+                  {approvedUnbooked.length === 1
+                    ? 'One order is approved but not booked yet'
+                    : `${approvedUnbooked.length} orders are approved but not booked yet`}
+                </div>
+                <div className="mt-0.5 text-[12px] text-amber-900/80">
+                  The client said yes. Booking firms the held units and routes the lines to the floor.
+                </div>
+                <div className="mt-2 space-y-2">
+                  {approvedUnbooked.map((o) => (
+                    <div key={o.id} className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[13px] font-semibold text-amber-900">{o.orderNumber}</span>
+                      <span className="text-[12px] text-amber-900/80">
+                        {orderContentSummary(o.lineItems) ?? 'No line items yet'}
+                      </span>
+                      <MarkBookedButton
+                        orderId={o.id}
+                        orderNumber={o.orderNumber}
+                        orderStatus={o.status}
+                        onDone={load}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {job.fromInquiry && (
               <div className="mt-1 flex items-center gap-1.5 text-[12px] text-zinc-700">
                 <span>Originated from</span>
@@ -1768,9 +1889,15 @@ const driverTone = (d: any): string => {
             )}
           </div>
 
+          {/* Only the menu lives here. This column is shrink-0 so the
+              button never collapses, which means EVERYTHING in it sets a
+              floor on its width — the "Returned … · name" line used to sit
+              here and, on a phone, claimed ~300px and squeezed the badges
+              and title into a sliver (Wes 2026-09-17). That line and the
+              Archived chip now sit under the badges in the wrapping column.
+              The white S logo that sat above the button is gone too: white
+              on a white card, it painted nothing and pushed the menu down. */}
           <div className="flex flex-col items-end gap-3 flex-shrink-0">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src="/s-logo-white.png" alt="SirReel" className="h-8 w-auto opacity-90 select-none" />
             <div className="flex items-center gap-2">
               <div className="relative">
                 <button
@@ -1853,15 +1980,6 @@ const driverTone = (d: any): string => {
                 )}
               </div>
             </div>
-            {job.returnedAt && (
-              <div className="text-[12px] text-emerald-700 font-semibold text-right">
-                Returned {fmtDateTime(job.returnedAt)}
-                {job.returnedBy && <span className="text-zinc-700 font-normal"> · {job.returnedBy.name}</span>}
-              </div>
-            )}
-            {job.archivedAt && (
-              <span className="text-[11px] font-bold uppercase tracking-wider text-rose-600 bg-rose-50 border border-rose-200 rounded px-2 py-0.5">Archived</span>
-            )}
           </div>
         </div>
 
@@ -3840,7 +3958,6 @@ const driverTone = (d: any): string => {
 
       {/* Email threads filed in this Job (email-in-Job, step 6). The
           component hides itself until a thread is filed. */}
-      <JobEmailThreads jobId={job.id} tone="light" />
 
       {/* Not started — every empty section, reachable in one click.
           A chip expands its section in place; a section that gains
@@ -3985,6 +4102,14 @@ const driverTone = (d: any): string => {
           }}
         />
       )}
+    </div>
+      <aside className={`min-w-0 ${tab === 'conversation' ? '' : 'hidden xl:block'} xl:sticky xl:top-4`}>
+        <JobConversation
+          jobId={job.id}
+          onSummary={onConvoSummary}
+          className="h-[calc(100vh-7rem)] min-h-[480px] xl:h-[calc(100vh-2.5rem)]"
+        />
+      </aside>
     </div>
   );
 }

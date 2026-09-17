@@ -12,8 +12,10 @@
  *     with no runner is a button that 404s;
  *   · `maintenanceRunner` refuses an id that is not in the registry, which
  *     is the allowlist itself;
- *   · NO TASK CHANGES SCHEMA. `category` has no DDL member on purpose; this
- *     catches anyone widening it and quietly adding a migration button;
+ *   · NO TASK CHANGES SCHEMA except a `schema` task, and that one may only
+ *     carry CREATE … IF NOT EXISTS statements (`isAdditiveStatement`) —
+ *     this catches anyone smuggling an ALTER or a DROP in behind the one
+ *     door that was opened for brand-new tables;
  *   · every task says what it writes and names its CLI equivalent, so the
  *     two entry points can never drift apart unnoticed;
  *   · declared params are the only ones the route will forward, so each
@@ -23,6 +25,7 @@
  */
 import { MAINTENANCE_TASKS, maintenanceTask, MAINTENANCE_RUN_ACTION } from '@/lib/admin/maintenanceTasks'
 import { maintenanceRunner, runnableIds } from '@/lib/admin/maintenanceRunners'
+import { isAdditiveStatement } from '@/lib/admin/additiveDdl'
 
 let fail = 0
 const eq = (label: string, got: unknown, want: unknown) => {
@@ -48,10 +51,26 @@ eq('a traversal id resolves to nothing', maintenanceRunner('../../etc/passwd'), 
 eq('lookup by id round-trips', maintenanceTask(ids[0])?.id, ids[0])
 eq('unknown lookup is null', maintenanceTask('nope'), null)
 
-// No migrations behind a phone button.
-yes('no task changes schema', MAINTENANCE_TASKS.every((t) => t.category === 'seed' || t.category === 'backfill'))
-const prose = MAINTENANCE_TASKS.map((t) => `${t.title} ${t.summary} ${t.writes}`).join(' ')
-yes('no task advertises DDL', !/\bALTER\b|\bCREATE TABLE\b|\bDROP\b|add-.*-columns/i.test(prose))
+// No migrations behind a phone button — except additive CREATEs, and only those.
+yes('every category is a known one', MAINTENANCE_TASKS.every((t) => t.category === 'seed' || t.category === 'backfill' || t.category === 'schema'))
+const nonSchema = MAINTENANCE_TASKS.filter((t) => t.category !== 'schema')
+const schema = MAINTENANCE_TASKS.filter((t) => t.category === 'schema')
+const prose = nonSchema.map((t) => `${t.title} ${t.summary} ${t.writes}`).join(' ')
+yes('no seed/backfill advertises DDL', !/\bALTER\b|\bCREATE TABLE\b|\bDROP\b|add-.*-columns/i.test(prose))
+yes('only a schema task carries statements', nonSchema.every((t) => t.ddl === undefined))
+yes('every schema task carries statements', schema.every((t) => (t.ddl?.statements.length ?? 0) > 0 && (t.ddl?.tables.length ?? 0) > 0))
+yes('every schema statement is CREATE … IF NOT EXISTS', schema.every((t) => t.ddl!.statements.every(isAdditiveStatement)))
+yes('every schema statement names a table the task declares', schema.every((t) =>
+  t.ddl!.statements.every((sql) => t.ddl!.tables.some((tbl) => sql.includes(`"${tbl}"`)))))
+
+// The gate itself, both directions.
+yes('gate: CREATE TABLE IF NOT EXISTS passes', isAdditiveStatement('CREATE TABLE IF NOT EXISTS "x" ("id" TEXT NOT NULL)'))
+yes('gate: CREATE UNIQUE INDEX IF NOT EXISTS passes', isAdditiveStatement('CREATE UNIQUE INDEX IF NOT EXISTS "x_key" ON "x" ("id")'))
+yes('gate: CREATE TABLE without IF NOT EXISTS is refused', !isAdditiveStatement('CREATE TABLE "x" ("id" TEXT)'))
+yes('gate: ALTER is refused', !isAdditiveStatement('ALTER TABLE "x" ADD COLUMN IF NOT EXISTS "y" TEXT'))
+yes('gate: DROP is refused', !isAdditiveStatement('DROP TABLE IF EXISTS "x"'))
+yes('gate: a CREATE hiding a DROP is refused', !isAdditiveStatement('CREATE TABLE IF NOT EXISTS "x" ("id" TEXT); DROP TABLE "y"'))
+yes('gate: a CREATE hiding an UPDATE is refused', !isAdditiveStatement('CREATE INDEX IF NOT EXISTS "i" ON "x" ("id"); UPDATE "x" SET "id" = 1'))
 
 for (const t of MAINTENANCE_TASKS) {
   yes(`${t.id}: has a title`, t.title.length > 5)

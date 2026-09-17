@@ -4,10 +4,8 @@ import { useState } from 'react';
 import { CalendarCheck, Loader2 } from 'lucide-react';
 
 /**
- * "Record client approval" — record an off-portal approval and book the
- * order in one click, from the job page. (Was "Client said yes" until
- * 2026-09-11 — Wes read it as a status that had already landed, and
- * asked whether the client had actually said yes.)
+ * Book one order from the job page — the client said yes, record it and
+ * book in a single press.
  *
  * Wes 2026-09-09: "When the client approves a quote, the units reserved
  * should show booked as should the order. If they tell us this verbally or
@@ -18,6 +16,16 @@ import { CalendarCheck, Loader2 } from 'lucide-react';
  * clicks on the ORDER page, which is not where anyone is standing when the
  * client calls. This is the same two transitions plus the piece that was
  * missing: firming the held units.
+ *
+ * **The label follows the status** (Wes 2026-09-17: the tile said
+ * "Approved — book it", this button said "Record client approval" and the
+ * order page said "Mark booked" — three names for one act, and on an
+ * APPROVED order the first two disagree about what is even left to do).
+ * An APPROVED order already HAS the client's yes on file, so the only act
+ * left is booking: the button says **Book it**. From DRAFT / QUOTE_SENT
+ * the yes is not on file yet and recording it is half the point, so it
+ * says **Record client approval**. Either way the confirm button says
+ * Book it, because that is what the press does.
  *
  * It CONFIRMS before firing because the book path emails people (the
  * client's booking welcome, and any sub-rental partner on the order). The
@@ -48,6 +56,8 @@ interface MarkBookedResult {
 
 export function MarkBookedButton({ orderId, orderNumber, orderStatus, onDone }: Props) {
   const fromDraft = orderStatus === 'DRAFT';
+  // APPROVED = the yes is already recorded; the only act left is the book.
+  const alreadyApproved = orderStatus === 'APPROVED';
   const [open, setOpen] = useState(false);
   const [note, setNote] = useState('');
   const [busy, setBusy] = useState(false);
@@ -96,13 +106,15 @@ export function MarkBookedButton({ orderId, orderNumber, orderStatus, onDone }: 
     return (
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(true); }}
-        className="ml-2 shrink-0 inline-flex items-center gap-1.5 rounded-md border border-amber-600 bg-amber-600 px-2.5 py-1 text-[12px] font-bold text-white hover:bg-amber-500 transition-colors"
+        className="shrink-0 inline-flex items-center gap-1.5 rounded-md border border-amber-600 bg-amber-600 px-2.5 py-1 text-[12px] font-bold text-white hover:bg-amber-500 transition-colors"
         title={fromDraft
           ? `Book ${orderNumber} without sending a quote — the client agreed off-portal`
-          : `Record that the client approved ${orderNumber} verbally or by email, and book it`}
+          : alreadyApproved
+            ? `${orderNumber} is approved and not booked yet — book it and firm the held units`
+            : `Record that the client approved ${orderNumber} verbally or by email, and book it`}
       >
         <CalendarCheck className="w-3.5 h-3.5" />
-        Record client approval
+        {alreadyApproved ? 'Book it' : 'Record client approval'}
       </button>
     );
   }
@@ -113,7 +125,7 @@ export function MarkBookedButton({ orderId, orderNumber, orderStatus, onDone }: 
       className="mt-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5"
     >
       <div className="text-[13px] font-semibold text-amber-900">
-        Book {orderNumber} on the client’s word
+        {alreadyApproved ? `Book ${orderNumber}` : `Book ${orderNumber} on the client’s word`}
       </div>
       <ul className="mt-1.5 space-y-0.5 text-[12px] text-amber-900/90 list-disc list-inside">
         <li>Order moves to <strong>Booked</strong>; the job reads Booked too.</li>
@@ -142,7 +154,7 @@ export function MarkBookedButton({ orderId, orderNumber, orderStatus, onDone }: 
           className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-amber-500 disabled:opacity-50 transition-colors"
         >
           {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-          {busy ? 'Booking…' : 'Mark booked'}
+          {busy ? 'Booking…' : 'Book it'}
         </button>
         <button
           onClick={() => { setOpen(false); setErr(null); }}

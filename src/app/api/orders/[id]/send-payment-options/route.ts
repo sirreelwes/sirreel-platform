@@ -39,6 +39,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
     select: {
       id: true,
       orderNumber: true,
+      jobId: true,
       jobContact: { select: { firstName: true, lastName: true, email: true } },
       job: {
         select: {
@@ -77,6 +78,7 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const result = await sendPaymentDetailsEmail({
     to: candidate.email as string,
     firstName: candidate.firstName ?? null,
+    jobId: order.jobId,
   })
   if (!result.ok) {
     // 'not_configured' means the bank details have never been filled in —
