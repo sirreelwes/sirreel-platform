@@ -585,6 +585,45 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - NOT done: the pick-list floor (`/warehouse/pick/[id]`) still records
     only `PickListItem.scannedCode`; no write-back to RW; no camera
     scanning (wedge/keyboard only, as before).
+## Walk-around photos: date on every frame, Save, out-beside-back (2026-09-17 — Hugo)
+- Hugo's three notes on the Damage ID build (HQ's vehicle check in/out,
+  `/reports/vehicles` + the filed record `/reports/vehicles/[inspectionId]`):
+  time and date at the bottom of each photo; save a photo from HQ for a
+  damage report; scroll through check-out and check-in photos side by side.
+- **One wording for a photo's time: `src/lib/fleet/photoStamp.ts`** (pure).
+  `photoStampWhen` ("Sep 16, 2026 · 2:14 PM PT", Pacific, says so), the
+  short badge form, the numbered slot title ("5. Driver side rear" — the
+  crew's DamageID number), the caption a saved copy carries, and the saved
+  file's name (`Cube-27_check-out_05-driver-side-rear_2026-09-16_14-14.jpg`).
+  The record page, the compare viewer, the return capture screen's "Out"
+  badge and the burned-in stamp all read it. Nothing else formats a
+  photo's time.
+- **WHICH time changed underneath.** `InspectionPhoto.createdAt` used to be
+  the moment the whole form was FILED (`createMany` at finalize), so every
+  photo on a walk-around carried the same time to the minute. All four
+  attach loops (staff check-out/return routes, driver `selfCheckout` /
+  `selfReturn`) now write `createdAt: blob.uploadedAt` — the moment the
+  photo landed in the store from the yard, seconds after the shutter for an
+  in-app shot, server-of-record. No schema change. Older rows keep the
+  filing time; nothing reads camera EXIF on purpose (the phone's word).
+- **Save = a stamped COPY, never the original.** `GET /api/fleet/photos/
+  [photoId]?download=1` reads the private blob, draws the caption along the
+  bottom with `@napi-rs/canvas` (`src/lib/fleet/stampPhoto.ts`) and the
+  Liberation Sans Bold that pdfjs-dist ships (a lambda has no system fonts
+  — text drawn with none is silently blank; both traced into the route in
+  next.config.js), and returns it as an attachment. HEIC or any decode
+  failure → the raw file under the same good name (`X-Photo-Stamped: 0`).
+  **`loadImage` applies EXIF orientation itself** — do not apply it again
+  (the first cut did, and portrait shots came out upside down).
+- **Out beside back: `/reports/vehicles/[inspectionId]/compare`** (+
+  `?slot=`), `WalkaroundCompare` over `buildCompareRecord()` in
+  `src/lib/fleet/comparePairs.ts` (pure). Check-out is ALWAYS the left frame
+  whichever end was opened; Julian's slots in walk order, then each end's
+  close-ups and extras (out first). Arrow keys, filmstrip, Save on each
+  frame. `filedInspection().counterpart` now carries its `inspectorName`,
+  `damagePhotos` and `otherPhotos` for it. Read-only, yard-gated.
+- `npm run test:photo-stamp`.
+
 ## Job welcome email — "here is your link" (2026-09-11)
 - Wes: after the team replies with a quote, "remind us to send the welcome
   email" — on the job tile or page or both. Both: the /jobs tile carries a
@@ -1467,6 +1506,22 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `X-SirReel-Job-Message` header even if Resend rewrote the Message-ID on
   the wire; MONEY-mode inboxes (billing@/payments@) keep an anchored
   message with no invoice keyword (`jobTagged` / `conversationLink`).
+- **The hello@ REPLY-TO CAPTURE is OFF for thread sends (2026-09-17 — Wes:
+  "I don't understand why there are emails still getting generated from the
+  system that go there").** Nothing was ever ADDRESSED to hello@ — it is
+  appended to REPLY-TO by `effectiveReplyTo` in sendAgreementEmail.ts
+  whenever the Reply-To is an on-domain address the ingest does not fully
+  watch (wes@, hq@), so what lands there is the CLIENT'S REPLY. It existed
+  because a reply to a Resend send carried an In-Reply-To HQ had never
+  stored, leaving no way to prove the reply belonged to an HQ conversation
+  (Wes's ruling 2026-08-28, chosen over ingesting wes@). **Phase 1 removed
+  that premise** — every thread send carries an HQ-minted Message-ID stored
+  on the outbound row PLUS `jobs+<code>@` on Cc, two independent anchors —
+  so `sendOnJobThread` passes `replyToExact: true` and the client sees the
+  person alone. **A send with NO job still gets the capture**: no anchor is
+  exactly the case the trick was built for (the pre-job sales welcome,
+  inquiry replies). Partner mail opted out separately on 2026-09-14. Both
+  directions are pinned in `npm run test:partner-mail`.
 - **Unverified, by design tolerant:** whether Resend honours a caller-set
   `Message-ID`. If it does not, the ingested own-copy carries the real id
   on a thread filed to the job, so a client reply referencing it still
@@ -1579,19 +1634,37 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   steps; a note never arms. The @chip row shows EVERY active teammate but
   yourself (the old `slice(0, 8)` hid Jose and Ana) and a chip already in
   the note is lit and inert.
-- **Placement** (`/jobs/[id]/page.tsx`): the page's outer wrapper is a
-  2-column grid at `xl` (1280px+) — the job's column plus a 400px
-  `<aside>` holding the panel, sticky, full height. Below `xl` a
-  `ConversationTabs` strip (Details | Conversation, with a dot when the
-  client is waiting) sits at the top of the page and the panel takes the
-  full width when the tab is on. **The panel is mounted ONCE** and
-  shown/hidden by class, so it loads once and its summary reaches the tab.
-  `?tab=conversation` is the deep link (same pattern as
-  `/jobs?panel=incoming`). The header's old "Email client" button is now
-  "Conversation" — switches the tab and focuses the box
-  (`job-conversation:focus` window event). `JobEmailThreads` is gone from
-  the job page (still used by /rentalworks/reconcile); `JobEmailButton`
-  stays for the counter-proposal panel.
+- **Placement — a DOCK owned by the /jobs layout, not the job page**
+  (Wes 2026-09-17: "a minimize button for the chat window so that we can
+  leave it open on top of the other jobs that we are looking at. Also, a
+  close window button"). The panel used to be an `<aside>` in
+  `/jobs/[id]/page.tsx`, so it died on every walk from one job to the next
+  — there was nothing to leave open. `JobChatDock.tsx` mounts it from
+  `jobs/layout.tsx` (the same trick that keeps the rail's scroll
+  position), as the third flex child of the list|detail row.
+  - Three states, ONE mount: **open** = a reserved 400px column at 1280px+
+    (a flex child, so it never covers the job) and a `fixed inset-0`
+    window below that; **min** = a pill at the bottom right naming the job
+    it holds, over everything; **closed** = gone. Minimise HIDES the panel
+    rather than unmounting it, so a half-typed note survives.
+  - **Follow mode** is what preserves the old always-on rail: while
+    nobody has pressed either button the window re-binds to whichever job
+    is on screen. Minimise and close both stop it (that is what pinning
+    means); the job header's **Conversation** button is the only way back,
+    and it carries the "client replied" dot. Following is gated on 1280px
+    — below that an open window is the whole screen, and a job page that
+    buries itself under a chat on arrival is not a rail.
+  - The window can hold job A while you read job B — that IS the feature,
+    and also exactly how someone writes into the wrong conversation, so
+    the pane carries a **"Holding SR-JOB-A — you're on B · Switch"** strip
+    and an "Open SR-JOB-A" link. `key={target.id}` on the panel means a
+    draft never rides from one job to another.
+  - `?tab=conversation` is still the deep link (the Hand-to-Billing email,
+    an urgent note's text, the order page, /chat) — it OPENS the window,
+    once per job. The `ConversationTabs` strip is gone; the dock is the
+    entry point at every width. `JobEmailThreads` is gone from the job
+    page (still used by /rentalworks/reconcile); `JobEmailButton` stays
+    for the counter-proposal panel.
 - **Rail:** `/api/jobs` rows carry `conversation: { awaitingReply,
   lastInboundAt }` from ONE `emailThread.groupBy` over the page
   (`conversationSummaryForJobs`: newest inbound on any thread filed to the

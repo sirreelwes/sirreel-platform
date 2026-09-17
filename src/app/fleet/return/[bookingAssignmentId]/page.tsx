@@ -96,7 +96,7 @@ export default async function FleetReturnPage({ params }: Params) {
           // slot-by-slot. Ordered so the guided slots come before
           // anything free-form or pre-guided-capture (position null).
           photos: {
-            select: { id: true, position: true },
+            select: { id: true, position: true, createdAt: true },
             orderBy: { createdAt: 'asc' },
           },
           damageItems: {
@@ -231,7 +231,7 @@ export default async function FleetReturnPage({ params }: Params) {
         fuelLevel: checkoutRow.fuelLevel,
         mileage: checkoutRow.mileageAtInspection,
         notes: checkoutRow.notes,
-        photos: checkoutRow.photos,
+        photos: checkoutRow.photos.map((p) => ({ id: p.id, position: p.position, takenAt: p.createdAt.toISOString() })),
         preExisting: checkoutRow.damageItems,
       }
     : null

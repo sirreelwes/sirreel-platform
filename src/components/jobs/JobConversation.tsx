@@ -10,11 +10,13 @@
  * A reply from here goes out on the job's thread (Phase 1 anchors, From =
  * the author); a note stays here and is never sent.
  *
- * Placement (Wes 2026-09-17): a pinned rail beside the job at 1280px+, a
- * Details | Conversation tab under the header below that, a full-screen
- * chat on a phone. This component is the panel; the job page decides
- * where it sits. It is mounted ONCE and shown/hidden with classes, so it
- * fetches once and can report `awaitingReply` to the tab strip.
+ * Placement: this component is only the PANEL. Where it sits — a pinned
+ * column beside the job at 1280px+, a full-screen window below that, a
+ * pill at the bottom of the screen when minimised — is JobChatDock's
+ * business, and the dock lives in the /jobs layout so the window survives
+ * walking from one job to the next. It is mounted ONCE and hidden with
+ * classes rather than unmounted, so it fetches once, keeps a half-typed
+ * note through a minimise, and can report `awaitingReply` to the dock.
  *
  * Four kinds of row: client (left), staff (right, by name), system (one
  * compact line — "Quote sent · S260912-003"), note (violet, dashed,
@@ -23,7 +25,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertTriangle, Lock, Mail, Send, Siren, StickyNote, UserCheck, UserPlus, Users } from 'lucide-react'
+import { AlertTriangle, Lock, Mail, Minus, Send, Siren, StickyNote, UserCheck, UserPlus, Users, X } from 'lucide-react'
 import { splitCcInput } from '@/lib/email/ccList'
 import { internalNoteTells, mentionsIn } from '@/lib/email/conversationRules'
 
@@ -125,11 +127,20 @@ export function JobConversation({
   jobId,
   className = '',
   onSummary,
+  onMinimize,
+  onClose,
 }: {
   jobId: string
   className?: string
-  /** Fired after each load — the tab strip reads `awaitingReply` for its dot. */
+  /** Fired after each load — the dock reads `awaitingReply` for its dot. */
   onSummary?: (s: { awaitingReply: boolean; count: number }) => void
+  /**
+   * Window controls, supplied by whatever is holding the panel (the dock).
+   * Absent — as on a surface that owns its own chrome — and no buttons
+   * render, so the panel is still a plain embeddable card.
+   */
+  onMinimize?: () => void
+  onClose?: () => void
 }) {
   const [data, setData] = useState<Conversation | null>(null)
   const [draft, setDraft] = useState<Draft | null>(null)
@@ -376,8 +387,9 @@ export function JobConversation({
               </div>
             )}
           </div>
+          <div className="flex items-center gap-1 shrink-0">
           {data && (
-            <div className="relative shrink-0">
+            <div className="relative">
               <button
                 type="button"
                 onClick={() => setClaimOpen((v) => !v)}
@@ -423,6 +435,34 @@ export function JobConversation({
               )}
             </div>
           )}
+          {/* Window controls (Wes 2026-09-17: "a minimize button for the chat
+              window so that we can leave it open on top of the other jobs
+              that we are looking at. Also, a close window button"). Minimise
+              does NOT unmount the panel — the dock hides it — so a half-typed
+              note survives being tucked away. */}
+          {onMinimize && (
+            <button
+              type="button"
+              onClick={onMinimize}
+              className="p-1 rounded-md text-lt-fg3 hover:text-lt-fg hover:bg-lt-inner"
+              title="Minimise — keep this conversation while you look at other jobs"
+              aria-label="Minimise the conversation"
+            >
+              <Minus size={15} aria-hidden />
+            </button>
+          )}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1 rounded-md text-lt-fg3 hover:text-lt-fg hover:bg-lt-inner"
+              title="Close — reopen from the job's Conversation button"
+              aria-label="Close the conversation"
+            >
+              <X size={15} aria-hidden />
+            </button>
+          )}
+          </div>
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           {(['ALL', 'SALES', 'BILLING'] as const).map((l) => (
@@ -771,37 +811,5 @@ export function JobConversation({
         )}
       </footer>
     </section>
-  )
-}
-
-/**
- * The Details | Conversation strip the job page shows below 1280px. The
- * rail carries the panel above that width, so the strip hides there.
- */
-export function ConversationTabs({
-  tab,
-  onChange,
-  awaiting,
-}: {
-  tab: 'details' | 'conversation'
-  onChange: (t: 'details' | 'conversation') => void
-  awaiting: boolean
-}) {
-  return (
-    <div className="xl:hidden flex items-center gap-1 border-b border-lt-hairline mb-3">
-      {(['details', 'conversation'] as const).map((t) => (
-        <button
-          key={t}
-          type="button"
-          onClick={() => onChange(t)}
-          className={`inline-flex items-center gap-1.5 text-[13px] font-semibold px-3 py-2 border-b-2 -mb-px ${
-            tab === t ? 'border-amber-600 text-amber-700' : 'border-transparent text-lt-fg3 hover:text-lt-fg'
-          }`}
-        >
-          {t === 'details' ? 'Details' : 'Conversation'}
-          {t === 'conversation' && awaiting && <span className="w-2 h-2 rounded-full bg-amber-600" aria-label="client replied" />}
-        </button>
-      ))}
-    </div>
   )
 }
