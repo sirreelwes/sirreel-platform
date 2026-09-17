@@ -202,11 +202,11 @@ export async function completeSelfCheckout(input: CompleteSelfCheckoutInput): Pr
   const requested = input.stagedPhotos
     .filter((p): p is StagedPhotoInput & { key: string } => typeof p?.key === 'string' && p.key.startsWith(prefix))
     .slice(0, 50)
-  const { blobs } = requested.length ? await list({ prefix, limit: 1000 }) : { blobs: [] as { pathname: string; url: string }[] }
+  const { blobs } = requested.length ? await list({ prefix, limit: 1000 }) : { blobs: [] as { pathname: string; url: string; uploadedAt: Date }[] }
   const byPath = new Map(blobs.map((b) => [b.pathname, b]))
   const present = requested
     .map((p) => ({ p, blob: byPath.get(p.key) }))
-    .filter((x): x is { p: StagedPhotoInput & { key: string }; blob: { pathname: string; url: string } } => !!x.blob)
+    .filter((x): x is { p: StagedPhotoInput & { key: string }; blob: { pathname: string; url: string; uploadedAt: Date } } => !!x.blob)
   const photosMissing = requested.length - present.length
 
   const positionsOnFile = new Set(present.map((x) => normalizePosition(x.p.position)).filter(Boolean) as string[])
@@ -282,6 +282,9 @@ export async function completeSelfCheckout(input: CompleteSelfCheckoutInput): Pr
           contentType: p.contentType && ALLOWED_PHOTO_TYPES.has(p.contentType) ? p.contentType : null,
           position: normalizePosition(p.position),
           uploadedBy: null,
+          // When it landed in the store, not when the form was filed —
+          // see the staff routes; the photo stamp reads this column.
+          createdAt: blob.uploadedAt,
         })),
       })
     }

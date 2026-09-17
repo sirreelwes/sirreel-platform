@@ -32,6 +32,7 @@ import {
   DAMAGE_POSITION,
   type PhotoPosition,
 } from '@/lib/fleet/photoPositions';
+import { photoStampShort } from '@/lib/fleet/photoStamp';
 
 export interface StagedPhoto {
   localId: string;
@@ -48,6 +49,9 @@ export interface StagedPhoto {
 export interface ComparePhoto {
   id: string;
   position: string | null;
+  /** When it was taken (ISO). Printed on the thumbnail so the tech at
+   *  the truck sees "Out · Sep 16, 2:14 PM", not just "Out". */
+  takenAt?: string;
 }
 
 let nextLocalId = 0;
@@ -286,7 +290,13 @@ export function GuidedPhotoCapture({
         )}
 
         <div className={before ? 'grid grid-cols-2 gap-2' : ''}>
-          {before && <Thumb src={`/api/fleet/photos/${before.id}`} alt={`${slot.label} at check-out`} badge="Out" />}
+          {before && (
+            <Thumb
+              src={`/api/fleet/photos/${before.id}`}
+              alt={`${slot.label} at check-out`}
+              badge={before.takenAt ? `Out · ${photoStampShort(new Date(before.takenAt))}` : 'Out'}
+            />
+          )}
           {taken ? (
             <div className="relative aspect-[4/3] rounded-lg overflow-hidden bg-zinc-900 border border-zinc-700">
               {/* eslint-disable-next-line @next/next/no-img-element */}

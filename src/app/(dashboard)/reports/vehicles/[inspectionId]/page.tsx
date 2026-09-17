@@ -14,13 +14,21 @@
  * When the other end of the rental is on file, its shot of the SAME
  * slot sits beside this one. That pairing is the entire mechanism HQ
  * copied from DamageID — photographs on their own settle nothing.
+ *
+ * Hugo's three notes (2026-09-17) all land here or one step away:
+ * every frame carries the date and time it was taken (lib/fleet/
+ * photoStamp, the one wording); every frame has Save, which downloads a
+ * copy with that stamp printed on it for a damage report; and "Compare
+ * side by side" opens /compare — the two ends, large, one angle at a
+ * time, stepped through with arrows.
  */
 
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { Lock, ArrowLeft, FileText, Camera, AlertTriangle, ArrowLeftRight } from 'lucide-react'
+import { Lock, ArrowLeft, FileText, Camera, AlertTriangle, ArrowLeftRight, Columns2, Download } from 'lucide-react'
 import { getYardUser } from '@/lib/yard/requireYardAccess'
 import { PHOTO_GROUPS } from '@/lib/fleet/photoPositions'
+import { photoStampWhen, photoStampShort } from '@/lib/fleet/photoStamp'
 import {
   filedInspection,
   type FiledInspectionDetail,
@@ -115,6 +123,17 @@ export default async function FiledInspectionPage({
       </div>
 
       <div className="flex flex-wrap items-center gap-3 mb-5">
+        {/* Out beside back, one angle at a time — the DamageID view Hugo
+            asked for. Offered even before the other end is filed: it then
+            shows this end alone with the other frame saying so, which is
+            still the quickest way to page through 23 shots at full size. */}
+        <Link
+          href={`/reports/vehicles/${rec.inspectionId}/compare`}
+          className="inline-flex items-center gap-1.5 text-[14px] font-semibold text-white bg-amber-600 hover:bg-amber-500 rounded-lg px-3 py-1.5"
+        >
+          <Columns2 size={14} aria-hidden />
+          {rec.counterpart ? 'Compare out vs back' : 'Step through the photos'}
+        </Link>
         {rec.counterpart && (
           <Link
             href={`/reports/vehicles/${rec.counterpart.inspectionId}`}
@@ -159,7 +178,7 @@ export default async function FiledInspectionPage({
         <p className="text-lt-fg2 text-[14px] mb-3">
           Each slot below shows this walk-around beside the{' '}
           {rec.counterpart.edge === 'OUT' ? 'check-out' : 'check-in'} shot of the same angle,{' '}
-          {fmtWhen(rec.counterpart.inspectedAt)}.
+          {fmtWhen(rec.counterpart.inspectedAt)}. Tap a slot&rsquo;s name to see the two large, side by side.
         </p>
       )}
 
@@ -176,7 +195,13 @@ export default async function FiledInspectionPage({
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
               {slots.map((s) => (
-                <SlotCard key={s.position} slot={s} edge={rec.edge} paired={!!rec.counterpart} />
+                <SlotCard
+                  key={s.position}
+                  slot={s}
+                  edge={rec.edge}
+                  paired={!!rec.counterpart}
+                  compareHref={`/reports/vehicles/${rec.inspectionId}/compare?slot=${encodeURIComponent(s.position)}`}
+                />
               ))}
             </div>
           </section>
@@ -247,13 +272,25 @@ function DamageBlock({
   )
 }
 
-function SlotCard({ slot, edge, paired }: { slot: FiledSlot; edge: 'OUT' | 'IN'; paired: boolean }) {
+function SlotCard({
+  slot, edge, paired, compareHref,
+}: {
+  slot: FiledSlot
+  edge: 'OUT' | 'IN'
+  paired: boolean
+  compareHref: string
+}) {
   const otherLabel = edge === 'OUT' ? 'On return' : 'At check-out'
   return (
     <div className="border border-lt-hairline bg-lt-card rounded-lg overflow-hidden">
-      <div className="px-2 py-1.5 border-b border-lt-hairline text-[13px] text-lt-fg font-medium truncate">
-        {slot.label}
-      </div>
+      <Link
+        href={compareHref}
+        className="flex items-center justify-between gap-1 px-2 py-1.5 border-b border-lt-hairline text-[13px] text-lt-fg font-medium hover:bg-lt-inner"
+        title="See out and back side by side"
+      >
+        <span className="truncate">{slot.label}</span>
+        <Columns2 size={13} aria-hidden className="flex-none text-lt-fg3" />
+      </Link>
       <Frame photo={slot.mine} alt={`${slot.label}, ${edge === 'OUT' ? 'check-out' : 'check-in'}`} />
       {paired && (
         <>
@@ -267,6 +304,12 @@ function SlotCard({ slot, edge, paired }: { slot: FiledSlot; edge: 'OUT' | 'IN';
   )
 }
 
+/**
+ * One photograph: the picture, then under it WHEN it was taken and a
+ * Save. The time is the same wording that gets printed onto the saved
+ * copy, so what the supervisor reads on screen is what the body shop
+ * reads on the file.
+ */
 function Frame({ photo, alt, muted }: { photo: FiledPhoto | null; alt: string; muted?: boolean }) {
   if (!photo) {
     return (
@@ -280,16 +323,35 @@ function Frame({ photo, alt, muted }: { photo: FiledPhoto | null; alt: string; m
     )
   }
   return (
-    <a href={`/api/fleet/photos/${photo.id}`} target="_blank" rel="noreferrer" className="block">
-      {/* Private blob, streamed behind the HQ session. */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`/api/fleet/photos/${photo.id}`}
-        alt={alt}
-        loading="lazy"
-        className={`w-full object-cover ${muted ? 'h-16' : 'h-28'}`}
-      />
-    </a>
+    <div>
+      <a href={`/api/fleet/photos/${photo.id}`} target="_blank" rel="noreferrer" className="block">
+        {/* Private blob, streamed behind the HQ session. */}
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`/api/fleet/photos/${photo.id}`}
+          alt={alt}
+          loading="lazy"
+          className={`w-full object-cover ${muted ? 'h-16' : 'h-28'}`}
+        />
+      </a>
+      <div className={`flex items-center justify-between gap-1 px-2 ${muted ? 'py-0.5' : 'py-1'}`}>
+        <span
+          className={`tabular-nums truncate ${muted ? 'text-[10px] text-lt-fg3' : 'text-[11px] text-lt-fg2'}`}
+          title={photoStampWhen(photo.takenAt)}
+        >
+          {muted ? photoStampShort(photo.takenAt) : photoStampWhen(photo.takenAt)}
+        </span>
+        <a
+          href={`/api/fleet/photos/${photo.id}?download=1`}
+          download
+          aria-label="Save a copy with the date and time on it"
+          title="Save a copy with the date and time on it"
+          className="flex-none text-lt-fg3 hover:text-lt-fg p-0.5"
+        >
+          <Download size={muted ? 12 : 14} aria-hidden />
+        </a>
+      </div>
+    </div>
   )
 }
 
