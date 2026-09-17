@@ -136,6 +136,15 @@ export async function GET(req: NextRequest) {
       preSentAt: true,
       clientApprovedAt: true,
       clientChangeRequestedAt: true,
+      // WHAT the client said was wrong, not just that they said something.
+      // The desk is the surface that has to answer it, and "asked for a
+      // change" with no words attached sends Ana to the job page to read
+      // the one sentence she needed (2026-09-17).
+      clientChangeNote: true,
+      // The note printed on the face of the document — editable from the
+      // row via PATCH /api/invoices/[id], so the form has to open with what
+      // is on there now rather than with a blank box.
+      notes: true,
       // How it was paid (Ana, 2026-09-11). Only money that counts — a voided
       // or still-pending payment is not how an invoice was settled.
       payments: {
@@ -186,6 +195,8 @@ export async function GET(req: NextRequest) {
       preSentAt: i.preSentAt?.toISOString() ?? null,
       clientApprovedAt: i.clientApprovedAt?.toISOString() ?? null,
       clientChangeRequestedAt: i.clientChangeRequestedAt?.toISOString() ?? null,
+      clientChangeNote: i.clientChangeNote,
+      notes: i.notes,
       orderId: i.order.id,
       orderNumber: i.order.orderNumber,
       companyName: i.order.company?.name ?? null,

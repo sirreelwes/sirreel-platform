@@ -126,6 +126,7 @@
     "test:partner-terms": "tsx tests/sub-rentals/partner-terms.test.ts",
     "test:partner-sms": "tsx tests/sub-rentals/partner-sms.test.ts",
     "test:collector": "tsx tests/sub-rentals/collector.test.ts",
+    "test:invoice-edits": "tsx tests/invoices/invoice-edits.test.ts",
     "test:partner-intro-nudge": "tsx tests/sub-rentals/partner-intro-nudge.test.ts",
     "test:will-call": "tsx tests/sub-rentals/will-call.test.ts",
     "test:portal-pickup": "tsx tests/portal/deliveries-pickup.test.ts",

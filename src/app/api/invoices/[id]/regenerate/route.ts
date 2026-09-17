@@ -27,6 +27,12 @@ export const maxDuration = 30
  * un-send a document that was genuinely sent. What changed is written to the
  * invoice's notes and to an AuditLog row carrying both totals.
  *
+ * The DUE DATE is carried over, not restamped (2026-09-17). The generator
+ * defaults it to the issue date, so a rewrite used to push the due date to
+ * today — an invoice 20 days late came back 0 days late because someone
+ * corrected OUR arithmetic, and any terms a biller had set by hand were
+ * gone. A correction does not restart the client's clock.
+ *
  * Refuses when money has been applied. A payment was taken against a stated
  * figure; moving the total underneath it would leave that payment
  * reconciling to a number that exists nowhere. That case wants void + reissue
@@ -52,7 +58,15 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
 
   const invoice = await prisma.invoice.findUnique({
     where: { id: params.id },
-    select: { id: true, invoiceNumber: true, type: true, orderId: true, total: true, sentAt: true },
+    select: {
+      id: true,
+      invoiceNumber: true,
+      type: true,
+      orderId: true,
+      total: true,
+      sentAt: true,
+      dueDate: true,
+    },
   })
   if (!invoice) return NextResponse.json({ error: 'invoice not found' }, { status: 404 })
   if (invoice.type !== 'RENTAL') {
@@ -72,6 +86,8 @@ export async function POST(_req: NextRequest, { params }: { params: { id: string
   const res = await generateRentalInvoice({
     orderId: invoice.orderId,
     replaceInvoiceId: invoice.id,
+    // Keep the date the client is working to — see the header.
+    dueDate: invoice.dueDate,
   })
   if (!res.ok) {
     return NextResponse.json({ ok: false, error: res.error, reason: res.error }, { status: res.status })

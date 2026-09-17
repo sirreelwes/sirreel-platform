@@ -1003,6 +1003,62 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## Ana can correct an invoice from her own desk (2026-09-17 — Ana)
+- Ana: "how do I update an invoice from my side?" She could not. Both ways of
+  correcting an invoice existed — **regenerate** (rewrite the figures from
+  the order, KEEP the number — Wes 2026-09-01) and **void + re-cut** — but
+  both lived on the JOB page, two screens from `/collections`, which is where
+  she reads "Client asked for a change". And neither could touch the two
+  facts that live on the invoice and nowhere else.
+- **The split that decides every button here: figures belong to the ORDER;
+  the due date and the printed note belong to the INVOICE.** A rate, a line
+  or a late discount is fixed on the order and pulled through. An invoice
+  total that can be typed over reconciles to nothing, so there is no total
+  field and never should be — `PATCH /api/invoices/[id]` takes `dueDate` and
+  `notes`, full stop.
+  - **Due date** — SirReel bills due-on-receipt so the generator stamps the
+    issue date. Terms a client negotiated, or an extension given on the
+    phone, had nowhere to go, so honouring one meant letting the invoice read
+    as delinquent. That date is what every aging figure and "30d late" chip
+    counts from.
+  - **Note** — the PO number the client's A/P wants on the face of the
+    document, a remit instruction, "corrected 9/17". Ana's edit REPLACES it
+    wholesale; the old value is in the AuditLog `invoice.edited` row.
+- **The PDF follows, rendered from the invoice's OWN snapshot** —
+  `renderStoredInvoice()` (extracted from `renderPaidInvoice`, which is now
+  the PAID-only gate in front of it). NOT `generateRentalInvoice`, which
+  re-derives from the live order and would drag unrelated line edits into a
+  document nobody asked to republish. Replace-on-regenerate for the blob.
+  A **PAID** invoice is already rendered on demand (the PAID stamp), so its
+  blob is left alone.
+- **No snapshot → the edit is REFUSED, whatever the status.** The snapshot is
+  what every presentation is drawn from, PAID render included, so a
+  pre-snapshot invoice would move the row and leave the client's PDF saying
+  something else. The refusal names the fix (regenerate first, or void and
+  re-cut). This guard was first written gated on "needs a blob rewrite" and
+  the test caught the PAID hole — keep it unconditional.
+- **A regenerate now CARRIES THE DUE DATE OVER instead of restamping it.**
+  The generator defaults `dueDate` to the issue date, so a rewrite pushed the
+  due date to today: an invoice 20 days late came back 0 days late because
+  somebody corrected OUR arithmetic, and any hand-set terms were silently
+  gone. A correction does not restart the client's clock. (This is also what
+  lets a hand-set due date survive without a new column.)
+- **Two surfaces, one route.** `/collections` → All HQ invoices → **Correct**
+  on the row: the client's change request IN THEIR WORDS
+  (`clientChangeNote` is on the payload now — "asked for a change" with no
+  words sent her to the job page to read one sentence), the due date, the
+  note, a **"Pull the figures through from the order"** button (the
+  regenerate) and a LINK to the order for what is actually billed. The job
+  page's `JobInvoicesPanel` carries the same edit as **Due date & note**
+  beside its existing Update / Send / Void.
+- VOID is the only hard lock — a withdrawn document stays as it was. **PAID
+  is deliberately NOT locked**: a settled invoice still gets asked for a PO
+  number. Billing-gated (`can(role, 'billing')`) like void, regenerate and
+  reopen. `npm run test:invoice-edits`.
+- Unchanged and still the answer for money: the order is the book. Reopen a
+  CLOSED/INVOICED order (`POST /api/orders/[id]/reopen`, billing-gated) to
+  edit lines or discounts, then pull the figures through.
+
 ## "Approved — book it" names the order and takes you to it (2026-09-17 — Wes)
 - Wes, on SR-JOB-0312: "It says that the production supply order is booked
   but it does not give me any other options there. On the tile it says
