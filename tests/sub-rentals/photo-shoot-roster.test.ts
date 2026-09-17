@@ -59,9 +59,14 @@ yes('client text carries no price', !/\$|\bper day\b|\bdaily rate\b/i.test(clien
 yes('client text never promises a driver', !/\bdriver\b/i.test(clientText))
 yes('the house specialism is named where it helps', /profoto/i.test(names.join(' ')))
 
-// Their Sprinter vans are OUR lane — a partner listed against the house
-// fleet is the GreenLite caveat over again.
-yes('no sprinter/van unit on the roster', !/sprinter|cargo van|passenger van/i.test(names.join(' ')))
+// Their Sprinter Cargo Van Packages are NOT excluded on principle — they
+// belong in Photo Shoot Rentals and are already filed in the DB from VSM's
+// own categories (Wes 2026-09-17: "VSM cargo vans come preloaded with gear
+// that we don't carry so keep them"). They are absent from THIS FILE only
+// because the live rows are better sourced than anything it could infer.
+// What this line guards is that nobody re-derives them here as guesses and
+// creates a second, worse set beside the real ones.
+yes('the file does not re-invent the van packages already on file', !/sprinter|cargo van|passenger van/i.test(names.join(' ')))
 
 // ── what a VSM unit does on an order ──────────────────────────────────
 const vendor = { catalogSection: VSM_PLANET.catalogSection, partnerKind: VSM_PLANET.partnerKind, defaultReceiveMethod: VSM_PLANET.defaultReceiveMethod }
