@@ -18,13 +18,20 @@
  * under /api/drive. Scoped to the ONE vehicle that token was minted for
  * — a driver on another job sees nothing here.
  *
- * Three things this must never carry, and does not:
+ * FOUR things this must never carry, and does not:
  *   · the DRIVER'S LICENCE photo — `buildInspectionReport` filters
  *     DRIVERS_LICENSE out of every side, deliberately (see its header);
  *   · the lockbox or gate CODE — the report has never carried
  *     `Asset.accessCode`, and codes reach a driver only through the
  *     earned-and-unlocked path on the page itself;
- *   · anyone else's rental — the token resolves to one assignment.
+ *   · anyone else's rental — the token resolves to one assignment;
+ *   · **anything about the CHECK-IN** — `checkoutSideOnly` strips the
+ *     return walk-around, its damage close-ups, the miles driven and
+ *     `newDamage` before this renders. Wes 2026-09-17: "typically we deal
+ *     straight with production for damage reporting — do not need to send
+ *     to driver after return." A driver's link lives 45 days, so without
+ *     this the person who drove the truck could read the damage findings
+ *     before the production did.
  *
  * It is NOT the client-facing send. `inspectionReportSendingEnabled()`
  * stays dark and is not consulted here: that gate is about EMAILING the
@@ -36,7 +43,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { renderToBuffer } from '@react-pdf/renderer'
 import React from 'react'
 import { prisma } from '@/lib/prisma'
-import { buildInspectionReport } from '@/lib/fleet/inspectionReport'
+import { buildInspectionReport, checkoutSideOnly } from '@/lib/fleet/inspectionReport'
 import { readPrivateBlobBuffer } from '@/lib/claims/streamBlob'
 import { ConditionReportDocument, type PhotoData } from '@/lib/fleet/ConditionReportDocument'
 
@@ -62,9 +69,14 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     return NextResponse.json({ error: 'this assignment was cancelled' }, { status: 409 })
   }
 
-  const report = await buildInspectionReport(da.bookingAssignmentId)
-  if (!report) return NextResponse.json({ error: 'not found' }, { status: 404 })
-  if (!report.out && !report.back) {
+  const full = await buildInspectionReport(da.bookingAssignmentId)
+  if (!full) return NextResponse.json({ error: 'not found' }, { status: 404 })
+  // The driver's copy is the CHECK-OUT sheet and nothing else — see the
+  // header. Applied before the 404 below, so a vehicle that has only been
+  // checked IN reads as nothing to show rather than handing over the
+  // return findings.
+  const report = checkoutSideOnly(full)
+  if (!report.out) {
     // Nothing has been walked around yet. The page hides the link in this
     // state; say it plainly for anyone who kept an old one.
     return NextResponse.json({ error: 'no walk-around has been filed for this vehicle yet' }, { status: 404 })
