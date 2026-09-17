@@ -90,7 +90,9 @@ function NoteReply({
   onDone,
 }: {
   row: NoteTarget
-  staff: { id: string; name: string }[]
+  /** The WHOLE team: `suggested` false is off the chip row but still
+   *  tagged when the name is typed (conversationRules.isTagSuggested). */
+  staff: { id: string; name: string; suggested?: boolean }[]
   meId: string
   onDone: (msg: string) => void
 }) {
@@ -98,7 +100,9 @@ function NoteReply({
   const [urgent, setUrgent] = useState(false)
   const [busy, setBusy] = useState(false)
 
+  // Tagging reads the whole list; only the chip row below is narrowed.
   const tagged = useMemo(() => mentionsIn(body, staff).filter((id) => id !== meId), [body, staff, meId])
+  const chipPeople = useMemo(() => staff.filter((s) => s.id !== meId && s.suggested !== false), [staff, meId])
   const blocked = urgent && tagged.length === 0
 
   const send = async () => {
@@ -142,11 +146,10 @@ function NoteReply({
           if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') void send()
         }}
       />
-      {staff.length > 0 && (
+      {chipPeople.length > 0 && (
         <div className="flex items-center gap-1 text-[10.5px] text-lt-fg3 flex-wrap">
           <Users size={10} aria-hidden />
-          {staff
-            .filter((s) => s.id !== meId)
+          {chipPeople
             .map((s) => {
               const on = tagged.includes(s.id)
               return (
@@ -202,7 +205,7 @@ export function ChatInbox() {
   const [filter, setFilter] = useState<Filter>('all')
   const [openId, setOpenId] = useState<string | null>(null)
   const [flash, setFlash] = useState<string | null>(null)
-  const [staff, setStaff] = useState<{ id: string; name: string }[]>([])
+  const [staff, setStaff] = useState<{ id: string; name: string; suggested?: boolean }[]>([])
   // Wes 2026-09-17: "we probably need a search field at top of chat to find
   // jobs or clients that we want to message about." The box does two things:
   // it filters the rows you HAVE as you type (instant, in the browser), and
@@ -241,7 +244,7 @@ export function ChatInbox() {
     void fetch(`/api/jobs/${openId}/conversation`)
       .then((r) => r.json())
       .then((j) => {
-        if (j?.ok && Array.isArray(j.staff)) setStaff(j.staff.map((s: { id: string; name: string }) => ({ id: s.id, name: s.name })))
+        if (j?.ok && Array.isArray(j.staff)) setStaff(j.staff.map((s: { id: string; name: string; suggested?: boolean }) => ({ id: s.id, name: s.name, suggested: s.suggested !== false })))
       })
       .catch(() => {})
   }, [openId, staff.length])
