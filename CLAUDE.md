@@ -1442,6 +1442,22 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `X-SirReel-Job-Message` header even if Resend rewrote the Message-ID on
   the wire; MONEY-mode inboxes (billing@/payments@) keep an anchored
   message with no invoice keyword (`jobTagged` / `conversationLink`).
+- **The hello@ REPLY-TO CAPTURE is OFF for thread sends (2026-09-17 — Wes:
+  "I don't understand why there are emails still getting generated from the
+  system that go there").** Nothing was ever ADDRESSED to hello@ — it is
+  appended to REPLY-TO by `effectiveReplyTo` in sendAgreementEmail.ts
+  whenever the Reply-To is an on-domain address the ingest does not fully
+  watch (wes@, hq@), so what lands there is the CLIENT'S REPLY. It existed
+  because a reply to a Resend send carried an In-Reply-To HQ had never
+  stored, leaving no way to prove the reply belonged to an HQ conversation
+  (Wes's ruling 2026-08-28, chosen over ingesting wes@). **Phase 1 removed
+  that premise** — every thread send carries an HQ-minted Message-ID stored
+  on the outbound row PLUS `jobs+<code>@` on Cc, two independent anchors —
+  so `sendOnJobThread` passes `replyToExact: true` and the client sees the
+  person alone. **A send with NO job still gets the capture**: no anchor is
+  exactly the case the trick was built for (the pre-job sales welcome,
+  inquiry replies). Partner mail opted out separately on 2026-09-14. Both
+  directions are pinned in `npm run test:partner-mail`.
 - **Unverified, by design tolerant:** whether Resend honours a caller-set
   `Message-ID`. If it does not, the ingested own-copy carries the real id
   on a thread filed to the job, so a client reply referencing it still

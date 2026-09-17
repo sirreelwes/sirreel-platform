@@ -214,7 +214,25 @@ export async function sendOnJobThread(input: SendOnJobThreadInput): Promise<Send
     ...threadingHeaders({ messageId, rootMessageId: ctx.rootMessageId, lastMessageId: ctx.lastMessageId }),
   }
 
-  let result = await sendAgreementEmail({ ...payload, subject, cc, headers })
+  // The hello@ REPLY-TO CAPTURE is not needed on a thread send, so it is
+  // turned off here (Wes 2026-09-17: "I don't understand why there are
+  // emails still getting generated from the system that go there").
+  //
+  // `effectiveReplyTo` appends hello@ whenever the Reply-To is an on-domain
+  // address the ingest does not fully watch — wes@, hq@ — because a reply to
+  // a Resend send used to carry an In-Reply-To HQ had never stored, leaving
+  // no way to prove the reply belonged to an HQ conversation. The hello@
+  // copy was that proof (Wes's ruling 2026-08-28).
+  //
+  // Phase 1 removed the premise. Every send from here carries an HQ-MINTED
+  // Message-ID that is stored on the outbound row, plus `jobs+<code>@` on
+  // Cc — two independent anchors, either of which files the reply. Keeping
+  // hello@ as well only shows the client a second reply address, one of them
+  // a shared inbox, and fills that mailbox with copies of conversations
+  // already filed. Sends with NO job still get the capture: they have no
+  // anchor, which is exactly the case the trick was built for.
+  const exactReplyTo = { replyToExact: true as const }
+  let result = await sendAgreementEmail({ ...payload, ...exactReplyTo, subject, cc, headers })
   if (!result.ok && /message.?id|header/i.test(result.reason)) {
     // Resend's docs do not say whether a caller-set Message-ID is honoured
     // or refused. A refusal must not cost the client their quote: send
@@ -223,7 +241,7 @@ export async function sendOnJobThread(input: SendOnJobThreadInput): Promise<Send
     console.warn('[jobThread] send refused with Message-ID set — retrying without it:', result.reason)
     const { 'Message-ID': _dropped, ...rest } = headers
     void _dropped
-    result = await sendAgreementEmail({ ...payload, subject, cc, headers: rest })
+    result = await sendAgreementEmail({ ...payload, ...exactReplyTo, subject, cc, headers: rest })
   }
   if (!result.ok) return { ...result, subject, threadId: ctx.threadId, messageId }
 

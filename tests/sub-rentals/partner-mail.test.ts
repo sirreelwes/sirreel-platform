@@ -45,6 +45,17 @@ eq('client mail still gets the capture anchor', effectiveReplyTo('wes@sirreel.co
 eq('partner mail gets wes@ alone', effectiveReplyTo('wes@sirreel.com', true), 'wes@sirreel.com')
 eq('relay address alone on partner mail', effectiveReplyTo('jobs+abc@sirreel.com', true), 'jobs+abc@sirreel.com')
 eq('relay address paired on client mail', effectiveReplyTo('jobs+abc@sirreel.com'), ['jobs+abc@sirreel.com', 'hello@sirreel.com'])
+
+// 2026-09-17 (Wes: "I don't understand why there are emails still getting
+// generated from the system that go there"). The hello@ capture exists to
+// prove a reply belongs to an HQ conversation when nothing else can —
+// `sendOnJobThread` passes replyToExact because a thread send carries its
+// own stored Message-ID AND the jobs+<code>@ Cc. Both directions pinned
+// here: a send with a job drops it, a send without one keeps it.
+eq('a job-thread send shows the person alone', effectiveReplyTo('wes@sirreel.com', true), 'wes@sirreel.com')
+eq('a jobless send still gets the anchor', effectiveReplyTo('wes@sirreel.com'), ['wes@sirreel.com', 'hello@sirreel.com'])
+eq('a fully-ingested inbox never needed it, with or without a job', effectiveReplyTo('jose@sirreel.com'), 'jose@sirreel.com')
+eq('an off-domain Reply-To is never touched', effectiveReplyTo('producer@acmepictures.com'), 'producer@acmepictures.com')
 eq('a fully ingested inbox is untouched either way', effectiveReplyTo('jose@sirreel.com', true), 'jose@sirreel.com')
 eq('no Reply-To stays absent', effectiveReplyTo(undefined, true), undefined)
 
