@@ -221,7 +221,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
   // order's assigned units + publish it to the client portal.
   type Incomplete = { unitName: string; missing: string[] }
   const [dotBusy, setDotBusy] = useState(false)
-  const [dotCheck, setDotCheck] = useState<{ unitCount: number; incomplete: Incomplete[] } | null>(null)
+  const [dotCheck, setDotCheck] = useState<{ unitCount: number; incomplete: Incomplete[]; clientCanSee: boolean; automatic: boolean } | null>(null)
   const [dotResult, setDotResult] = useState<{ ok: boolean; msg: string } | null>(null)
 
   // Step 1: readiness check (warn BEFORE publishing) — no generation.
@@ -231,7 +231,12 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
       const res = await fetch(`/api/orders/${orderId}/dot-sheet?check=1`)
       const json = await res.json()
       if (!res.ok || !json.ok) { setDotResult({ ok: false, msg: json.error || `Couldn't read DOT data (${res.status})` }); return }
-      setDotCheck({ unitCount: json.unitCount, incomplete: json.incompleteUnits || [] })
+      setDotCheck({
+        unitCount: json.unitCount,
+        incomplete: json.incompleteUnits || [],
+        clientCanSee: !!json.clientCanSee,
+        automatic: !!json.automatic,
+      })
     } catch (e) {
       setDotResult({ ok: false, msg: e instanceof Error ? e.message : String(e) })
     } finally { setDotBusy(false) }
@@ -247,7 +252,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
       setDotCheck(null)
       setDotResult({
         ok: true,
-        msg: `DOT info sheet ready for ${json.unitCount} vehicle${json.unitCount === 1 ? '' : 's'} — the client can now download it from their portal.`,
+        msg: `Sent — the client can download the DOT sheet for ${json.unitCount} vehicle${json.unitCount === 1 ? '' : 's'} from their portal. It will keep up with any unit changes on its own.`,
       })
     } catch (e) {
       setDotResult({ ok: false, msg: e instanceof Error ? e.message : String(e) })
@@ -967,37 +972,61 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                         disabled={dotBusy}
                         className="border border-zinc-300 hover:bg-white disabled:opacity-40 text-zinc-800 text-xs font-semibold px-3 py-1.5 rounded"
                       >
-                        {dotBusy ? 'Checking…' : 'Send DOT paperwork'}
+                        {dotBusy ? 'Checking…' : 'Check DOT paperwork'}
                       </button>
                     )}
                   </div>
                   <p className="text-[11px] text-zinc-500 mt-0.5">
-                    Year, make, VIN, plate &amp; latest BIT for the vehicles assigned to this job — published to the client&apos;s portal.
+                    Year, make, VIN, plate &amp; latest BIT for the vehicles on this order. It reaches the client&apos;s
+                    portal BY ITSELF once every unit&apos;s record is complete, and always names the units assigned
+                    right now — there is nothing to re-send after a swap.
                   </p>
 
                   {dotCheck && (
                     <div className="mt-2 space-y-2">
                       {dotCheck.unitCount === 0 ? (
-                        <div className="text-xs text-rose-700">No assigned vehicle units on this job yet — assign units first.</div>
+                        <div className="text-xs text-rose-700">No assigned vehicle units on this order yet — assign units first.</div>
                       ) : dotCheck.incomplete.length > 0 ? (
                         <div className="rounded border border-amber-300 bg-amber-50 px-2.5 py-2 text-xs text-amber-900">
-                          <div className="font-semibold">Heads up — some vehicles are missing info:</div>
+                          <div className="font-semibold">
+                            {dotCheck.clientCanSee
+                              ? 'The client has this, and some vehicles are still missing info:'
+                              : 'Withheld from the client — some vehicles are missing info:'}
+                          </div>
                           <ul className="mt-1 list-disc list-inside">
                             {dotCheck.incomplete.map((u) => (
                               <li key={u.unitName}><span className="font-mono">{u.unitName}</span> — missing {u.missing.join(', ')}</li>
                             ))}
                           </ul>
-                          <div className="mt-1">The sheet will show these as &ldquo;Not on file.&rdquo; Send anyway?</div>
+                          <div className="mt-1">
+                            Fill these in on Fleet and it publishes on its own. Or send it now with the blanks
+                            printed as &ldquo;Not on file&rdquo; — a page of blanks is a poor thing to hand an officer,
+                            so this is a decision, and it is recorded as one.
+                          </div>
                         </div>
                       ) : (
-                        <div className="text-xs text-emerald-700">{dotCheck.unitCount} vehicle{dotCheck.unitCount === 1 ? '' : 's'} ready — all DOT info on file.</div>
+                        <div className="text-xs text-emerald-700">
+                          {dotCheck.unitCount} vehicle{dotCheck.unitCount === 1 ? '' : 's'} — record complete, and the client
+                          can already download it. Nothing to send.
+                        </div>
                       )}
-                      {dotCheck.unitCount > 0 && (
+                      {/* The button is the OVERRIDE only. A complete record is
+                          already on the portal, so offering "publish" there
+                          would be a no-op dressed as an action. */}
+                      {dotCheck.unitCount > 0 && dotCheck.incomplete.length > 0 && !dotCheck.clientCanSee && (
                         <div className="flex gap-2">
                           <button onClick={() => sendDotPaperwork(data.orderId!)} disabled={dotBusy} className="bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300 text-white text-xs font-semibold px-3 py-1.5 rounded">
-                            {dotBusy ? 'Generating…' : dotCheck.incomplete.length > 0 ? 'Generate & publish anyway' : 'Generate & publish to portal'}
+                            {dotBusy ? 'Sending…' : 'Send it anyway'}
                           </button>
-                          <button onClick={() => setDotCheck(null)} className="text-xs text-zinc-600 hover:text-zinc-900 px-2 py-1.5">Cancel</button>
+                          <button onClick={() => setDotCheck(null)} className="text-xs text-zinc-600 hover:text-zinc-900 px-2 py-1.5">Leave it withheld</button>
+                        </div>
+                      )}
+                      {dotCheck.unitCount > 0 && (dotCheck.incomplete.length === 0 || dotCheck.clientCanSee) && (
+                        <div className="flex gap-2">
+                          <a href={`/api/orders/${data.orderId}/dot-sheet`} target="_blank" rel="noreferrer" className="border border-zinc-300 hover:bg-white text-zinc-800 text-xs font-semibold px-3 py-1.5 rounded">
+                            Read what they see
+                          </a>
+                          <button onClick={() => setDotCheck(null)} className="text-xs text-zinc-600 hover:text-zinc-900 px-2 py-1.5">Close</button>
                         </div>
                       )}
                     </div>

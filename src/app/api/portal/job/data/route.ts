@@ -42,6 +42,8 @@ import { buildBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingT
 import { PUBLIC_VEHICLE_VISIBLE_WHERE } from '@/lib/site/vehicleCatalog'
 import { CLIENT_KIT_VISIBILITY, hiddenFromClient } from '@/lib/orders/clientLines'
 import { narrowAssignmentsToOrder, portalDocHref } from '@/lib/fleet/vehicleDocs'
+import { dotSheetForOrder } from '@/lib/fleet/dotSheet'
+import { clientStatusLabel, clientWaitingNote } from '@/lib/fleet/dotSheetPublish'
 
 export const dynamic = 'force-dynamic'
 
@@ -417,6 +419,14 @@ export async function GET(req: NextRequest) {
     order.id,
     resolved.followedFrom?.id,
   ])
+
+  // Whether the DOT sheet is the client's to have, decided NOW rather than
+  // read off a stored PDF: a complete record publishes itself, an incomplete
+  // one is withheld unless a rep chose to send it. Its own call on purpose —
+  // deriving it from `vehicleAssignments` above would mean adding VIN to that
+  // select, and that select is the audit checkpoint for what an Asset may
+  // show a client.
+  const dotSheet = await dotSheetForOrder(order.id, [resolved.followedFrom?.id], order.dotSheetGeneratedAt)
 
   // A catalog photo per reserved vehicle class, for the client's "Assets
   // reserved" tiles (Wes 2026-09-12: "possibly with little icon pictures of
@@ -886,10 +896,16 @@ export async function GET(req: NextRequest) {
       // "Pending" status on the paperwork row is unchanged.
       quotePdfUrl: order.quotePdfUrl ? '/api/portal/job/quote-pdf' : null,
       quotePdfGeneratedAt: order.quotePdfGeneratedAt,
-      // DOT info packet — served through the gated portal proxy (never the
-      // raw private-blob URL). Present only once generated.
-      dotSheetUrl: order.dotSheetGeneratedAt ? '/api/portal/job/dot-sheet' : null,
+      // DOT info packet — served through the gated portal proxy (never a raw
+      // blob URL), and RENDERED FRESH on download so it always names the
+      // trucks currently on the order. It appears by itself as soon as every
+      // assigned unit has its record; with blanks it is withheld until a rep
+      // sends it anyway. The proxy re-checks this, so the link is the offer,
+      // not the permission.
+      dotSheetUrl: dotSheet.state.available ? '/api/portal/job/dot-sheet' : null,
       dotSheetGeneratedAt: order.dotSheetGeneratedAt,
+      dotSheetNote: clientWaitingNote(dotSheet.state),
+      dotSheetStatus: clientStatusLabel(dotSheet.state),
       agreement: rentalAgreement,
       counterProposal,
       stageContract,

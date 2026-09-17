@@ -45,6 +45,9 @@
  *     upcoming order with no replacement cost, so the order cannot tell
  *     the client's broker what to insure it for. One item per ROW, not
  *     per order. Clears when the row (or its RentalWorks units) is priced.
+ *   - dot-sheet-incomplete (DERIVED) — an upcoming order whose vehicles
+ *     are picked but whose DOT record has blanks, so the client's sheet is
+ *     being withheld. The complete case publishes itself and raises nothing.
  *   - kit-incomplete (DERIVED) — an upcoming order whose radios (or any
  *     kitted item) are missing the pieces the catalog says ride with
  *     them, so they never print on the pull sheet. The early half of the
@@ -108,6 +111,7 @@ import { clientCreatedUnquotedProvider } from '@/lib/actionItems/providers/clien
 import { possibleDuplicateJobProvider } from '@/lib/actionItems/providers/possibleDuplicateJob'
 import { annualRequestedProvider } from '@/lib/actionItems/providers/annualRequested'
 import { replacementCostMissingProvider } from '@/lib/actionItems/providers/replacementCostMissing'
+import { dotSheetIncompleteProvider } from '@/lib/actionItems/providers/dotSheetIncomplete'
 import { kitIncompleteProvider } from '@/lib/actionItems/providers/kitIncomplete'
 import { walkiesShortProvider } from '@/lib/actionItems/providers/walkiesShort'
 import { partnerCancelledOffPickListProvider } from '@/lib/actionItems/providers/partnerCancelledOffPickList'
@@ -157,6 +161,7 @@ const PROVIDERS: ActionItemProvider[] = [
   // A catalog row on an upcoming order has no replacement cost, so the
   // order's COI figure for the client's broker is a floor, not a total.
   replacementCostMissingProvider,
+  dotSheetIncompleteProvider,
   kitIncompleteProvider,
   // Committed walkie orders overrun the CP200 pool on some day — HQ says
   // how many to sub (Wes 2026-09-15: the "(Sub)" catalog row is gone).

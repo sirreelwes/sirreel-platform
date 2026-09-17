@@ -1,17 +1,22 @@
 /**
- * POST /api/orders/[id]/dot-sheet        — generate the DOT packet, store on the Order.
- * GET  /api/orders/[id]/dot-sheet         — stream the stored DOT PDF (gated proxy).
- * GET  /api/orders/[id]/dot-sheet?check=1 — readiness check (units + what's missing)
- *                                            for the pre-send warning; no generation.
+ * GET  /api/orders/[id]/dot-sheet         — the DOT packet for this order's
+ *                                            CURRENT units, rendered fresh.
+ * GET  /api/orders/[id]/dot-sheet?check=1 — readiness: units, what is missing,
+ *                                            and whether the client can see it.
+ * POST /api/orders/[id]/dot-sheet         — the "send it anyway" override:
+ *                                            records that a human chose to
+ *                                            publish an INCOMPLETE record.
  *
- * The PDF lives on a PRIVATE blob and is served only through this proxy
- * (and the portal proxy for clients) — never a public CDN URL.
+ * The GET no longer streams a stored blob. A sheet built when the rep pressed
+ * publish went on naming a van that had since been swapped off the order, so
+ * the bytes are built from the order's units at the moment of the request —
+ * see src/lib/fleet/dotSheetPublish.ts. Staff may pull it in any state; the
+ * client's copy is gated (api/portal/job/dot-sheet).
  */
 import { NextRequest, NextResponse } from 'next/server'
-import { prisma } from '@/lib/prisma'
 import { requireDispatchAccess } from '@/lib/fleet/requireDispatchAccess'
-import { streamPrivateBlobAsResponse } from '@/lib/claims/streamBlob'
-import { gatherDotUnits, generateAndStoreDotSheet } from '@/lib/fleet/dotSheet'
+import { dotSheetForOrder, generateAndStoreDotSheet, renderDotSheet } from '@/lib/fleet/dotSheet'
+import { deskBlockerSentence } from '@/lib/fleet/dotSheetPublish'
 
 export const dynamic = 'force-dynamic'
 
@@ -22,22 +27,39 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (!auth.ok) return auth.response
   const { id } = await params
 
+  const sheet = await dotSheetForOrder(id)
+
   if (req.nextUrl.searchParams.get('check') === '1') {
-    const { units, jobName, jobCode, company } = await gatherDotUnits(id)
-    const order = await prisma.order.findUnique({ where: { id }, select: { dotSheetGeneratedAt: true } })
     return NextResponse.json({
       ok: true,
-      company, jobName, jobCode,
-      unitCount: units.length,
-      incompleteUnits: units.filter((u) => u.missing.length > 0).map((u) => ({ unitName: u.unitName, missing: u.missing })),
-      hasSheet: !!order?.dotSheetGeneratedAt,
-      generatedAt: order?.dotSheetGeneratedAt ?? null,
+      company: sheet.company,
+      jobName: sheet.jobName,
+      jobCode: sheet.jobCode,
+      unitCount: sheet.state.unitCount,
+      incompleteUnits: sheet.state.gaps,
+      // What the CLIENT can see right now, and whether it got there without
+      // anyone pressing anything. The modal's copy reads these directly —
+      // "hasSheet" used to mean "a PDF exists", which stopped being the
+      // question once the sheet became derived.
+      clientCanSee: sheet.state.available,
+      automatic: sheet.state.automatic,
+      reason: sheet.state.reason,
+      blocker: deskBlockerSentence(sheet.state),
     })
   }
 
-  const order = await prisma.order.findUnique({ where: { id }, select: { dotSheetPdfUrl: true, job: { select: { jobCode: true } } } })
-  if (!order?.dotSheetPdfUrl) return NextResponse.json({ error: 'no DOT sheet generated yet' }, { status: 404 })
-  return streamPrivateBlobAsResponse({ fileUrl: order.dotSheetPdfUrl, filename: `DOT-${order.job?.jobCode ?? id}.pdf` })
+  if (sheet.state.unitCount === 0) {
+    return NextResponse.json({ error: 'no assigned vehicle units on this order' }, { status: 404 })
+  }
+  const pdf = await renderDotSheet(sheet)
+  return new Response(new Uint8Array(pdf), {
+    status: 200,
+    headers: {
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': `inline; filename="DOT-${sheet.jobCode ?? id}.pdf"`,
+      'Cache-Control': 'no-store',
+    },
+  })
 }
 
 export async function POST(_req: NextRequest, { params }: Params) {
@@ -45,6 +67,10 @@ export async function POST(_req: NextRequest, { params }: Params) {
   if (!auth.ok) return auth.response
   const { id } = await params
 
+  // Still stores a PDF — an artifact of exactly what was approved. What it is
+  // FOR is the `dotSheetGeneratedAt` stamp: the record of a human deciding an
+  // incomplete sheet should go to the client anyway. A complete record needs
+  // no press at all and never reaches here.
   const result = await generateAndStoreDotSheet(id)
   if (!result.ok) return NextResponse.json({ ok: false, error: result.reason }, { status: 400 })
   return NextResponse.json({
