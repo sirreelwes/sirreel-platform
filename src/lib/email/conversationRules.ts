@@ -127,6 +127,7 @@ export function systemLabel(label: string | null | undefined): string {
   if (l.startsWith('driver/request')) return 'Driver details requested'
   if (l.startsWith('coi-request-fix')) return 'COI — more needed'
   if (l.startsWith('coi-approved')) return 'COI approved'
+  if (l.startsWith('coi-broker-review')) return 'COI review sent to the broker'
   if (l.startsWith('coi-requirements')) return 'COI requirements sent to the broker'
   if (l.startsWith('sub-rental-estimate')) return 'Estimate sent'
   return 'Sent by HQ'

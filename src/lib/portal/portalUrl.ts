@@ -153,6 +153,16 @@ export function coiUploadUrl(token: string): string {
 }
 
 /**
+ * The BROKER's read-only review of one certificate — `/coi/broker/[token]`.
+ * A static segment beside `[token]`, so it never resolves as an upload
+ * token. Client-facing mail, so it rides the portal base like the drop link
+ * above (src/lib/coi/brokerReviewToken.ts mints the token).
+ */
+export function coiBrokerReviewUrl(token: string): string {
+  return `${portalBaseUrl()}/coi/broker/${encodeURIComponent(token)}`
+}
+
+/**
  * The v2 paperwork portal — `/portal/v2/[token]`, keyed by a
  * PaperworkRequest token. This is where the client authorizes a card,
  * signs, and drops their COI. Routed through the portal base like every

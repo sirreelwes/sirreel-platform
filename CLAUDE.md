@@ -171,6 +171,70 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - The client COI drop link now runs the AI review on arrival (it used to store
   the PDF with no analysis at all).
 
+## The broker gets the review, not a forwarded paragraph (2026-09-17 — Wes)
+- Wes: "Is there a way to extract the broker from a COI and add an option to
+  send a link to them when we need an updated COI or something isn't passing
+  our test? The link would open a read only review showing the broker what we
+  are rejecting or requesting be fixed." Every correction used to go client →
+  broker → client, with our requirement text re-explained at each hop.
+- **The broker is read off the document, not stored.** `COI_PROMPT` now
+  extracts the ACORD 25 **PRODUCER** box (agency, contact name, email, phone,
+  address) beside `namedInsured`; it lives in `CoiCheck.aiResponse.producer`
+  and is read on demand by `readCoiBroker()` in `src/lib/coi/broker.ts`.
+  **No column, no migration** — same reasoning as the named insured: a raw
+  FACT off the certificate that a re-run corrects. Placeholder-scrubbing
+  ("N/A", "same as insured") and e-mail validation live in the READER, not in
+  what we store; an invented broker is a correction request sent to a
+  stranger with the client's name in it.
+- **"Never asked" ≠ "blank box."** A review filed before today has no
+  `producer` key at all and the desk says "re-run it to pull the broker off
+  the certificate" — the same distinction `aiHasInsuredName` carries. Today's
+  `normalizeCoiReview` always stamps the key, so an empty producer box on a
+  fresh review reads as asked-and-blank.
+- **`POST /api/coi/review/[id]` action `EMAIL_BROKER`** — the fourth option
+  beside Approve / Reject / Request fix from client. Same posture as
+  REQUEST_FIX: the email IS the act (a send failure changes nothing), the row
+  parks in COUNTERED, Reply-To is the reviewer. Differences: the recipient
+  defaults to the producer block, the **client is Cc'd by default** (nobody's
+  broker is approached behind their coordinator's back), and **the review
+  LINK is appended by the route, never by the editable draft** — the partner-
+  welcome rule, so a reviewer trimming a paragraph cannot delete the thing the
+  email exists to deliver. Audited `coi.broker_review_sent` (who it went to,
+  never the body — that is on the job's thread). Label `coi-broker-review`
+  rides `sendOnJobThread`, so the broker's reply files to the job.
+- **The link opens `/coi/broker/[token]`** — read-only in the strong sense:
+  no form, no POST, no session. `signCoiBrokerToken` reuses the COI-upload
+  HMAC envelope with a **domain separator** (`coi-broker-review.v1`) so an
+  upload token can never be replayed as a review token, and the payload is
+  ONE `coiId` — a forwarded link never widens. 45-day TTL.
+- **`buildBrokerReviewPacket()` IS the disclosure envelope**, and the page
+  renders nothing it does not return. IN: the requirements, the verdict per
+  requirement, what THEIR certificate shows, the insured, the job name, the
+  replacement-value sentence, where to send the corrected one (the existing
+  client drop link). OUT: the reviewer's internal note, the per-check model
+  prose (it names requirements this job may not have — the 2026-09-09 leak),
+  the risk level, the stored PDF, the order, any rate, any contact but ours.
+- Verdicts are **recomputed on every view**, not frozen at send: a broker who
+  opens the link after the desk approved reads "nothing further needed", and
+  a production company fixed in HQ clears the named-insured line here too.
+  A gear-only job's auto rows stay NA, so we never ask a broker for coverage
+  this job does not need.
+- **The sample certificate rides along** (Wes 2026-09-17: "we may want to
+  also add a copy of our sample COI to broker") — the same ACORD the portal
+  and the Forms menu offer, `SAMPLE_COI_PATH` in requirements.ts, absolute on
+  the marketing origin so it resolves from any host or inbox. **Gated on
+  `SiteSetting.formCoiUrl` being set on BOTH surfaces**: `/api/public/forms/
+  [slot]` 404s until an admin uploads the PDF, so the page offers nothing
+  rather than a dead link and `brokerReviewLinkLines({ hasSample })` names it
+  in the email only when one is on file. A broker matching a document beats a
+  broker matching a paragraph; a broker clicking a 404 costs the round trip
+  this feature exists to save.
+- `COI_INBOX` ('rentals@') moved into `requirements.ts` — the portal's broker
+  email and this page name one mailbox. `npm run test:coi-broker`.
+- NOT done: nothing yet nudges when a broker has had the link for days with
+  no new certificate, and the broker is not offered anywhere outside the
+  review desk (no chip on the job page, no company-level broker on file).
+
 ## After-hours VEHICLE pickup email (2026-09-10)
 - Wes: "an easy button for sales to send this summary" — Jose's hand-typed
   After Hours Instructions (address, Gate 1 code, driver's-license line,
