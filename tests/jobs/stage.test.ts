@@ -10,7 +10,7 @@
  * the ladder.
  */
 import { deriveJobStage, type JobStageInputs } from '../../src/lib/jobs/stage'
-import { STAGE_RAIL, STAGE_CHIP, STATUS_COLORS, LEGEND_ITEMS, barColor, readinessMeterStyle, readinessLabelClass } from '../../src/lib/scheduling/statusTokens'
+import { STAGE_RAIL, STAGE_CHIP, STATUS_COLORS, LEGEND_ITEMS, barColor, readinessMeterStyle, readinessLabelClass, readySolidClass } from '../../src/lib/scheduling/statusTokens'
 
 const failures: string[] = []
 function eq(got: unknown, want: unknown, why: string): void {
@@ -72,7 +72,10 @@ eq(Object.keys(STAGE_RAIL).sort(), ['booked', 'cancelled', 'hold', 'inquiry', 'l
 eq(Object.keys(STAGE_CHIP).length >= 6, true, 'every stage has a chip')
 eq(barColor('order').bg, STATUS_COLORS.order.bg, 'order stage paints the Planyo dark red')
 eq(barColor('order', { blindPickup: true }).bg, 'bg-violet-500', 'blind pickup still wins over red')
-eq(barColor('hold', { blindPickup: true }).bg, STATUS_COLORS.hold.bg, 'blind pickup does not color an unbooked hold')
+// 2026-09-15: blind wins over every LIVE stage, hold included — the closed-day
+// question is usually answered while the reservation is still a hold.
+eq(barColor('hold', { blindPickup: true }).bg, 'bg-violet-500', 'blind pickup colors a hold too — the handoff alert outranks the stage')
+eq(barColor('cancelled', { blindPickup: true }).bg, STATUS_COLORS.cancelled.bg, 'a dead job has no handoff to warn about')
 eq(LEGEND_ITEMS.some((l) => l.label === 'Booked · Warehouse order'), true, 'legend names the red rung')
 eq(readinessMeterStyle(3, 5, { stage: 'hold' }).backgroundImage?.includes('147, 197, 253'), true, 'a hold washes blue')
 eq(readinessMeterStyle(3, 5, { stage: 'order' }).backgroundImage?.includes('253, 164, 175'), true, 'a warehouse-order job washes rose')
@@ -80,6 +83,22 @@ eq(readinessMeterStyle(3, 5, { stage: 'cancelled' }), {}, 'a cancelled bar draws
 eq(readinessLabelClass('text-white', { done: 3 }, 'order').includes('bg-white/85'), true, 'a washed label sits on a white plate, not dark ink on dark red')
 eq(readinessLabelClass('text-white', { done: 0 }, 'order'), 'text-white', 'no wash, no plate — white on the solid bar as before')
 eq(readinessLabelClass('text-green-800', { done: 3 }, 'inquiry'), 'text-green-800', 'dark-ink tokens keep their ink')
+
+// Wes 2026-09-17: the light wash builds left to right; COMPLETE is the
+// bar's own solid colour with no wash — one solid dark bar, not a solid
+// light one.
+eq(readinessMeterStyle(5, 5, { stage: 'hold' }), {}, 'a complete hold draws no wash — the solid blue bar is the finished state')
+eq(readinessMeterStyle(5, 5, { stage: 'order' }), {}, 'a complete warehouse-order bar draws no wash — solid red')
+eq(readinessMeterStyle(5, 5, { stage: 'hold', blindPickup: true }), {}, 'a complete blind bar draws no wash — solid violet')
+eq(readinessMeterStyle(4, 5, { stage: 'hold' }).backgroundImage?.includes('80%'), true, '4 of 5 still washes to 80%')
+eq(readinessMeterStyle(5, 5, { stage: 'hold', light: true }).backgroundImage?.includes('1.000'), true, 'a pale surface has no darker colour to snap to — its wash runs to full opacity')
+eq(readinessLabelClass('text-white', { done: 5, total: 5, ready: true }, 'order'), 'text-white', 'a complete label is white on the solid bar again — no plate')
+eq(readinessLabelClass('text-white', { done: 5, total: 5 }, 'hold'), 'text-white', 'done >= total reads as complete without the ready flag')
+eq(readinessLabelClass('text-white', { done: 4, total: 5 }, 'hold').includes('bg-white/85'), true, '4 of 5 keeps the plate')
+eq(readySolidClass('hold'), STATUS_COLORS.hold.bg, 'the job page strip goes solid blue on a ready hold')
+eq(readySolidClass('order', { blindReturn: true }), 'bg-violet-500', 'blind outranks the stage on the ready strip too')
+eq(readySolidClass('inquiry'), STATUS_COLORS.booked.bg, 'a ready inquiry strip takes the green its outline wears')
+eq(readySolidClass('cancelled'), '', 'off the ladder: nothing')
 
 console.log('')
 if (failures.length) { console.log(`${failures.length} failure(s)`); process.exit(1) }

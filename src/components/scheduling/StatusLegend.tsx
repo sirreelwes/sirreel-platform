@@ -59,14 +59,19 @@ export default function StatusLegend({
         ))}
         {/* Paperwork meter — the same gradient the bars draw, so the key and
             the rail cannot drift. Three samples read better than one: the
-            point is that it FILLS. */}
+            point is that it FILLS, and then (Wes 2026-09-17) that "ready"
+            is the bar's own solid colour with no wash, not a solid light
+            bar. Sampled at 2 and 4 rather than 0 — an untouched bar and a
+            ready bar are the same solid swatch, and two identical swatches
+            with different words under them is a key that argues with
+            itself. Drawn as a hold so the wash is the swatch's own hue. */}
         <span className="text-gray-300">|</span>
         <span className="text-gray-400 font-medium">Paperwork:</span>
-        {[0, 3, 5].map((done) => (
+        {[2, 4, 5].map((done) => (
           <div key={done} className="flex items-center gap-1">
             <div
               className="w-8 h-3 rounded-sm bg-blue-500"
-              style={readinessMeterStyle(done, 5)}
+              style={readinessMeterStyle(done, 5, { stage: 'hold' })}
             />
             <span className="text-gray-500">{done === 5 ? 'ready' : `${done} of 5`}</span>
           </div>

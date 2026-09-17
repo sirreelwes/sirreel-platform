@@ -286,11 +286,27 @@ const METER_FILL_BLIND = '196, 181, 253'
  *  halves of Wes's sketch true at once. Part-way, the fill is translucent
  *  and the bar's own status colour reads through it — a half-papered hold
  *  is still visibly blue, an order-attached bar still visibly red — so the
- *  meter never impersonates another status. At 5 of 5 it reaches full
- *  opacity and every ready bar, whatever it started as, is the same light
- *  green: "turn full green when all necessary items are met."
+ *  meter never impersonates another status.
  *  Pale bars start higher — there is no strong hue under them to preserve,
- *  and the fill has to carry the whole signal against white grid. */
+ *  and the fill has to carry the whole signal against white grid.
+ *
+ *  COMPLETE is NOT the top of the ramp (Wes 2026-09-17: "the light color
+ *  would build left to right. Once complete the entire bar would be
+ *  filled with the darker color and would just show one solid bar rather
+ *  than being filled with the lighter fill color"). It used to reach full
+ *  opacity at 5 of 5, so every ready bar was a solid LIGHT bar. Now a
+ *  solid bar that reaches 5 of 5 draws NO wash at all: the bar's own
+ *  status colour — the dark blue, green, red or violet it started as —
+ *  IS the finished state, edge to edge, and the label goes back to white
+ *  on it. The light wash only ever means "in progress". The ramp below
+ *  therefore tops out one step short of 1.0 on a solid bar (4 of 5 is
+ *  the deepest wash it draws), which is fine: it never needed to reach
+ *  full opacity to read as nearly done.
+ *  A PALE surface (`light`) has no darker colour of its own to snap to —
+ *  the backup sub-lane, the "needs a unit" chips, the grey track under
+ *  the job page's strip — so there the wash still runs to full opacity;
+ *  the job page swaps its track for the stage's solid colour itself via
+ *  `readySolidClass`. */
 const METER_ALPHA_ON_SOLID = 0.5
 const METER_ALPHA_ON_LIGHT = 0.75
 
@@ -337,6 +353,9 @@ export function readinessMeterStyle(
   // Outline stages have no strong hue to preserve — the fill carries the
   // whole signal against white grid, so it starts with more body.
   const light = opts?.light ?? (stage === 'inquiry' || stage === 'cancelled' || stage === 'lost')
+  // Complete on a solid bar: no wash. The bar's own dark colour is the
+  // finished state — one solid bar, not a solid light one.
+  if (pct >= 100 && !light) return {}
   const ratio = pct / 100
   const base = light ? METER_ALPHA_ON_LIGHT : METER_ALPHA_ON_SOLID
   const alpha = base + (1 - base) * ratio
@@ -356,12 +375,35 @@ export function readinessMeterStyle(
  * text is already dark (inquiry green, backup blue, the rose chips) are
  * returned untouched.
  */
-export function readinessLabelClass(base: string, r?: { done: number } | null, _stage?: string): string {
+export function readinessLabelClass(
+  base: string,
+  r?: { done: number; total?: number; ready?: boolean } | null,
+  _stage?: string,
+): string {
   if (!r || r.done <= 0) return base
+  // Complete draws no wash (see readinessMeterStyle), so the label goes
+  // back to white on the solid bar — a plate over a solid bar would be
+  // the only thing left saying "something happened here".
+  if (r.ready || (typeof r.total === 'number' && r.total > 0 && r.done >= r.total)) return base
   // Only white-on-color labels need the plate; a dark-ink token (dashed
   // inquiry green, the struck greys) already reads on its pale wash.
   if (!base.includes('text-white')) return base
   return `${base.replace('text-white', '').trim()} ${METER_PLATE}`
+}
+
+/**
+ * The solid fill a COMPLETE meter wears on a surface that is not itself
+ * the stage-coloured bar — the job page's paperwork strip sits on a grey
+ * track, and a finished strip there should be the same one solid bar the
+ * reservations board shows, in the same colour. Blind outranks the stage,
+ * as everywhere. Inquiry takes booked's green (its outline hue); the two
+ * off-ladder stages draw nothing, matching their absent wash.
+ */
+export function readySolidClass(stage: string, opts?: { blindPickup?: boolean; blindReturn?: boolean }): string {
+  if (isBlindBar(stage, opts)) return BLIND_PICKUP_COLOR.bg
+  if (stage === 'cancelled' || stage === 'lost') return ''
+  if (stage === 'inquiry') return STATUS_COLORS.booked.bg
+  return (STATUS_COLORS[stage] ?? STATUS_COLORS.booked).bg
 }
 
 /** Hover text — "Ready to go out" or "3 of 5 · missing COI, Card". */

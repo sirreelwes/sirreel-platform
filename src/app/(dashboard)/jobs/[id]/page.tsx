@@ -70,7 +70,7 @@ import { FinalInvoiceTile } from '@/components/jobs/FinalInvoiceTile';
 import { JobInvoicesPanel } from '@/components/jobs/JobInvoicesPanel';
 import { formatCadenceLabel, type CadenceRollup, type CadenceState } from '@/lib/jobs/cadence';
 import { STAGE_HINT, STAGE_LABEL, type JobStage } from '@/lib/jobs/stage';
-import { STAGE_CHIP, STAGE_RAIL, readinessMeterStyle } from '@/lib/scheduling/statusTokens';
+import { STAGE_CHIP, STAGE_RAIL, readinessMeterStyle, readySolidClass } from '@/lib/scheduling/statusTokens';
 import { computeReadiness } from '@/lib/jobs/readiness';
 import { orderContentSummary } from '@/lib/orders/contentSummary';
 import { rollupCoiState } from '@/lib/coi/coiState';
@@ -2064,29 +2064,32 @@ const driverTone = (d: any): string => {
         <div className="flex items-center justify-between gap-3 mb-2.5">
           <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Paperwork</h2>
           <div className="flex items-center gap-3">
-            {stripScored ? (
+            {stripScored ? (() => {
+              // Blind handoff outranks the stage here too, so the strip
+              // and the job's bar on the board are one color. Any order
+              // flag, or any vehicle overridden blind.
+              const blind = jobBlindRollup(
+                liveOrders,
+                liveB.flatMap((b: any) =>
+                  (b.items ?? []).flatMap((i: any) =>
+                    (i.assignments ?? [])
+                      .filter((a: any) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT')
+                      .map((a: any) => ({ blindPickup: a.blindPickup ?? null, blindReturn: a.blindReturn ?? null })),
+                  ),
+                ),
+              );
+              return (
               <span className="flex items-center gap-2 text-[12px] text-zinc-600">
                 {/* The progress bar, in the job's stage color — the same
-                    wash the reservations bar carries. */}
+                    wash the reservations bar carries. Ready = the stage's
+                    solid colour edge to edge (Wes 2026-09-17), which on
+                    this grey track means swapping the track itself; the
+                    wash function draws only the in-progress light fill. */}
                 <span
-                  className="inline-block w-20 h-2 rounded-sm bg-zinc-200 border border-zinc-300"
-                  style={readinessMeterStyle(readiness.done, readiness.total, {
-                    stage,
-                    light: true,
-                    // Blind handoff outranks the stage here too, so the
-                    // strip and the job's bar on the board are one color.
-                    // Any order flag, or any vehicle overridden blind.
-                    ...jobBlindRollup(
-                      liveOrders,
-                      liveB.flatMap((b: any) =>
-                        (b.items ?? []).flatMap((i: any) =>
-                          (i.assignments ?? [])
-                            .filter((a: any) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT')
-                            .map((a: any) => ({ blindPickup: a.blindPickup ?? null, blindReturn: a.blindReturn ?? null })),
-                        ),
-                      ),
-                    ),
-                  })}
+                  className={`inline-block w-20 h-2 rounded-sm border ${
+                    readiness.ready ? `${readySolidClass(stage, blind)} border-transparent` : 'bg-zinc-200 border-zinc-300'
+                  }`}
+                  style={readiness.ready ? undefined : readinessMeterStyle(readiness.done, readiness.total, { stage, light: true, ...blind })}
                   aria-hidden="true"
                 />
                 <span>
@@ -2094,7 +2097,8 @@ const driverTone = (d: any): string => {
                   {readiness.ready && <span className="text-emerald-700 font-semibold"> · Ready to go out</span>}
                 </span>
               </span>
-            ) : (
+              );
+            })() : (
               <span className="text-[12px] text-zinc-600">scoring starts when a reservation or order lands</span>
             )}
             {/* The client's own copy of this strip. Named recipient for the
