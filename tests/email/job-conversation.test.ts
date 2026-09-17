@@ -14,6 +14,7 @@ import {
   bareAddress,
   claimLabel,
   cleanNote,
+  internalNoteTells,
   kindFor,
   labelDetail,
   labelFromTriageNotes,
@@ -119,6 +120,34 @@ check('no client message → not waiting', awaitingReply([{ kind: 'system', at: 
 check('client wrote last → waiting', awaitingReply([{ kind: 'system', at: at('2026-09-12T10:00Z') }, { kind: 'client', at: at('2026-09-12T11:00Z') }]) === true)
 check('we answered after → not waiting', awaitingReply([{ kind: 'client', at: at('2026-09-12T11:00Z') }, { kind: 'staff', at: at('2026-09-12T11:30Z') }]) === false)
 check('order of rows does not matter', awaitingReply([{ kind: 'staff', at: at('2026-09-12T11:30Z') }, { kind: 'client', at: at('2026-09-12T11:00Z') }]) === false)
+
+// ── Before a reply goes to the client: does it read like a note? ─────
+console.log('\ninternalNoteTells — what the review step says out loud')
+{
+  const team = [
+    { id: 'u-hugo', name: 'Hugo Ramirez' },
+    { id: 'u-oliver', name: 'Oliver Carlson' },
+    { id: 'u-ana', name: 'Ana Lopez' },
+    { id: 'u-wes', name: 'Wes Bailey' },
+  ]
+  // Wes's two notes from SR-JOB-0312, 2026-09-17, as typed.
+  const first = 'Hey team, there was some confusion about the start date for some reason. However it is picking up this morning early, supposedly at 6 am, so hopefully we can get that going as soon as possible. I believe Oliver may have already been all over this too @Hugo'
+  const second = 'Hi all,\n\nI also noticed that she has a steel deck on this order but is only driving a pass van. How is that possible? @Oliver @Oliver @Oliver'
+  const t1 = internalNoteTells(first, team)
+  check('"Hey team … @Hugo": the mention is named', t1.some((t) => t.includes('@Hugo')), t1)
+  check('"Hey team …": the opener is named', t1.some((t) => t.includes('Hey team')), t1)
+  const t2 = internalNoteTells(second, team)
+  check('"Hi all … @Oliver ×3": one mention line, one opener line', t2.length === 2 && t2[0].includes('@Oliver') && !t2[0].includes('@Oliver, @Oliver') && t2[1].includes('Hi all'), t2)
+
+  check('a plain client reply has no tells', internalNoteTells('Hi Sarah,\n\nThe van is ready for pickup at 6 am tomorrow. Gate 1 code is in the after-hours email.\n\nThanks,\nJose', team).length === 0)
+  check('"Hi all" to a production is still flagged — the review is loud, not blocking', internalNoteTells('Hi all, the trucks are confirmed for Monday.', team).some((t) => t.includes('Hi all')))
+  check('a colleague addressed by name at a line start', internalNoteTells('Oliver, can you call her about the steel deck?', team).some((t) => t.includes('Oliver')))
+  check('a first name mid-sentence is not an address', internalNoteTells('We told Oliver the van is set.', team).length === 0)
+  check('"Ana" inside Anaheim does not trip', internalNoteTells('Anaheim, 6 am pickup confirmed.', team).length === 0)
+  check('a client who shares a first name, mid-line, is fine', internalNoteTells('Please let Hugo at the production office know.', team).length === 0)
+  check('an empty draft has no tells', internalNoteTells('   ', team).length === 0)
+  check('no staff list → only the opener can tell', internalNoteTells('Hey team, @Hugo', []).length === 1)
+}
 
 console.log(failures ? `\n${failures} FAILED` : '\nall passed')
 process.exit(failures ? 1 : 0)

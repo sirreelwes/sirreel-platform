@@ -226,6 +226,62 @@ export function mentionsIn(body: string, staff: { id: string; name: string }[]):
   return out
 }
 
+// ── Before a reply goes to the client ────────────────────────────────
+
+/**
+ * Wes 2026-09-17: "Things that are sent to the client need to be
+ * confirmed. I'm a little bit afraid that someone's going to write an
+ * internal note and accidentally send it to the client." The composer's
+ * two tabs sit an inch apart and ⌘↵ worked in both, so a note typed on the
+ * wrong tab was one keystroke from the client's inbox.
+ *
+ * Two things now stand between Send and the wire: a review step in the
+ * panel (To, Cc, From, the whole message, then a second Send), and the
+ * server refusing a send that does not say it was reviewed
+ * (`confirmed: true` on POST /api/jobs/[id]/email). This rule feeds the
+ * review step: the tells that a message was meant for the team, so the
+ * review can say so out loud and offer "Save as a note instead".
+ *
+ * Tells, all read off the text: an @mention of someone on staff (the
+ * client has no idea who @Hugo is), a team-facing opener ("Hey team",
+ * "Hi all", "Team,"), or a staff FIRST NAME used as an address ("Oliver,
+ * can you…"). None of them block — a rep can legitimately write "Hi all"
+ * to a production — they make the review louder.
+ */
+export function internalNoteTells(body: string, staff: { id: string; name: string }[]): string[] {
+  const tells: string[] = []
+  const text = body.trim()
+  if (!text) return tells
+
+  const mentioned = mentionsIn(text, staff)
+  if (mentioned.length > 0) {
+    const names = mentioned
+      .map((id) => staff.find((s) => s.id === id)?.name.split(/\s+/)[0])
+      .filter((n): n is string => !!n)
+    tells.push(`mentions ${names.map((n) => `@${n}`).join(', ')} — the client does not know who that is`)
+  }
+
+  const opener = text.split('\n')[0].trim().toLowerCase().replace(/[!.,:\s]+$/, '')
+  if (/^(hey|hi|hello|yo)?\s*(team|all|everyone|guys|folks)$/.test(opener) || /^(hey|hi|hello)\s+(team|all|everyone|guys|folks)\b/.test(opener)) {
+    tells.push(`opens "${text.split('\n')[0].trim()}" — that reads as a note to the team`)
+  }
+
+  // "Oliver, can you…" / "Hugo — " at the start of a line: a colleague
+  // addressed by first name. Only a FULL-word match at a line start, so
+  // "Ana" inside "Anaheim" and a client who shares a name mid-sentence
+  // do not trip it.
+  const firsts = new Set(staff.map((s) => s.name.trim().split(/\s+/)[0].toLowerCase()).filter((n) => n.length > 2))
+  const addressed = new Set<string>()
+  for (const line of text.split('\n')) {
+    const m = line.trim().match(/^([A-Za-z][A-Za-z'.-]*)\s*[,—:-]/)
+    if (m && firsts.has(m[1].toLowerCase())) addressed.add(m[1])
+  }
+  if (addressed.size > 0) {
+    tells.push(`addresses ${[...addressed].join(', ')} by name — someone on the team`)
+  }
+  return tells
+}
+
 /** Merge emails and notes into one stream, oldest first. Stable on ties (email before note). */
 export function mergeTimeline<E extends { at: Date }, N extends { at: Date }>(
   emails: E[],

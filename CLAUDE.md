@@ -1413,6 +1413,22 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `mentions` (ids). Nothing notifies a mentioned person yet — the chip row
   under the box is the nudge. Audited `job.note_added`. Do NOT use the
   legacy `job_messages` table for this.
+- **A reply to the client is REVIEWED before it goes (Wes 2026-09-17:
+  "Things that are sent to the client need to be confirmed. I'm a little
+  bit afraid that someone's going to write an internal note and
+  accidentally send it to the client").** The composer's "Review & send"
+  (and ⌘↵ on the reply tab) opens a review dialog — From, To, Cc, subject,
+  the whole message — and only the Send inside it emails. Focus lands on
+  "Back to editing", so a second ⌘↵ or a stray Enter goes back, never out.
+  `internalNoteTells()` in conversationRules.ts (pure, in
+  `test:job-conversation`) reads the draft for signs it was meant for the
+  team — an @mention of someone on staff, a "Hey team" / "Hi all" opener,
+  a colleague addressed by first name at a line start — and the review
+  says so and offers "Save as an internal note instead". Loud, never
+  blocking. **Server-side, `POST /api/jobs/[id]/email` refuses without
+  `confirmed: true`** (400), so a composer that skips the review cannot
+  send; `JobEmailButton`'s modal is its own review and passes it. Notes
+  need no review — they are never sent.
 - **The composer is the Phase 1 send** (`POST /api/jobs/[id]/email`), now
   **From = the author** (`Jose Pacheco <jose@sirreel.com>` through Resend's
   verified domain — the cadence runner has sent as the agent that way since

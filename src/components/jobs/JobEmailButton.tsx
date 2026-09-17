@@ -169,7 +169,9 @@ export function JobEmailButton({
       const r = await fetch(`/api/jobs/${jobId}/email`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ threadId: activeThreadId, to, cc, subject, body, counterReviewId: preset?.counterReviewId }),
+        // This modal IS the review: the rep opened it, saw To / Cc / subject
+        // and the message, and pressed Send. The route refuses without it.
+        body: JSON.stringify({ threadId: activeThreadId, to, cc, subject, body, counterReviewId: preset?.counterReviewId, confirmed: true }),
       })
       const j = await r.json()
       if (!r.ok || !j.ok) throw new Error(j.error || 'Send failed.')

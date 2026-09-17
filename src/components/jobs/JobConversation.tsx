@@ -23,8 +23,9 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Lock, Mail, Send, StickyNote, UserCheck, UserPlus, Users } from 'lucide-react'
+import { AlertTriangle, Lock, Mail, Send, StickyNote, UserCheck, UserPlus, Users } from 'lucide-react'
 import { splitCcInput } from '@/lib/email/ccList'
+import { internalNoteTells } from '@/lib/email/conversationRules'
 
 type Lane = 'SALES' | 'BILLING'
 
@@ -139,6 +140,12 @@ export function JobConversation({
   const [busy, setBusy] = useState(false)
   const [flash, setFlash] = useState<string | null>(null)
   const [claimOpen, setClaimOpen] = useState(false)
+  // Wes 2026-09-17: "things that are sent to the client need to be
+  // confirmed." A reply never leaves on the first Send: it opens this
+  // review (To, Cc, From, the whole message, and any sign it was meant
+  // for the team) and goes out on the second. Notes need no review — they
+  // are never sent.
+  const [reviewing, setReviewing] = useState(false)
   const listRef = useRef<HTMLDivElement>(null)
   const boxRef = useRef<HTMLTextAreaElement>(null)
 
@@ -216,34 +223,23 @@ export function JobConversation({
     setCc(merged.join(', '))
   }
 
-  const send = async () => {
+  const saveNote = async () => {
     if (!data || busy) return
     const text = body.trim()
     if (!text) return
     setBusy(true)
     try {
-      if (mode === 'note') {
-        const r = await fetch(`/api/jobs/${jobId}/conversation/notes`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ body: text }),
-        })
-        const j = await r.json()
-        if (!r.ok || !j.ok) throw new Error(j.error || 'Could not save the note.')
-        setBody('')
-        say('Note added — internal only.')
-      } else {
-        if (!to.trim()) throw new Error('Pick who this goes to.')
-        const r = await fetch(`/api/jobs/${jobId}/email`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ to: to.trim(), cc, subject: draft?.subject || data.subject, body: text }),
-        })
-        const j = await r.json()
-        if (!r.ok || !j.ok) throw new Error(j.error || 'Send failed.')
-        setBody('')
-        say(`Sent to ${to.trim()} on the job thread.`)
-      }
+      const r = await fetch(`/api/jobs/${jobId}/conversation/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ body: text }),
+      })
+      const j = await r.json()
+      if (!r.ok || !j.ok) throw new Error(j.error || 'Could not save the note.')
+      setBody('')
+      setReviewing(false)
+      setMode('note')
+      say('Note added — internal only.')
       await load()
     } catch (e) {
       say(e instanceof Error ? e.message : 'Something went wrong.')
@@ -251,6 +247,55 @@ export function JobConversation({
       setBusy(false)
     }
   }
+
+  /** First Send on a reply: open the review. Nothing is sent here. */
+  const openReview = () => {
+    if (!data || busy) return
+    if (!body.trim()) return
+    if (!to.trim()) {
+      say('Pick who this goes to.')
+      return
+    }
+    setReviewing(true)
+  }
+
+  /** Second Send, from inside the review: the one call that emails the client. */
+  const sendReviewed = async () => {
+    if (!data || busy || !reviewing) return
+    const text = body.trim()
+    if (!text || !to.trim()) return
+    setBusy(true)
+    try {
+      const r = await fetch(`/api/jobs/${jobId}/email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: to.trim(), cc, subject: draft?.subject || data.subject, body: text, confirmed: true }),
+      })
+      const j = await r.json()
+      if (!r.ok || !j.ok) throw new Error(j.error || 'Send failed.')
+      setBody('')
+      setReviewing(false)
+      say(`Sent to ${to.trim()} on the job thread.`)
+      await load()
+    } catch (e) {
+      say(e instanceof Error ? e.message : 'Something went wrong.')
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  /** The composer's button / ⌘↵: a note saves, a reply goes to review. */
+  const send = async () => {
+    if (mode === 'note') await saveNote()
+    else openReview()
+  }
+
+  // What in the draft says "this was for the team" — shown in the review.
+  const tells = useMemo(
+    () => (data && mode === 'reply' ? internalNoteTells(body, data.staff) : []),
+    [data, mode, body],
+  )
+  const ccList = useMemo(() => splitCcInput(cc).valid.filter((a) => a !== to.trim().toLowerCase()), [cc, to])
 
   const claim = async (action: 'claim' | 'release' | 'hand', laneArg?: Lane) => {
     setClaimOpen(false)
@@ -564,7 +609,7 @@ export function JobConversation({
           }}
         />
         <div className="flex items-center justify-between gap-2">
-          <span className="text-[11px] text-lt-fg3 truncate">{flash ?? (mode === 'reply' && data ? `Sends as ${data.me.name || data.me.email}` : '⌘↵ to send')}</span>
+          <span className="text-[11px] text-lt-fg3 truncate">{flash ?? (mode === 'reply' && data ? `Sends as ${data.me.name || data.me.email} · you review it first` : '⌘↵ to add')}</span>
           <button
             type="button"
             onClick={() => void send()}
@@ -574,9 +619,95 @@ export function JobConversation({
             }`}
           >
             {mode === 'note' ? <StickyNote size={13} aria-hidden /> : <Send size={13} aria-hidden />}
-            {busy ? 'Working…' : mode === 'note' ? 'Add note' : 'Send'}
+            {busy ? 'Working…' : mode === 'note' ? 'Add note' : 'Review & send'}
           </button>
         </div>
+        {reviewing && data && (
+          <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 px-3 py-6"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="conversation-review-title"
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setReviewing(false)
+            }}
+          >
+            <div className="w-full max-w-lg max-h-full flex flex-col bg-lt-card border border-lt-hairline rounded-2xl shadow-xl overflow-hidden">
+              <div className="px-4 pt-4 pb-3 border-b border-lt-hairline">
+                <h3 id="conversation-review-title" className="text-[15px] font-semibold text-lt-fg flex items-center gap-2">
+                  <Mail size={15} aria-hidden className="text-amber-700" /> Send this to the client?
+                </h3>
+                <p className="mt-0.5 text-[12px] text-lt-fg2">
+                  It goes out by email, from you, on the job thread. Nothing has been sent yet.
+                </p>
+              </div>
+              <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-3 text-[12px]">
+                {tells.length > 0 && (
+                  <div className="rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg text-chip-warn-fg px-3 py-2">
+                    <div className="flex items-center gap-1.5 font-semibold">
+                      <AlertTriangle size={13} aria-hidden /> This reads like a note for the team
+                    </div>
+                    <ul className="mt-1 list-disc pl-4 space-y-0.5">
+                      {tells.map((t) => (
+                        <li key={t}>{t}</li>
+                      ))}
+                    </ul>
+                    <button
+                      type="button"
+                      onClick={() => void saveNote()}
+                      disabled={busy}
+                      className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-violet-600 hover:bg-violet-500 text-white px-2.5 py-1 text-[12px] font-semibold disabled:opacity-40"
+                    >
+                      <StickyNote size={12} aria-hidden /> Save as an internal note instead
+                    </button>
+                  </div>
+                )}
+                <dl className="grid grid-cols-[3.5rem_1fr] gap-x-2 gap-y-1">
+                  <dt className="text-lt-fg3">From</dt>
+                  <dd className="text-lt-fg break-words">{data.me.name || data.me.email}</dd>
+                  <dt className="text-lt-fg3">To</dt>
+                  <dd className="text-lt-fg font-semibold break-words">
+                    {draft?.contacts.find((c) => c.email === to.trim())?.name
+                      ? `${draft.contacts.find((c) => c.email === to.trim())!.name} · ${to.trim()}`
+                      : to.trim()}
+                  </dd>
+                  <dt className="text-lt-fg3">Cc</dt>
+                  <dd className="text-lt-fg break-words">
+                    {ccList.length ? ccList.join(', ') : <span className="text-lt-fg3">nobody</span>}
+                    <span className="text-lt-fg3"> · filed to {data.job.jobCode}</span>
+                  </dd>
+                  <dt className="text-lt-fg3">Subject</dt>
+                  <dd className="text-lt-fg break-words">{draft?.subject || data.subject}</dd>
+                </dl>
+                <div className="rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-[13px] text-lt-fg whitespace-pre-wrap break-words">
+                  {body.trim()}
+                </div>
+              </div>
+              <div className="px-4 py-3 border-t border-lt-hairline flex items-center justify-between gap-2">
+                {/* Focus lands on Back, on purpose: a second ⌘↵ or a stray
+                    Enter after the review opens goes back to the draft,
+                    never out to the client. Sending is a click on Send. */}
+                <button
+                  type="button"
+                  onClick={() => setReviewing(false)}
+                  disabled={busy}
+                  autoFocus
+                  className="rounded-lg border border-lt-hairline px-3 py-1.5 text-[13px] font-semibold text-lt-fg2 hover:text-lt-fg hover:bg-lt-inner"
+                >
+                  Back to editing
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void sendReviewed()}
+                  disabled={busy}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white px-3 py-1.5 text-[13px] font-semibold disabled:opacity-40"
+                >
+                  <Send size={13} aria-hidden /> {busy ? 'Sending…' : `Send to ${to.trim()}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {data && data.staff.length > 0 && mode === 'note' && (
           <div className="flex items-center gap-1 text-[10.5px] text-lt-fg3 flex-wrap">
             <Users size={10} aria-hidden />
