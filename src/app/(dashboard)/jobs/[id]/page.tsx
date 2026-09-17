@@ -34,7 +34,7 @@ import { notifyJobsChanged } from '@/components/jobs/JobsListProvider';
  * CompanyAgreement.autoCoverJobs — see src/lib/orders/annualCoverage.ts.
  */
 const SHOW_AGREEMENT_ON_FILE = true;
-import { JobConversation, ConversationTabs } from '@/components/jobs/JobConversation';
+import { useJobChat } from '@/components/jobs/JobChatDock';
 import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { JobWelcomeButton } from '@/components/jobs/JobWelcomeButton';
 import { AddAssetButton } from '@/components/jobs/AddAssetButton';
@@ -527,24 +527,15 @@ export default function JobDetailPage() {
   const canSeeMoney = useMoneyVisible();
   const params = useParams();
   const router = useRouter();
-  // One-thread-per-job (Phase 2): the Conversation is a pinned rail at
-  // 1280px+ and a Details | Conversation tab below that. `?tab=conversation`
-  // is the deep link a notification lands on (same pattern as
-  // /jobs?panel=incoming). The panel is mounted ONCE and shown/hidden by
-  // class, so it loads once and its "client replied" dot reaches the tab.
+  // One-thread-per-job (Phase 2): the Conversation lives in a dock owned by
+  // the /jobs LAYOUT, so it survives walking from one job to the next and
+  // can be minimised or closed (Wes 2026-09-17). This page only says which
+  // job is on screen; the dock decides whether the window follows.
+  // `?tab=conversation` is the deep link a notification lands on (the
+  // Hand-to-Billing email, an urgent note's text) — it opens the window.
   const searchParams = useSearchParams();
-  const tab: 'details' | 'conversation' = searchParams?.get('tab') === 'conversation' ? 'conversation' : 'details';
-  const setTab = useCallback(
-    (t: 'details' | 'conversation') => {
-      const q = new URLSearchParams(searchParams?.toString() ?? '');
-      if (t === 'conversation') q.set('tab', 'conversation');
-      else q.delete('tab');
-      router.replace(`${window.location.pathname}${q.toString() ? `?${q.toString()}` : ''}`, { scroll: false });
-    },
-    [router, searchParams],
-  );
-  const [convoAwaiting, setConvoAwaiting] = useState(false);
-  const onConvoSummary = useCallback((sum: { awaitingReply: boolean }) => setConvoAwaiting(sum.awaitingReply), []);
+  const wantsConversation = searchParams?.get('tab') === 'conversation';
+  const chat = useJobChat();
   // `?book=1` — where the tile's "Approved — book it" chip lands. The chip
   // used to be plain text inside the row's link, so pressing it dropped a
   // rep at the top of a long page with nothing saying WHICH order it meant
@@ -687,6 +678,29 @@ export default function JobDetailPage() {
       next.has(oid) ? next.delete(oid) : next.add(oid);
       return next;
     });
+
+  // Tell the dock which job is on screen. While nobody has minimised or
+  // closed the window it follows this, which keeps the always-on column
+  // the rail used to be; once it is pinned, this is only what the
+  // "you're on another job" strip reads.
+  const chatSetHere = chat.setHere;
+  useEffect(() => {
+    if (!job) return;
+    chatSetHere({ id: job.id, jobCode: job.jobCode, name: job.name, company: job.company?.name ?? null });
+    return () => chatSetHere(null);
+  }, [job, chatSetHere]);
+
+  // `?tab=conversation` — the Hand-to-Billing email and an urgent note's
+  // text land here. Open the window even if it was closed; once per
+  // landing, so pressing Close does not fight the deep link.
+  const chatOpenFor = chat.openFor;
+  const convoDeepLinkRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!wantsConversation || !job || convoDeepLinkRef.current === job.id) return;
+    convoDeepLinkRef.current = job.id;
+    chatOpenFor({ id: job.id, jobCode: job.jobCode, name: job.name, company: job.company?.name ?? null });
+    setTimeout(() => window.dispatchEvent(new CustomEvent('job-conversation:focus')), 120);
+  }, [wantsConversation, job, chatOpenFor]);
 
   // Land the `?book=1` deep link: open every approved-unbooked order and
   // scroll the prompt into view. Runs after the job is in state, so the
@@ -1588,9 +1602,7 @@ const driverTone = (d: any): string => {
   const foldedChips = FOLD_META.filter((m) => sectionEmpty[m.key] && !openSections.has(m.key));
 
   return (
-    <div className="mx-auto max-w-5xl xl:max-w-[1480px] xl:grid xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-4 xl:items-start">
-      <ConversationTabs tab={tab} onChange={setTab} awaiting={convoAwaiting} />
-      <div className={`max-w-5xl mx-auto space-y-3 text-[15px] min-w-0 ${tab === 'conversation' ? 'hidden xl:block' : ''}`}>
+    <div className="max-w-5xl mx-auto space-y-3 text-[15px] min-w-0">
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-zinc-100 border border-zinc-300 text-zinc-900 text-[15px] px-4 py-2 rounded-lg shadow-xl">
           {toast}
@@ -1797,16 +1809,20 @@ const driverTone = (d: any): string => {
                 )}
               </div>
             )}
+              {/* The one way back to a window that was closed. */}
               <button
                 type="button"
                 onClick={() => {
-                  setTab('conversation');
+                  chat.openFor({ id: job.id, jobCode: job.jobCode, name: job.name, company: job.company?.name ?? null });
                   setTimeout(() => window.dispatchEvent(new CustomEvent('job-conversation:focus')), 60);
                 }}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-semibold rounded-lg border border-lt-hairline bg-lt-card text-lt-fg2 hover:text-lt-fg"
                 title="Write to the client on this job's one thread"
               >
                 <Mail size={13} aria-hidden /> Conversation
+                {chat.target?.id === job.id && chat.awaiting && (
+                  <span className="w-2 h-2 rounded-full bg-amber-600" aria-label="client replied" />
+                )}
               </button>
             </div>
             {/* In-Job creation — the ONLY place quotes/reservations are
@@ -4102,14 +4118,6 @@ const driverTone = (d: any): string => {
           }}
         />
       )}
-    </div>
-      <aside className={`min-w-0 ${tab === 'conversation' ? '' : 'hidden xl:block'} xl:sticky xl:top-4`}>
-        <JobConversation
-          jobId={job.id}
-          onSummary={onConvoSummary}
-          className="h-[calc(100vh-7rem)] min-h-[480px] xl:h-[calc(100vh-2.5rem)]"
-        />
-      </aside>
     </div>
   );
 }
