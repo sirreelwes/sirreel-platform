@@ -41,12 +41,14 @@ import {
  * them to install, sign up, configure or learn anything, because that is the
  * whole point: it is already on their account.
  *
- * Two lead-ins are Wes's own words rather than that pattern (2026-09-16, on
- * reading the draft): the after-hours line opens on the claim he actually
- * makes to clients — "we are the most responsive team in the business" —
- * with AHA covering the hours the team is asleep, and the partner line is
- * his, verbatim. Where his phrasing and the pattern disagree, his phrasing
- * wins: it is his voice the client is buying.
+ * Several lead-ins follow Wes's framing instead (2026-09-16, on reading the
+ * draft): the after-hours line opens on the claim he actually makes to
+ * clients — "we are the most responsive team in the business" — with AHA
+ * covering the hours the team is asleep; the partner line is his, verbatim;
+ * and the insurance line was rewritten to match them, opening on what we do
+ * for the client rather than on the disaster it prevents. Where his phrasing
+ * and the pattern disagree, his phrasing wins: it is his voice the client is
+ * buying.
  *
  * AHA is named to clients on purpose — the portal job page already says
  * "After hours, text AHA" — and described as an assistant rather than a
@@ -67,7 +69,7 @@ import {
 export const SIRREEL_CAPABILITIES: ReadonlyArray<string> = [
   "<strong>Nobody should have to call for a status.</strong> Every show gets its own page now — dates, paperwork, pickup details, who to call. Your coordinator opens a link. No login, no account to set up.",
   "<strong>Signing the same contract every show got old.</strong> So we put one agreement on your account instead. Every job after that is a one-pager that files under it — nothing to re-read, nothing to re-sign.",
-  "<strong>COIs always go wrong at the worst possible moment.</strong> We read every certificate the minute it lands and tell you if something's off — usually days ahead, instead of at the gate on load-in morning. We'll tell your broker the number to insure for, too.",
+  "<strong>We keep the insurance side clean for you.</strong> Every certificate gets read the day it arrives, and if the named insured doesn't match the production company you hear about it days ahead — not at the gate on load-in morning. We'll tell your broker the replacement value to cover, too.",
   "<strong>We're the most responsive team in the business.</strong> And for the few hours we're catching sleep before the next day, AHA — our after-hours assistant — picks up. Your crew can text at any hour and get a driver into a truck or a lock box on the spot, instead of leaving a voicemail.",
   "<strong>Find everything you need in one place.</strong> If we don't own it, we get it from our partners — quoted, delivered and billed by us. Your team places one order and reconciles one invoice.",
   "<strong>\u201cDid that come back?\u201d shouldn't be a debate.</strong> Radios, generators and the rest get scanned going out and scanned coming in, so what happened is a record instead of an argument.",
