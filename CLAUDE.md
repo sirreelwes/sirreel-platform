@@ -949,6 +949,51 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## The reservation follows the order's dates (2026-09-17 — Wes)
+- Wes, on Someday Studios' passenger van: "I changed it in the order, but
+  that did not change it on the reservation as we had planned for it to
+  do." Pickup 18th → 17th on the order; the board still drew the van on
+  the 18th. Nothing had ever moved a UNIT with a line's dates:
+  `BookingAssignment.startDate/endDate` are COPIES stamped at assign time
+  from the quoted block (assignWindow.ts), and neither date edit wrote
+  them back. Worse, `coverageOfBlock` matches by exact day, so the NEW
+  block read as unfilled while the same van sat held on the old one.
+- **Two edits move line dates, one implementation follows them:**
+  `syncReservationToLineDates()` in `src/lib/scheduling/followLineDates.ts`,
+  called by the row editor (`PUT /line-items/[lineId]`) and "Change dates…"
+  (`POST /dates/apply`). It runs `holdOnQuoteSend` (peak + envelope widen),
+  re-stamps the units, then `tightenBookingEnvelope` brings the envelope IN
+  when nothing still needs the old days. Pure rules `planAssignmentFollow`
+  / `bookingEnvelopeFor`, `npm run test:follow-line-dates`.
+- **Why the row editor never fired before:** its gate was the line's own
+  `assetCategoryId`, which every catalog-bound vehicle leaves null (the
+  class lives on the catalog row). `holdCategoryForLine()` in
+  holdOnQuoteSend.ts is now the exported, pure resolution the hold itself
+  uses; resolve a line's class through it, never off `assetCategoryId`
+  alone. The qty-change branch of that route still gates the old way —
+  open, not touched here.
+- **Which units follow:** the ones carrying the old block's days verbatim
+  (the same rule coverage counts by), up to the moved line's quantity, this
+  order's own before unstamped ones; a sibling order's unit never moves.
+  Overlap is accepted only when the class has NO other block on the order
+  (a row stamped with an order span before blocks existed). CHECKED_OUT:
+  the pickup already happened, so only the return follows, and only when
+  the pickup did not move.
+- **A unit booked elsewhere on the new days does NOT move** on the row
+  editor — it stays, and the PUT response's `assignmentsFollowed.blocked`
+  names it (the page alerts). The client's dates are the client's dates;
+  the truck is a re-pick. "Change dates…" showed the rep every conflict
+  and had them tick through, so it passes `allowConflicts` and the unit
+  moves anyway, audited `overrodeConflict: true`. Every re-stamp is
+  AuditLog `booking_assignment.dates_followed_line` with old/new days.
+- **The envelope shrinks only when nothing bare is on the booking:** a
+  class held with no quoted line behind it (Make Reservation, no order
+  line) has the envelope as its only date, so with one present the
+  envelope stays widen-only. Otherwise pushing an order a week later no
+  longer leaves a phantom hold on the old days.
+- The header `PUT /api/orders/[id]` `startDate/endDate` is still a mirror
+  with no UI and reaches nothing scheduling-side — on purpose.
+
 ## "Booking item is fully assigned" — one capacity rule (2026-09-17 — Jose)
 - Jose, on Mad Minds (SR-JOB-0389): changing Cargo 35 for another van was
   refused "booking item is fully assigned". Not a driver, not a lock. The
