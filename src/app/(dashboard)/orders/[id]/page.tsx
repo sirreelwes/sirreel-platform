@@ -6,6 +6,7 @@ import { paymentMethodLabel } from '@/lib/invoices/paymentMethods';
 import { calendarDays, computeBillableDays, weekCapChoices } from '@/lib/orders/billing';
 import { DayClaimsPanel } from '@/components/orders/DayClaimsPanel';
 import { useRouter, useParams, useSearchParams } from "next/navigation";
+import { orderBackTarget } from "@/lib/nav/orderBackTarget";
 import { useSession } from "next-auth/react";
 import { getPermissions } from "@/lib/permissions";
 import type { UserRole } from "@prisma/client";
@@ -3370,6 +3371,7 @@ export default function OrderDetailPage() {
   })();
   const recipients = computeRecipients(order);
   const noRecipient = !recipients.primary;
+  const backTarget = orderBackTarget({ from: searchParams?.get('from'), job: order.job });
 
   return (
     // Light-motif page bg — overrides the dashboard shell's default
@@ -3377,8 +3379,13 @@ export default function OrderDetailPage() {
     // wrapper so the two surfaces feel like one engagement.
     <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1200px] mx-auto">
-        <button onClick={() => router.push("/orders")} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">
-          &larr; Back to Orders
+        {/* Back goes where you CAME FROM. It used to be a fixed push to
+            /orders, so an agent who opened this order from a job was
+            dropped into the master list and had to find the job again
+            (Wes 2026-09-17). A job-side link carries ?from=job and this
+            reads it; every other door still lands on the list. */}
+        <button onClick={() => router.push(backTarget.href)} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">
+          &larr; {backTarget.label}
         </button>
 
       {/* Order Header */}
