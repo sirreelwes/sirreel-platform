@@ -16,6 +16,9 @@ import { shouldOnboardClaimEmail } from "@/lib/claims/shouldOnboardClaimEmail"
 import { shouldIngest, recordIngestDecision, inboxMode, hasKnownConversationLink } from "@/lib/email/ingestFilter"
 import { ingestHrEmail, HR_INBOX } from "@/lib/hr/ingestHrEmail"
 import { handleIngestedMessageForInquiryReply } from "@/lib/sales/markInquiryResponded"
+import { jobCodeFromHeaders, JOB_MESSAGE_HEADER } from "@/lib/email/jobThreadRules"
+import { resolveJobForIngest } from "@/lib/email/jobThread"
+import { fileThreadInJobIfUnfiled } from "@/lib/jobs/attachThreadToJob"
 
 // Centralized — see src/lib/email/watchedInboxes.ts. Alias kept for
 // the existing in-file references; same array, single source of
@@ -129,6 +132,14 @@ async function syncInbox(email: string) {
     // (claims@ → ana@ etc.) so downstream classification can route on
     // true addressing instead of the inbox-of-record.
     const routingHeaders = extractRoutingHeaders(headers)
+    // Job-thread anchors (lib/email/jobThreadRules). The References chain
+    // and HQ's own marker header prove membership (anchor A); the job
+    // address on any recipient header names the job outright (anchor B).
+    // Read here, used three times below: the driver-relay guard, the
+    // own-copy dedup, and the fill-only filing after the thread upsert.
+    const references = get("References") || null
+    const jobMessageHeader = get(JOB_MESSAGE_HEADER) || null
+    const jobCode = jobCodeFromHeaders([get("To"), get("Cc"), routingHeaders?.deliveredTo, routingHeaders?.xOriginalTo])
     // Machine-generated? An out-of-office responder is stored like any
     // other message but never counts as a human response — see the
     // thread-state and inquiry-reply blocks below.
@@ -176,8 +187,9 @@ async function syncInbox(email: string) {
     // after the already-ingested check above, which is what stops a
     // message being forwarded twice. Fire-and-forget + caught: a relay
     // failure must not break ingest for the rest of the mailbox.
-    const relayTag =
-      parseRelayTag(get("To")) ||
+    const relayTag = jobCode
+      ? null // jobs+sr-job-NNNN@ is a job thread's address, never a driver's
+      : parseRelayTag(get("To")) ||
       parseRelayTag(get("Cc")) ||
       parseRelayTag(routingHeaders?.deliveredTo) ||
       parseRelayTag(routingHeaders?.xOriginalTo)
@@ -216,6 +228,19 @@ async function syncInbox(email: string) {
       if (existingCanonical) {
         duplicateOfId = existingCanonical.id
       }
+    }
+    // HQ's OWN send, back through jobs@ (anchor B Cc's the job address on
+    // every send). The send already recorded itself on the job's root
+    // thread under the Message-ID it minted; if Resend rewrote that id on
+    // the wire, the marker header still names it. Fold this copy onto the
+    // recorded row rather than storing our email twice.
+    if (!duplicateOfId && jobMessageHeader && jobMessageHeader !== rfc822MessageId) {
+      const own = await prisma.emailMessage.findFirst({
+        where: { rfc822MessageId: jobMessageHeader, duplicateOfId: null },
+        select: { id: true },
+        orderBy: { createdAt: "asc" },
+      }).catch(() => null)
+      if (own) duplicateOfId = own.id
     }
 
     // Direction is now classified by the central helper. Outbound
@@ -263,12 +288,16 @@ async function syncInbox(email: string) {
     // LINKED-mode proof (wes@): one DB roundtrip, only for inboxes in
     // that mode — does this message's Message-ID chain touch a stored
     // conversation? Unlinked mail is dropped below and never written.
+    // MONEY mode reads the same proof since the job thread shipped: a
+    // client's "thanks, paid" on the job's thread has no invoice keyword
+    // and must not be dropped by billing@'s positive filter.
+    const mode = inboxMode(email)
     const conversationLink =
-      inboxMode(email) === 'LINKED'
+      mode === 'LINKED' || mode === 'MONEY'
         ? await hasKnownConversationLink({
             rfc822MessageId,
             inReplyTo,
-            references: get('References'),
+            references,
           })
         : undefined
     const decision = shouldIngest({
@@ -280,6 +309,7 @@ async function syncInbox(email: string) {
       bodyHtml: body.bodyHtml,
       routingHeaders,
       conversationLink,
+      jobTagged: !!jobCode,
     })
     void recordIngestDecision(email, decision)
     if (!decision.keep) continue
@@ -310,6 +340,22 @@ async function syncInbox(email: string) {
       },
       update: { lastMessageAt: sentAt, messageCount: { increment: 1 } },
     })
+
+    // One thread per job: an anchored message files its thread to the job
+    // by itself. FILL-ONLY — a thread a person already placed is never
+    // re-pointed (fileThreadInJobIfUnfiled is that rule). Before this, a
+    // client's reply to a quote arrived under a Gmail thread id HQ had
+    // never seen and sat unfiled until someone attached it by hand.
+    if (!thread.jobId) {
+      const anchoredJobId = await resolveJobForIngest({
+        jobCode,
+        rfc822MessageId,
+        inReplyTo,
+        references,
+        jobMessageId: jobMessageHeader,
+      })
+      if (anchoredJobId) await fileThreadInJobIfUnfiled(thread.id, anchoredJobId)
+    }
 
     // Advance the directional timestamp + lastDirection only if this
     // message is the new latest in its direction (and the new overall

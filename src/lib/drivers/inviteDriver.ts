@@ -22,7 +22,7 @@
  */
 
 import { randomUUID } from 'crypto'
-import { blindHandoffForBooking } from '@/lib/fleet/blindHandoff'
+import { blindHandoffForAssignment } from '@/lib/fleet/blindHandoff'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
 import { buildDriverAssignmentEmail } from '@/lib/email/templates/driverAssignment'
@@ -206,7 +206,7 @@ export async function inviteDriver(args: InviteDriverArgs): Promise<InviteDriver
   // Unattended pickup? Then the email should say so up front — the page
   // carries the gate and lockbox codes and the driver's own check-out
   // step, and a driver who expects to be met will not look for them.
-  const unattendedPickup = (await blindHandoffForBooking(booking)).blindPickup
+  const unattendedPickup = (await blindHandoffForAssignment(assignment.id)).blindPickup
 
   // ── SMS channel: the text carries the same three facts the email
   //    opens with (unit, production, date) and the same link. Short by

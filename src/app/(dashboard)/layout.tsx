@@ -225,10 +225,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       {/* Sidebar — desktop only; the phone gets MobileNav's sheet,
           which renders the same NavList from the same sections. */}
       <aside className="hidden md:flex w-60 flex-shrink-0 bg-[#1a1a1a] text-slate-200 flex-col">
-        {/* Brand — real SirReel "S" mark (white transparent PNG on the dark chrome) */}
+        {/* Brand — the 2023 SirReel icon file as drawn (black on white), on
+            its own white tile. The colour-reversed PNG read as a different
+            mark on the dark chrome (Wes). */}
         <div className="px-4 py-4 border-b border-white/10">
           <Link href="/" className="flex items-center gap-2.5">
-            <img src="/s-logo-white.png" alt="" aria-hidden="true" className="w-9 h-9 flex-shrink-0 object-contain" />
+            <span className="w-9 h-9 flex-shrink-0 rounded-lg bg-white flex items-center justify-center p-1">
+              <img src="/sirreel-s-icon-black.png" alt="" aria-hidden="true" className="w-full h-full object-contain" />
+            </span>
             <div className="leading-tight">
               <div className="font-bold text-[15px] text-white tracking-tight">SirReel</div>
               <div className="text-[8px] font-semibold text-amber-300 tracking-[0.22em] uppercase">SirReel HQ</div>

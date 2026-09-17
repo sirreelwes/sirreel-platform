@@ -18,10 +18,10 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { blindFlags, loadJobBlindContext, ordersForBooking } from '@/lib/fleet/blindHandoff'
+import { blindForVehicle, loadJobBlindContext, ordersForBooking } from '@/lib/fleet/blindHandoff'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { afterHoursPayload } from '@/lib/afterHours/instructions'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import {
   buildVehiclePickupEmail,
@@ -65,6 +65,8 @@ export async function jobPickupVehicles(jobId: string): Promise<PickupVehicle[]>
       startDate: true,
       endDate: true,
       status: true,
+      blindPickup: true,
+      blindReturn: true,
       bookingItem: { select: { booking: { select: { id: true } } } },
       asset: {
         select: {
@@ -85,7 +87,7 @@ export async function jobPickupVehicles(jobId: string): Promise<PickupVehicle[]>
   const seen = new Map<string, PickupVehicle>()
   for (const r of rows) {
     if (seen.has(r.asset.id)) continue
-    const blind = blindFlags(ordersForBooking(ctx.orders, r.bookingItem.booking.id, ctx.liveBookingIds)).any
+    const blind = blindForVehicle(ordersForBooking(ctx.orders, r.bookingItem.booking.id, ctx.liveBookingIds), r).any
     const start = fmtDay(r.startDate)
     const end = fmtDay(r.endDate)
     seen.set(r.asset.id, {
@@ -255,7 +257,8 @@ export async function sendVehiclePickupInstructions(args: {
   })
 
   const cc = await withTeamCc([], to[0])
-  const result = await sendAgreementEmail({
+  const result = await sendOnJobThread({
+    jobId: job.id,
     label: 'job/vehicle-pickup',
     to,
     cc: cc.filter((c) => !to.includes(c)).length ? cc.filter((c) => !to.includes(c)) : undefined,

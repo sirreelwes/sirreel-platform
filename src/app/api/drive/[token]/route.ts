@@ -5,7 +5,7 @@ import { listHours } from '@/lib/drivers/hoursStore'
 import { hoursPromptOpen } from '@/lib/drivers/hoursEntry'
 import { todayPacific } from '@/lib/sub-rentals/driverUnitView'
 import { selfCheckoutState } from '@/lib/drivers/selfCheckout'
-import { blindFlags, ordersForBooking } from '@/lib/fleet/blindHandoff'
+import { blindForVehicle, ordersForBooking } from '@/lib/fleet/blindHandoff'
 import { selfReturnState } from '@/lib/drivers/selfReturn'
 
 export const dynamic = 'force-dynamic'
@@ -52,6 +52,9 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
       bookingAssignment: {
         select: {
           id: true, startDate: true, endDate: true, status: true,
+          // This vehicle's own blind answer, when sales set one (Jose
+          // 2026-09-16) — null follows the order.
+          blindPickup: true, blindReturn: true,
           asset: {
             select: {
               unitName: true, make: true, model: true, licensePlate: true,
@@ -148,7 +151,8 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
     myOrders.find((o) => o.blindPickupInstructions?.trim())?.blindPickupInstructions ?? null
   const returnInstructions =
     myOrders.find((o) => o.blindReturnInstructions?.trim())?.blindReturnInstructions ?? null
-  const { blindPickup: isBlindPickup, blindReturn: isBlindReturn } = blindFlags(myOrders)
+  // THIS vehicle's answer: its own override where set, else its booking's orders.
+  const { blindPickup: isBlindPickup, blindReturn: isBlindReturn } = blindForVehicle(myOrders, asg)
 
   // What's loaded on the vehicle — the driver's pick list, scoped to this
   // run's dates by the query above.

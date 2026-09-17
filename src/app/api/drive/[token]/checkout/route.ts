@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { blindHandoffForBooking } from '@/lib/fleet/blindHandoff'
+import { blindHandoffForAssignment } from '@/lib/fleet/blindHandoff'
 import { prisma } from '@/lib/prisma'
 import { completeSelfCheckout, SelfCheckoutError } from '@/lib/drivers/selfCheckout'
 import { cardGateForJob } from '@/lib/payments/cardGate'
@@ -29,7 +29,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
     select: {
       id: true,
       bookingAssignment: {
-        select: { bookingItem: { select: { booking: { select: { id: true, jobId: true } } } } },
+        select: { id: true, bookingItem: { select: { booking: { select: { id: true, jobId: true } } } } },
       },
     },
   })
@@ -39,7 +39,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ tok
   // say whether the handoff is unattended (lib/fleet/blindHandoff). Re-read
   // here rather than trusted from the client.
   const jobId = da.bookingAssignment.bookingItem.booking.jobId
-  const blind = (await blindHandoffForBooking(da.bookingAssignment.bookingItem.booking)).blindPickup
+  const blind = (await blindHandoffForAssignment(da.bookingAssignment.id)).blindPickup
   if (!blind) {
     return NextResponse.json(
       { error: 'This pickup is staffed — SirReel will check the vehicle out with you at the yard.' },

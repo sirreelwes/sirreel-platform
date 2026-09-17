@@ -279,20 +279,23 @@ export default function ClientPortalV2() {
         </div>
       </div>
 
-      {/* After-hours access code — read-only; give to the driver */}
+      {/* After-hours verification code — read-only; give to the driver.
+          Named "verification", never "access": clients took "access code"
+          to be the gate code itself. It opens nothing. */}
       {booking.job?.assistantAuthCode && (
         <div className="max-w-xl mx-auto px-5 pt-4">
           <div className="rounded-xl border border-gray-200 bg-white p-4">
             <div className="text-[10px] uppercase font-bold tracking-wider text-gray-500">
-              After-hours access code
+              After-hours verification code
             </div>
             <div className="mt-1 font-mono text-[22px] font-bold tracking-[0.2em] text-gray-900">
               {booking.job.assistantAuthCode}
             </div>
             <p className="mt-1.5 text-[12px] text-gray-500 leading-snug">
-              Share this with your driver. If they need the gate code or a vehicle lockbox
-              code after hours, they can give this code to the SirReel assistant at
-              sirreel.com to verify — no need to reach an agent.
+              This is not the gate code — it doesn&apos;t open anything. It proves your
+              driver is with your job. Share it with them: after hours, they give it to the
+              SirReel assistant at sirreel.com, which then releases the gate and vehicle
+              lockbox codes — no need to reach an agent.
             </p>
           </div>
         </div>

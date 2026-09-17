@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { portalTokenUrl } from '@/lib/portal/portalUrl'
 
@@ -40,6 +40,7 @@ export async function POST(
       id: true,
       orderNumber: true,
       bookingId: true,
+      jobId: true,
       company: { select: { name: true } },
       job: { select: { name: true, jobCode: true } },
       jobContact: { select: { email: true, firstName: true } },
@@ -99,7 +100,9 @@ export async function POST(
   </div>
 </body></html>`
 
-  const emailResult = await sendAgreementEmail({
+  const emailResult = await sendOnJobThread({
+    jobId: order.jobId,
+    staffEmail: session.user.email,
     label: 'orders/agreement/resend-link',
     to: [recipient],
     // Replies route to the agent's watched inbox, not the unmonitored

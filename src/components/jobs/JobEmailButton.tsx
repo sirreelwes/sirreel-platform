@@ -120,7 +120,9 @@ export function JobEmailButton({
         setActiveThreadId(d.thread?.id ?? null)
         setTo(d.to ?? '')
         setCc(d.cc)
-        setSubject(preset && !d.thread ? preset.subject : d.subject)
+        // The subject is the job thread's whatever the preset says — the
+        // send would use it anyway, so the box shows what will go out.
+        setSubject(d.subject)
         if (preset) setBody((cur) => cur || preset.body)
       } catch (e) {
         setErr(e instanceof Error ? e.message : 'Could not compose the email.')
@@ -167,7 +169,9 @@ export function JobEmailButton({
       const r = await fetch(`/api/jobs/${jobId}/email`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ threadId: activeThreadId, to, cc, subject, body, counterReviewId: preset?.counterReviewId }),
+        // This modal IS the review: the rep opened it, saw To / Cc / subject
+        // and the message, and pressed Send. The route refuses without it.
+        body: JSON.stringify({ threadId: activeThreadId, to, cc, subject, body, counterReviewId: preset?.counterReviewId, confirmed: true }),
       })
       const j = await r.json()
       if (!r.ok || !j.ok) throw new Error(j.error || 'Send failed.')
@@ -334,9 +338,13 @@ export function JobEmailButton({
                     </span>
                     <input
                       value={subject}
-                      onChange={(e) => setSubject(e.target.value)}
-                      className="w-full rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-sm font-medium text-lt-fg"
+                      readOnly
+                      title="One thread per job — every email on this job goes out under this subject so the client sees a single conversation."
+                      className="w-full rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-sm font-medium text-lt-fg2"
                     />
+                    <span className="mt-1 block text-[11px] text-lt-fg3">
+                      Fixed for this job — one thread, so the client sees a single conversation.
+                    </span>
                   </label>
 
                   <label className="block">

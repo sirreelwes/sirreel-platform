@@ -2,6 +2,7 @@ import { categoryNameForLine, catalogClientCode } from '@/lib/catalog/display'
 import { openCounterProposalForJob } from '@/lib/contracts/jobCounterProposal'
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { jobBlindRollup, loadJobVehicleOverrides } from '@/lib/fleet/blindHandoff'
 import type { Prisma } from '@prisma/client'
 import {
   JOB_SESSION_COOKIE,
@@ -720,6 +721,14 @@ export async function GET(req: NextRequest) {
         }
       : null
 
+  // Blind for the portal: the order's flags, or any live vehicle on the
+  // job overridden blind on its own (Jose 2026-09-16) — that unit's
+  // driver needs the gate/lockbox brief just the same.
+  const portalBlind = jobBlindRollup(
+    [{ blindPickup: order.blindPickup, blindReturn: order.blindReturn }],
+    order.jobId ? await loadJobVehicleOverrides(order.jobId) : [],
+  )
+
   return NextResponse.json({
     contact: resolved.contact,
     portalAccessId: resolved.portalAccessId,
@@ -779,10 +788,12 @@ export async function GET(req: NextRequest) {
       // matching toggle is true. Defense-in-depth so a sales-side
       // toggle-off doesn't accidentally leak the prior text to the
       // client even though the column may still hold it server-side.
-      blindPickup: order.blindPickup,
-      blindReturn: order.blindReturn,
-      blindPickupInstructions: order.blindPickup ? order.blindPickupInstructions : null,
-      blindReturnInstructions: order.blindReturn ? order.blindReturnInstructions : null,
+      // Any vehicle overridden blind on its own (Jose 2026-09-16) opens
+      // the instructions too — the driver of that unit needs them.
+      blindPickup: portalBlind.blindPickup,
+      blindReturn: portalBlind.blindReturn,
+      blindPickupInstructions: portalBlind.blindPickup ? order.blindPickupInstructions : null,
+      blindReturnInstructions: portalBlind.blindReturn ? order.blindReturnInstructions : null,
     },
     job: order.job,
     countdown: portalCountdownMs != null ? { msUntilPickup: portalCountdownMs } : null,

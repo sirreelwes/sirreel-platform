@@ -16,6 +16,7 @@ import { prisma } from '@/lib/prisma'
 import { rankRecipients, type RankedRecipient } from '@/lib/email/recipients'
 import { buildFollowUpSendEmail, defaultFollowUpBody } from '@/lib/email/templates/followUpSend'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
+import { previewJobThreadSubject } from '@/lib/email/jobThread'
 import {
   CADENCE_STAGES,
   computeCadenceState,
@@ -82,6 +83,7 @@ export async function composeFollowUpEmail(
       quoteExpDays: true,
       portalSlug: true,
       companyId: true,
+      jobId: true,
       company: { select: { name: true } },
       agent: { select: { name: true, email: true } },
       job: {
@@ -207,7 +209,10 @@ export async function composeFollowUpEmail(
     to,
     alternatives,
     from: SEND_FROM,
-    subject,
+    // One thread per job: the send goes out under the job's subject
+    // (lib/email/jobThread), so the preview shows that one — the template
+    // subject is only the off-thread fallback.
+    subject: (await previewJobThreadSubject(order.jobId)) ?? subject,
     html,
     text,
     attachments: [],

@@ -26,6 +26,7 @@ import { buildWelcomeEmail } from '@/lib/email/templates/welcomeTemplate'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { defaultEmailBody } from '@/lib/email/standardOpening'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
+import { previewJobThreadSubject } from '@/lib/email/jobThread'
 
 export interface AttachmentMeta {
   filename: string
@@ -117,6 +118,7 @@ export async function composeQuoteEmail(
       lineItems: { select: { pickupDate: true, returnDate: true } },
       booking: { select: { startDate: true, endDate: true, status: true } },
       agent: { select: { name: true, email: true, phone: true } },
+      jobId: true,
       job: {
         select: {
           name: true,
@@ -224,7 +226,10 @@ export async function composeQuoteEmail(
     alternatives,
     autoCc,
     from: SEND_FROM,
-    subject,
+    // One thread per job: the send goes out under the job's subject
+    // (lib/email/jobThread), so the preview shows that one — the template
+    // subject is only the off-thread fallback.
+    subject: (await previewJobThreadSubject(order.jobId)) ?? subject,
     html,
     text,
     attachments,

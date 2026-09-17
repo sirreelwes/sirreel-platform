@@ -193,20 +193,23 @@ export async function syncHoldOnLineAdd(
     conflictOverrideNote?: string | null
   },
 ): Promise<{ bookingItemId: string; quantityBefore: number; quantityAfter: number; created: boolean }> {
-  const existing = await tx.bookingItem.findFirst({
-    where: { bookingId: args.bookingId, categoryId: args.categoryId, holdRank: 1 },
-    select: { id: true, quantity: true, notes: true, status: true, _count: { select: { assignments: { where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } } } } } },
-  })
+  const existing = await findRankOneHold(tx, args.bookingId, args.categoryId)
 
   if (existing) {
-    const next = existing.quantity + args.addedQty
+    // A line whose whole class was released (every truck given back by a
+    // line delete) reads UNFULFILLED with quantity 0. A new line of that
+    // class is new demand, so the row comes back as a live request rather
+    // than growing a dead one nothing counts.
+    const base = existing.status === 'UNFULFILLED' ? 0 : existing.quantity
+    const next = base + args.addedQty
     const notes = args.conflictOverrideNote
       ? appendNote(existing.notes, args.conflictOverrideNote)
       : existing.notes
     // A fully-assigned item that grows has an open slot again. Only
     // REQUESTED demand counts in availability and on the needs-a-unit
     // lane, so left ASSIGNED the new slot is invisible (SR-JOB-0347).
-    const reopen = existing.status === 'ASSIGNED' && next > existing._count.assignments
+    const reopen =
+      (existing.status === 'ASSIGNED' && next > existing._count.assignments) || existing.status === 'UNFULFILLED'
     await tx.bookingItem.update({
       where: { id: existing.id },
       data: { quantity: next, notes, ...(reopen ? { status: 'REQUESTED' } : {}) },
@@ -274,10 +277,7 @@ export async function syncHoldOnLineUpdate(
   },
 ): Promise<{ bookingItemId: string | null; quantityBefore: number; quantityAfter: number; deleted: boolean }> {
   if (args.deltaQty === 0) {
-    const existing = await tx.bookingItem.findFirst({
-      where: { bookingId: args.bookingId, categoryId: args.categoryId, holdRank: 1 },
-      select: { id: true, quantity: true },
-    })
+    const existing = await findRankOneHold(tx, args.bookingId, args.categoryId)
     return {
       bookingItemId: existing?.id ?? null,
       quantityBefore: existing?.quantity ?? 0,
@@ -286,11 +286,8 @@ export async function syncHoldOnLineUpdate(
     }
   }
 
-  const existing = await tx.bookingItem.findFirst({
-    where: { bookingId: args.bookingId, categoryId: args.categoryId, holdRank: 1 },
-    select: { id: true, quantity: true, notes: true, status: true, _count: { select: { assignments: { where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } } } } } },
-  })
-  if (!existing) {
+  const existing = await findRankOneHold(tx, args.bookingId, args.categoryId)
+  if (!existing || existing.status === 'UNFULFILLED') {
     // No hold to adjust. For positive delta, treat as an add.
     if (args.deltaQty > 0) {
       const created = await syncHoldOnLineAdd(tx, {
@@ -349,6 +346,24 @@ export async function syncHoldOnLineDelete(
     bookingId: args.bookingId,
     categoryId: args.categoryId,
     deltaQty: -Math.abs(args.removedQty),
+  })
+}
+
+/**
+ * The rank-1 hold for a class on a booking — a LIVE one first. A class
+ * can carry a released (UNFULFILLED) row beside a live one (a line was
+ * deleted, another was added), and `findFirst` with no preference was
+ * as likely to grow the dead row as the live one.
+ */
+async function findRankOneHold(tx: TxClient, bookingId: string, categoryId: string) {
+  const live = await tx.bookingItem.findFirst({
+    where: { bookingId, categoryId, holdRank: 1, status: { in: ['REQUESTED', 'ASSIGNED'] } },
+    select: { id: true, quantity: true, notes: true, status: true, _count: { select: { assignments: { where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } } } } } },
+  })
+  if (live) return live
+  return tx.bookingItem.findFirst({
+    where: { bookingId, categoryId, holdRank: 1 },
+    select: { id: true, quantity: true, notes: true, status: true, _count: { select: { assignments: { where: { status: { in: ['ASSIGNED', 'CHECKED_OUT'] } } } } } },
   })
 }
 

@@ -22,7 +22,10 @@
  * short is how the same truck goes out twice.
  */
 
-import { isUnholdableVehicleLine, type HoldableLineShape } from '../../src/lib/orders/holdOnQuoteSend'
+import {
+  isUnholdableVehicleLine, holdCategoryForLine, planHoldSyncOnLineEdit, type HoldableLineShape,
+} from '../../src/lib/orders/holdOnQuoteSend'
+import { peakConcurrent } from '../../src/lib/orders/peakConcurrentHold'
 
 const failures: string[] = []
 function check(got: unknown, want: unknown, why: string): void {
@@ -144,6 +147,74 @@ check(
   wantByCategory(highHorses),
   wantByCategory(highHorses),
   're-sending a quote yields the same desired quantity (set, not increment)',
+)
+
+// ── A line EDIT and the hold (2026-09-17) ─────────────────────────────
+// The row editor gated its hold branch on the line's own assetCategoryId,
+// which a catalog-bound van leaves null — so 1 → 2 vans left the hold at 1
+// and the capacity confirm never fired. The class now comes from
+// holdCategoryForLine on both sides of the edit, and the write is the peak
+// recompute, never a delta.
+console.log('\nline edit — what the hold is owed')
+check(
+  holdCategoryForLine(vehicleUnitTracked),
+  'cat-cargo',
+  'a catalog-bound van (assetCategoryId null) resolves its class through the catalog row',
+)
+check(
+  planHoldSyncOnLineEdit({ oldCategoryId: holdCategoryForLine(vehicleUnitTracked), newCategoryId: holdCategoryForLine(vehicleUnitTracked), oldQty: 1, newQty: 2 }),
+  { feasibilityDelta: 1, recompute: true, releaseCategoryId: null },
+  'catalog-bound van 1 → 2: the increase must fit, and the hold is recomputed',
+)
+check(
+  planHoldSyncOnLineEdit({ oldCategoryId: 'cat-cargo', newCategoryId: 'cat-cargo', oldQty: 3, newQty: 1 }),
+  { feasibilityDelta: 0, recompute: true, releaseCategoryId: null },
+  'quantity down: nothing to ask about capacity, still recomputed',
+)
+check(
+  planHoldSyncOnLineEdit({ oldCategoryId: 'cat-cargo', newCategoryId: 'cat-cargo', oldQty: 2, newQty: 2 }),
+  { feasibilityDelta: 0, recompute: false, releaseCategoryId: null },
+  'a rate or note edit on a held line owes the hold nothing',
+)
+check(
+  planHoldSyncOnLineEdit({ oldCategoryId: 'cat-cargo', newCategoryId: 'cat-cube', oldQty: 2, newQty: 2 }),
+  { feasibilityDelta: 2, recompute: true, releaseCategoryId: 'cat-cargo' },
+  'class change: the WHOLE quantity must fit the new class, the old one is handed back',
+)
+check(
+  planHoldSyncOnLineEdit({ oldCategoryId: null, newCategoryId: 'cat-cargo', oldQty: 1, newQty: 1 }),
+  { feasibilityDelta: 1, recompute: true, releaseCategoryId: null },
+  'a free-typed line bound to a real van starts holding it',
+)
+check(
+  planHoldSyncOnLineEdit({ oldCategoryId: 'cat-cargo', newCategoryId: null, oldQty: 1, newQty: 1 }),
+  { feasibilityDelta: 0, recompute: true, releaseCategoryId: 'cat-cargo' },
+  'a van re-picked as a ladder stops holding the van',
+)
+check(
+  planHoldSyncOnLineEdit({ oldCategoryId: holdCategoryForLine(supplies), newCategoryId: holdCategoryForLine(supplies), oldQty: 4, newQty: 9 }),
+  { feasibilityDelta: 0, recompute: false, releaseCategoryId: null },
+  'supplies never touch a hold, whatever the quantity does',
+)
+// Why the write is a recompute and not a delta: USC quoted ONE van for two
+// separate blocks. Bumping the first block to 2 makes the peak 2 — a delta
+// on a summed hold would say 3.
+const d = (s: string) => new Date(`${s}T00:00:00Z`)
+check(
+  peakConcurrent([
+    { start: d('2026-10-01'), end: d('2026-10-04'), quantity: 2 },
+    { start: d('2026-10-10'), end: d('2026-10-13'), quantity: 1 },
+  ]),
+  2,
+  'two sequential blocks, first bumped 1 → 2: the hold is the PEAK (2), not the sum (3)',
+)
+check(
+  peakConcurrent([
+    { start: d('2026-10-01'), end: d('2026-10-04'), quantity: 2 },
+    { start: d('2026-10-03'), end: d('2026-10-06'), quantity: 1 },
+  ]),
+  3,
+  'overlapping blocks still add up',
 )
 
 console.log(failures.length ? `\n${failures.length} FAILED\n` : '\nall passed\n')

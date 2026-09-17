@@ -24,7 +24,7 @@ import { prisma } from '@/lib/prisma'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobAfterHoursUrl } from '@/lib/portal/portalUrl'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { withTeamCc, agentReplyTo } from '@/lib/email/teamVisibility'
 import { buildAfterHoursEmail } from '@/lib/email/templates/afterHoursAccess'
 
@@ -136,7 +136,8 @@ export async function sendAfterHoursAccess(args: {
   })
 
   const cc = await withTeamCc([], chosen.person.email)
-  const result = await sendAgreementEmail({
+  const result = await sendOnJobThread({
+    jobId: job.id,
     label: 'job/after-hours',
     to: [chosen.person.email],
     cc: cc.length ? cc : undefined,

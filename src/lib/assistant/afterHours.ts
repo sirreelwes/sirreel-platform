@@ -29,7 +29,7 @@
 
 import { prisma } from '@/lib/prisma'
 import { phoneOnFile, phoneTail } from '@/lib/assistant/phoneFactor'
-import { blindHandoffForBooking } from '@/lib/fleet/blindHandoff'
+import { blindHandoffForAssignment } from '@/lib/fleet/blindHandoff'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { sendSms } from '@/lib/sms/sendSms'
 
@@ -236,6 +236,7 @@ export async function verifyAndRelease(input: {
       },
     },
     select: {
+      id: true,
       assetId: true,
       asset: {
         select: {
@@ -391,12 +392,13 @@ export async function verifyAndRelease(input: {
   if (lockboxCandidates.length === 1) {
     target = lockboxCandidates[0]
     // The lockbox code goes out only on a BLIND pickup or return of this
-    // vehicle (Wes 2026-09-16) — lib/fleet/blindHandoff, per booking.
+    // vehicle (Wes 2026-09-16) — lib/fleet/blindHandoff, per unit: its own
+    // override where sales set one (Jose 2026-09-16), else its booking's orders.
     const pinnedId = target.id
-    const bookingsForTarget = assignments.filter((a) => a.asset.id === pinnedId).map((a) => a.bookingItem.booking)
+    const unitsForTarget = assignments.filter((a) => a.asset.id === pinnedId)
     let blind = false
-    for (const b of bookingsForTarget) {
-      if ((await blindHandoffForBooking(b)).any) {
+    for (const a of unitsForTarget) {
+      if ((await blindHandoffForAssignment(a.id)).any) {
         blind = true
         break
       }

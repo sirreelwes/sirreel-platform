@@ -21,6 +21,7 @@ import {
   type PaperworkSummaryRow,
 } from '@/lib/email/templates/paperworkSummary'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
+import { previewJobThreadSubject } from '@/lib/email/jobThread'
 
 /**
  * The client's live destinations, resolved by the SEND route (which holds
@@ -173,7 +174,10 @@ export async function composePaperworkSummaryEmail(
     to,
     alternatives: candidates,
     from: SEND_FROM,
-    subject,
+    // One thread per job: the send goes out under the job's subject
+    // (lib/email/jobThread), so the preview shows that one — the template
+    // subject is only the off-thread fallback.
+    subject: (await previewJobThreadSubject(args.jobId)) ?? subject,
     html,
     text,
     attachments: [],

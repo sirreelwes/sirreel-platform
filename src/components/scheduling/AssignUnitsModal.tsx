@@ -133,6 +133,12 @@ interface AssignUnitsModalProps {
   bufferDays: number
   onClose: () => void
   onChanged?: () => void
+  /**
+   * Opened from a LINE of an order: the unit picked here is that line's
+   * truck (BookingAssignment.orderLineItemId) and goes out on that order.
+   * Omit from the board and the job page, where no line is in view.
+   */
+  forLine?: { orderId: string; lineId: string } | null
 }
 
 // Unit-availability badges + plain-English labels live in the shared
@@ -179,7 +185,7 @@ function CategoryThumb({ categoryId, alt }: { categoryId: string; alt: string })
   )
 }
 
-export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged }: AssignUnitsModalProps) {
+export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged, forLine = null }: AssignUnitsModalProps) {
   const [data, setData] = useState<PickerData | null>(null)
   const [loading, setLoading] = useState(true)
   const [submitting, setSubmitting] = useState<string | null>(null) // assetId mid-submit
@@ -201,7 +207,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
    * one order, which is exactly when the yard could not otherwise tell
    * which truck belonged to which.
    */
-  const [attachOrderId, setAttachOrderId] = useState<string>('')
+  const [attachOrderId, setAttachOrderId] = useState<string>(forLine?.orderId ?? '')
   /**
    * Which DATE BLOCK is being filled. An order quotes the same class on
    * two sets of days often enough — a van from the 28th, two more from
@@ -374,6 +380,9 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
           // Which order this unit goes out on. null lets the server
           // decide when the job has exactly one candidate.
           orderId: attachOrderId || null,
+          // And which LINE of it, when the picker was opened from one —
+          // the through line that prints this truck on that line.
+          orderLineItemId: forLine && (!attachOrderId || attachOrderId === forLine.orderId) ? forLine.lineId : null,
           // And which days — the block whose availability is on screen,
           // so the button can never check a window the list didn't.
           windowStart: data?.window?.start?.slice(0, 10),
@@ -397,6 +406,20 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
         setPendingBuffer({ asset, reason: json.reason, replaceAssetId })
         setPendingSwap(null)
         return
+      }
+      if (res.status === 409 && json.error === 'fully-assigned' && !replaceAssetId) {
+        // The server's count says this block is full. The rep opened the
+        // picker to CHANGE a unit, so the answer is the swap prompt, not a
+        // dead end — and the counts on screen are re-read so they match
+        // what just refused. If nothing on the block can be swapped
+        // (checked out), the reason says so.
+        const ids: string[] = Array.isArray(json.swappableAssetIds) ? json.swappableAssetIds : []
+        const outs = swappable.filter((a) => ids.length === 0 || ids.includes(a.asset.id))
+        await refresh()
+        if (outs.length > 0) {
+          setPendingSwap({ asset, outAssetId: outs.length === 1 ? outs[0].asset.id : null })
+          return
+        }
       }
       setError(json.reason || json.error || `Request failed (${res.status})`)
       setErrorAssetId(asset.assetId)

@@ -213,6 +213,16 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `src/lib/assistant/phoneFactor.ts`, `npm run test:phone-factor`). Scoped
   to the live assignment — a number on another job unlocks nothing. Web
   chat never passes a number; the job-code paths are unchanged.
+- **A "no mobile" icon on the staff table** (Wes 2026-09-17, handed
+  Julian's cell and then "Who are you missing?"): /admin/assistant flags
+  every staff row with no `User.phone`, counts them in the panel summary
+  ("4 on call · 3 with no mobile") and says what the blank costs — an
+  URGENT job note emails that person instead of texting, and AHA cannot
+  recognise their texts as staff. **That table also used to list only
+  ADMIN / AGENT / MANAGER**, and it is the sole editor for `User.phone`,
+  so Ana (BILLING), Julian and the yard had no way to be reached and no
+  way to be given a number; it is every active staff row now, DRIVER and
+  CLIENT excluded.
 - **AHA knows who is texting, by number, server-side**
   (`src/lib/assistant/senderIdentity.ts`; the model never decides). STAFF =
   active User whose `phone` (set on /admin/assistant, "Mobile (texts AHA as
@@ -916,9 +926,14 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   rate with Vic, and model detail is kept loose ("Pro pack & head kit — 2400
   W/s", never a SKU) so a call CORRECTS a row instead of discovering it was
   invented. **Rates are EMPTY** — Vic proposes from his page, HQ accepts.
-- **Their Sprinter van packages are deliberately NOT on the roster** — that
-  is our own fleet's lane (the GreenLite caveat). If Wes wants them they go
-  under Specialty Vehicles or Cars & SUVs, never under Photo Shoot Rentals.
+- **Their Sprinter Cargo Van Packages ARE ours to sell, and they belong in
+  Photo Shoot Rentals** (Wes 2026-09-17: "VSM cargo vans come preloaded with
+  gear that we don't carry so keep them"). This file first excluded them as
+  competing with our own vans — the GreenLite caveat — which read the VAN as
+  the product. It is not: the van is the wrapper and the preloaded package is
+  the thing, and none of it is gear SirReel holds. So they are NOT a
+  Specialty Vehicle or a Car & SUV; they are a photo package that happens to
+  arrive on wheels. **Do not "correct" them back out.**
 - **WILL_CALL is the partner default**, set on the Vendor and left NULL on
   every unit so it is one edit on the Portals row. A stills rental house is a
   counter business: DELIVERY would ask Vic for a window and a contact he
@@ -988,6 +1003,195 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## "Approved — book it" names the order and takes you to it (2026-09-17 — Wes)
+- Wes, on SR-JOB-0312: "It says that the production supply order is booked
+  but it does not give me any other options there. On the tile it says
+  that I need to book it." Both surfaces were right, about DIFFERENT
+  orders — the job carried one booked order and one still APPROVED.
+- **The header badge cannot tell APPROVED from BOOKED, on purpose.**
+  `cadenceForOrder` in `src/lib/jobs/cadence.ts` maps both to the state
+  `booked`, because a new `CadenceState` would re-tier the board's
+  colours, legend and sort (the same reason `approvedUnbooked` is carried
+  as its own COUNT in `/api/jobs`, not as a state). So the badge is NOT
+  changing. What was missing is the qualifier beside it.
+- **The job page now carries a `#book-it` prompt** under the quick-action
+  row (where JobWelcomeButton already lives), rendered when any live order
+  is APPROVED. It NAMES each order with its content summary and puts
+  `MarkBookedButton` beside it — "which order?" was the whole complaint,
+  and a count on a tile can never answer it.
+- **The tile chip navigates now.** It was plain text inside the row's
+  `<Link>`, so pressing it landed a rep at the top of a long job page
+  whose header reads BOOKED. It is a `<button>` that pushes
+  `/jobs/<id>?book=1`; the job page expands every approved order and
+  scrolls the prompt into view, once per landing.
+- **One name per act, across all three surfaces.** Before: the tile said
+  "Approved — book it", the job page said "Record client approval", the
+  order page said "Mark booked". Now the label follows the STATUS —
+  APPROVED already has the client's yes on file, so the only act left is
+  **Book it**; from DRAFT / QUOTE_SENT the yes is not on file and
+  recording it is half the point, so it is **Record client approval**.
+  The confirm button inside the panel always says Book it. The order
+  page's own APPROVED action was already "Book it" and is unchanged.
+- Nothing about the booking mechanics moved: `POST /api/orders/[id]/
+  mark-booked` and `bookOrder()` are untouched, and `MARK_BOOKABLE` /
+  `BOOKABLE_FROM` still agree on DRAFT / QUOTE_SENT / APPROVED.
+
+## The reservation follows the order's dates (2026-09-17 — Wes)
+- Wes, on Someday Studios' passenger van: "I changed it in the order, but
+  that did not change it on the reservation as we had planned for it to
+  do." Pickup 18th → 17th on the order; the board still drew the van on
+  the 18th. Nothing had ever moved a UNIT with a line's dates:
+  `BookingAssignment.startDate/endDate` are COPIES stamped at assign time
+  from the quoted block (assignWindow.ts), and neither date edit wrote
+  them back. Worse, `coverageOfBlock` matches by exact day, so the NEW
+  block read as unfilled while the same van sat held on the old one.
+- **Two edits move line dates, one implementation follows them:**
+  `syncReservationToLineDates()` in `src/lib/scheduling/followLineDates.ts`,
+  called by the row editor (`PUT /line-items/[lineId]`) and "Change dates…"
+  (`POST /dates/apply`). It runs `holdOnQuoteSend` (peak + envelope widen),
+  re-stamps the units, then `tightenBookingEnvelope` brings the envelope IN
+  when nothing still needs the old days. Pure rules `planAssignmentFollow`
+  / `bookingEnvelopeFor`, `npm run test:follow-line-dates`.
+- **Why the row editor never fired before:** its gate was the line's own
+  `assetCategoryId`, which every catalog-bound vehicle leaves null (the
+  class lives on the catalog row). `holdCategoryForLine()` in
+  holdOnQuoteSend.ts is now the exported, pure resolution the hold itself
+  uses; resolve a line's class through it, never off `assetCategoryId`
+  alone.
+- **The quantity / catalog-binding branch is closed too (same day).** It
+  gated on `newIsHold` off the line's own `assetCategoryId`, so a real van
+  edited 1 → 2 left the hold at 1 and the capacity confirm never fired.
+  Now: both class ids come from `holdCategoryForLine` (before and after the
+  edit — the order page sends both binding fields on EVERY save, so the
+  route compares against the row, not "present in the body");
+  `planHoldSyncOnLineEdit()` (pure, holdOnQuoteSend.ts, `npm run
+  test:quote-hold`) decides what the hold is owed; the WRITE is
+  `holdOnQuoteSend(orderId)` — SET to the peak, never the delta-summing
+  `syncHoldOnLineUpdate` (one van quoted for two separate weeks, one block
+  bumped to 2, is a hold of 2, not 3). The 409 `requiresConfirmation` is
+  kept (only the increase must fit; a class the line did not hold before
+  costs the whole quantity; checked on the line's NEW days), and
+  `saveEditLine` now does the add-line confirm-and-retry instead of a
+  dead-end alert. Response carries `holds { quantityBefore, quantityAfter,
+  releasedUnits, note }`; the page alerts `note`.
+- **Merged with the order-line ↔ unit through line (`66bec271`, rescued
+  from a detached HEAD onto `rescue/line-unit-throughline`, 2026-09-17).**
+  The PUT runs the recompute AROUND that commit's per-truck handling:
+  a VEHICLE line's quantity cut first hands back THIS line's trucks by
+  asset (`releaseLineUnits`, last-bound first, `keep: newQty` so unbound
+  slots go before a bound truck — without it a line of 18 with one van,
+  trimmed to 1, released the van), then recomputes; a bump recomputes,
+  then binds the extras stamped to the line (`assignUnitsForLine`); a
+  line that stops being a vehicle releases its trucks. A vehicle CLASS
+  change is refused (409 `USE_SWITCH_CLASS`) before any of this —
+  `saveEditLine` handles that code INSIDE its 409 branch, because the body
+  can only be read once. Response carries `holds`, `released`,
+  `unitAssignment` and `assignmentsFollowed`.
+- **Limits of the recompute:** it never shrinks a hold whose units are
+  ASSIGNED — on a stage, where there is no per-line truck, a cut is
+  reported in `holds.note` instead; and it only visits classes still
+  quoted, so a class the line LEFT (a stage re-picked) is released by
+  asset via `releaseBookingItem` when `categoryStillQuoted()` is false.
+  **Never `syncHoldOnLineDelete` for that** — at zero it DELETES the
+  BookingItem and the FK cascade takes every unit on it; the line DELETE
+  handler now uses it only for stages and releases a vehicle line's
+  trucks by asset. `syncHoldOnLineAdd/Update` prefer a live rank-1 row and
+  revive a released one from zero.
+- **Which units follow:** the ones carrying the old block's days verbatim
+  (the same rule coverage counts by), up to the moved line's quantity, this
+  order's own before unstamped ones; a sibling order's unit never moves.
+  Overlap is accepted only when the class has NO other block on the order
+  (a row stamped with an order span before blocks existed). CHECKED_OUT:
+  the pickup already happened, so only the return follows, and only when
+  the pickup did not move.
+- **A unit booked elsewhere on the new days does NOT move** on the row
+  editor — it stays, and the PUT response's `assignmentsFollowed.blocked`
+  names it (the page alerts). The client's dates are the client's dates;
+  the truck is a re-pick. "Change dates…" showed the rep every conflict
+  and had them tick through, so it passes `allowConflicts` and the unit
+  moves anyway, audited `overrodeConflict: true`. Every re-stamp is
+  AuditLog `booking_assignment.dates_followed_line` with old/new days.
+- **The envelope shrinks only when nothing bare is on the booking:** a
+  class held with no quoted line behind it (Make Reservation, no order
+  line) has the envelope as its only date, so with one present the
+  envelope stays widen-only. Otherwise pushing an order a week later no
+  longer leaves a phantom hold on the old days.
+- The header `PUT /api/orders/[id]` `startDate/endDate` is still a mirror
+  with no UI and reaches nothing scheduling-side — on purpose.
+
+## "Booking item is fully assigned" — one capacity rule (2026-09-17 — Jose)
+- Jose, on Mad Minds (SR-JOB-0389): changing Cargo 35 for another van was
+  refused "booking item is fully assigned". Not a driver, not a lock. The
+  PICKER counted exact-day coverage against the QUOTED quantity (the ADV
+  Carrera rule, 2026-09-14) while the WRITE counted every OVERLAPPING
+  assignment against the hold's own quantity — the order is loaded on
+  Cargo 35 + Cargo 45, so the second van's overlap filled the block on the
+  server while the picker still showed the swap. Two answers to "is this
+  block full?" on one screen.
+- **`blockCapacity()` in `src/lib/scheduling/assignWindow.ts` is the one
+  rule** (pure; `npm run test:assign-window`): when the resolved window IS a
+  quoted block, the block's quantity and exact coverage; with no block to be
+  exact against, the hold's quantity and overlap. `available-units` and
+  `assignUnitToBookingItem` both call it. The refusal is now
+  `error: 'fully-assigned'` with a readable `reason`, the counts, and
+  `swappableAssetIds`; nothing matched the old string.
+- **The picker turns that refusal into the swap prompt** ("Which unit does X
+  replace?") and re-reads its counts, instead of a dead-end error. A block
+  whose units are checked out still says so.
+- **On a swap the DRIVER goes with the job, not the van.** `DriverAssignment`
+  rows on the outgoing assignment are re-pointed at the replacement inside
+  the transaction (the driver's page and link survive; it now releases the
+  new van's code); inspections are detached (a walkaround is of the OLD van,
+  it stays on that asset's history); a checkout record on the outgoing unit
+  refuses the swap up front (`replace-checked-out`) — its FK is RESTRICT and
+  would otherwise fail after every other check passed. The replacement is
+  created BEFORE the outgoing row is deleted so those rows have somewhere to
+  go. Response carries `driversMoved`. Nobody is TOLD the driver's van
+  changed — open.
+
+## Cargo 20–25 have no lift gate (2026-09-16 — Wes)
+- Wes: "We haven't successfully changed cargos 20 through 25 to be without a
+  lift gate. Instead we've added a second cargo 25 that has no lift gate but
+  cargo 25 with a lift gate still exists." The six were seeded into "Cargo
+  Van w/ Liftgate" (seed_fleet.ts, March) and ruling A of 2026-07-15 filed
+  Planyo's "w/o" placement of them as stale. Planyo was right.
+- **This is a DATA change, shipped as a maintenance task, not a hand edit.**
+  `cargo-vans-no-lift-gate` on /admin/maintenance (iPad) or `npx tsx
+  scripts/cargo-vans-no-lift-gate.ts --write` (laptop) — one implementation,
+  `src/lib/fleet/moveCargoOffLiftGate.ts`. Dry run first; it prints the plan
+  per van and writes nothing. **It has not been run yet** — this session had
+  no database access; Wes runs it.
+- **The ORIGINAL row survives, the duplicate folds into it.** Rules in
+  `src/lib/fleet/cargoLiftGate.ts` (pure, `npm run test:cargo-lift-gate`):
+  the active row in the w/ class (oldest first) is the survivor because it
+  carries the seed id, the odometer, the access code and every trip; every
+  other active row with that name — the second Cargo 25, and the Planyo-era
+  Cargo 22/25 that sat in w/o since May — has its nine history tables
+  (`ASSET_HISTORY_RELATIONS`, pinned against `model Asset` by the test)
+  re-pointed at the survivor, facts the survivor lacks copied over
+  (`fillFromDuplicate`: fill-if-empty, higher odometer, notes appended), and
+  is retired under "Cargo 25 (duplicate — folded 2026-09-16)". **Nothing is
+  deleted.** Inactive rows are never a survivor and never folded.
+- **Counts are set from the rows, on BOTH tables.** The scheduler reads the
+  merged `InventoryItem.qtyOwned` (`getCategoryAvailability`), not the frozen
+  `AssetCategory.totalUnits`; the task sets both to the active-asset count of
+  each class. The w/o class was ARCHIVED in June (exports/catalog-export.json
+  has it `isActive:false`) — the task un-archives it and mirrors the w/
+  class's `reservableOnGantt`, or the moved vans would vanish from every
+  picker.
+- **A HOLD's class is not re-written.** A live reservation filed under w/
+  whose unit is one of these vans is NAMED in the log ("Look at:") and left
+  for a person to re-class on the reservation — the class on a hold is what
+  the quote says. Same for a hold that was assigned both rows of one van
+  (it holds the unit twice after the fold; release one).
+- `PLANYO_UNIT_CATEGORY_OVERRIDES` is now EMPTY — it pointed Cargo 20/21/23/24
+  at the class they are leaving, and once they sit in w/o the reservation's
+  own category matches first. Per-asset AuditLog rows:
+  `asset.category_moved`, `asset.folded_into` (old values included; the CLI
+  journal has the same). `TaskRefused` (`src/lib/admin/taskRefused.ts`) is
+  now the one refusal class every maintenance task throws; `SeedRefused`
+  stays as an alias.
+
 ## Run a task without a laptop — /admin/maintenance (2026-09-16 — Wes)
 - Wes: "I need to be able to run these scripts from my iPad with no access
   to my actual laptop." Everything seedable had ONE way in — `npx tsx
@@ -1016,12 +1220,23 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   and every real run writes an AuditLog `admin.maintenance_run` carrying the
   CREATED IDS, which is what keeps "cleanup by captured id only" workable
   when the run happened on a phone with no journal file.
-- **No schema changes here, on purpose.** `MaintenanceCategory` has no DDL
-  member so the type system refuses one. The `add-*-columns` / `add-*-table`
-  / `ALTER TYPE` scripts stay on a laptop: the live DB carries objects no
-  schema file knows and their failure mode is a half-migrated production
-  database. Tasks that DEPEND on a migration preflight it and refuse with a
-  fix line (see the PHOTO_SHOOT enum check) rather than 500-ing a page.
+- **No schema changes here, on purpose — with ONE exception (2026-09-17,
+  Wes: "It's not possible to do any of this from my phone").**
+  `category: 'schema'` may run ONLY `CREATE TABLE / INDEX … IF NOT EXISTS`:
+  the task carries its statements as `ddl` (plain data, e.g.
+  `src/lib/email/jobThreadTableSql.ts`), `isAdditiveStatement` in
+  `src/lib/admin/additiveDdl.ts` is the gate — the registry test applies it
+  at build time and `runAdditiveDdl` refuses at run time — and the runner
+  logs each table's columns afterwards so a phone screen proves it took. A
+  brand-new table has no half-run state, which is why this class is safe
+  where an ALTER is not. The `add-*-columns` / `ALTER TYPE` scripts STAY on
+  a laptop: the live DB carries objects no schema file knows and their
+  failure mode is a half-migrated production database. Tasks that DEPEND on
+  such a migration preflight it and refuse with a fix line (see the
+  PHOTO_SHOOT enum check) rather than 500-ing a page. First schema task:
+  `job-conversation-tables` — the Phase 2 Conversation tables; the CLI
+  `scripts/add-job-thread-tables.ts` is a thin wrapper over the same
+  `JOB_THREAD_TABLES_DDL`.
 - Page is built for a phone: 16px inputs (anything smaller makes iOS Safari
   zoom on focus), full-width controls, dry run as the primary button, "Run
   for real" behind a second tap. Nav: Admin → **Run a Task**.
@@ -1191,6 +1406,305 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `VSM_PLANET_ALIASES` in photoShootRoster.ts is that list and
   `findVsmVendor()` is the only lookup a VSM code path may use; the seed
   REFUSES rather than adding a roster on top of units it did not create.
+
+## One thread per job — Phase 1 SHIPPED 2026-09-17 (Wes)
+- Wes 2026-09-16: "figure out a way to have individual jobs stay on one
+  thread. For the client to have a single thread would be better … Is it
+  that we open a chat within the job itself and that chat feeds a single
+  email thread to the client?" Design, troubleshooting, placement and the
+  billing answer: `docs/specs/job-thread-one-conversation.md`. Read it
+  before touching how client mail is sent or filed. Phase 1 is the
+  ANCHORS + AUTO-FILING; Phase 2 (the Conversation panel, internal notes,
+  lanes, Hand to Billing, From = the author) and Phase 3 (Gmail-native
+  sending) are NOT built.
+- **Why it shattered, in one line:** no send carried proof of its job. 91
+  sites went through `sendAgreementEmail` with no In-Reply-To/References,
+  five subjects, three Reply-Tos (rep / billing@ / hello@); `EmailThread`
+  is keyed per MAILBOX (`gmailThreadId`), the pubsub never set `jobId`, and
+  HQ never learned its own Message-IDs (the root of the hello@ capture
+  trick for wes@).
+- **`sendOnJobThread()` in `src/lib/email/jobThread.ts` is the drop-in for
+  `sendAgreementEmail` at any site that knows its job** (same payload +
+  `jobId`, optional `staffEmail`, `separate: true` to opt out). It puts
+  three anchors on the email (rules in `jobThreadRules.ts`, pure, `npm run
+  test:job-thread`): (A) an HQ-minted `<jt.<jobcode>.<uuid>@sirreel.com>`
+  Message-ID + In-Reply-To/References to the job's earliest and newest
+  filed message, stored on the outbound `EmailMessage.rfc822MessageId` so
+  `hasKnownConversationLink` matches a FIRST reply; (B) `jobs+<jobcode>@
+  sirreel.com` on Cc — the driver-relay plus-address mechanism, Cc NEVER
+  Reply-To (Reply-To stays the person); (C) one subject per job, "Re:"
+  once. The root thread is `EmailThread` `hq-job-<jobId>` (deterministic,
+  created on first send, `jobId` set). **Its subject ADOPTS the newest
+  thread already filed to the job** (the client's inquiry) and is minted
+  `<job> — SirReel (<code>)` only when nothing is filed — continuing the
+  client's thread is more "one thread" than starting ours.
+- **Wired (Phase 1):** send-quote, job welcome, paperwork summary, manual
+  follow-up, portal invite, invoice + pre-invoice (Reply-To billing@
+  unchanged — billing rides the same thread, Wes 2026-09-17), and the job
+  page composer (`/api/jobs/[id]/email`; its subject box is read-only
+  now). The four compose helpers in `lib/email/preview/` return the
+  thread subject via `previewJobThreadSubject()` (read-only, creates
+  nothing) so the review modal shows what will go out. NOT wired: the
+  cadence runner (`sendCadenceEmail`, its own Resend path, gated OFF by
+  `CADENCE_SENDING_ENABLED`) and the pre-job sales welcome (no job yet).
+- **Wired (2026-09-17, Wes: "when I do something like send a paperwork
+  request or a COI request … does that automatically fall within the same
+  email thread? If it doesn't let's make sure it does") — EVERY remaining
+  client-facing send that knows its job, 27 sites:** card authorization
+  request + the client's handoff of it, self-serve "what's next", thank-you,
+  the paperwork portal link (re-sent from the order, re-sent from the
+  portal, the invite to a contact added on the order, the colleague a client
+  approves), negotiated agreement ready to sign, counter-proposal notice,
+  agreement re-issue, the signed copies of the rental agreement and the
+  stage contract, stage contract ready to sign, updated quote on change
+  (LCDW / check-out), final invoice + payment options, payment details
+  (job-aware caller only; the admin and inquiry callers pass no job and
+  send plain), the client's payment-details share to their A/P, after-hours
+  access / share / vehicle pickup, driver request, COI "more needed" and
+  "approved" (job-scoped COIs; a company-level COI has no job and sends
+  plain), the client's COI-requirements mail to their BROKER (client Cc'd +
+  Reply-To, so the broker's answer files to the job), and the sub-rental
+  estimate when it names a job. `sendOnJobThread` takes a null `jobId` and
+  sends plain, so a helper with an optional job needs no branch. Every label
+  has a name in `systemLabel` (the test pins the list) — a new client-facing
+  send needs BOTH the wrapper and a label line, or it reads "Sent by HQ".
+  The survey that found them: `sendAgreementEmail(` still has ~55 call
+  sites, all staff/partner/driver/HQ notices or pre-job sends (no job).
+- **Ingest (`/api/gmail/pubsub`) files an anchored thread to its job by
+  itself** — `resolveJobForIngest()`: job address on To/Cc/Delivered-To/
+  X-Original-To first, then the References chain against stored ids
+  (through a duplicate's canonical row). FILL-ONLY via
+  `fileThreadInJobIfUnfiled`; a thread a person placed is never re-pointed.
+  Also: the job code is checked BEFORE the driver relay (parseRelayTag
+  would claim `jobs+sr-job-…` as a driver tag); HQ's own copy of a send
+  (it lands in jobs@ via the Cc) is folded onto the recorded row by the
+  `X-SirReel-Job-Message` header even if Resend rewrote the Message-ID on
+  the wire; MONEY-mode inboxes (billing@/payments@) keep an anchored
+  message with no invoice keyword (`jobTagged` / `conversationLink`).
+- **The hello@ REPLY-TO CAPTURE is OFF for thread sends (2026-09-17 — Wes:
+  "I don't understand why there are emails still getting generated from the
+  system that go there").** Nothing was ever ADDRESSED to hello@ — it is
+  appended to REPLY-TO by `effectiveReplyTo` in sendAgreementEmail.ts
+  whenever the Reply-To is an on-domain address the ingest does not fully
+  watch (wes@, hq@), so what lands there is the CLIENT'S REPLY. It existed
+  because a reply to a Resend send carried an In-Reply-To HQ had never
+  stored, leaving no way to prove the reply belonged to an HQ conversation
+  (Wes's ruling 2026-08-28, chosen over ingesting wes@). **Phase 1 removed
+  that premise** — every thread send carries an HQ-minted Message-ID stored
+  on the outbound row PLUS `jobs+<code>@` on Cc, two independent anchors —
+  so `sendOnJobThread` passes `replyToExact: true` and the client sees the
+  person alone. **A send with NO job still gets the capture**: no anchor is
+  exactly the case the trick was built for (the pre-job sales welcome,
+  inquiry replies). Partner mail opted out separately on 2026-09-14. Both
+  directions are pinned in `npm run test:partner-mail`.
+- **Unverified, by design tolerant:** whether Resend honours a caller-set
+  `Message-ID`. If it does not, the ingested own-copy carries the real id
+  on a thread filed to the job, so a client reply referencing it still
+  resolves — one hop later. Check the first live send's headers in jobs@.
+- **What the client sees:** one growing conversation per job instead of a
+  row per document; "Quote", "Invoice" live in the body headings the
+  templates already carry. `rentals@` team Cc unchanged through Phase 1.
+- Do NOT resurrect `job_messages` (legacy, keyed by RW order number) for
+  internal notes. Do NOT put the job address in Reply-To. Do NOT widen the
+  wes@ LINKED filter — anchors add proof, nothing else. `startThreadForJob`
+  in recordOutboundOnThread.ts has no callers now; the root thread comes
+  from `jobThreadContext()`.
+
+## The job Conversation — Phase 2 SHIPPED 2026-09-17 (Wes: "Build Phase 2")
+- **Schema change — NOT `prisma db push`.** Two tables by additive SQL,
+  from a phone on /admin/maintenance → "Create the job Conversation tables"
+  (`job-conversation-tables`, the first `schema` task) or on a laptop
+  `npx tsx scripts/add-job-thread-tables.ts` — both run
+  `JOB_THREAD_TABLES_DDL` (`sr_job_threads` — the claim, one row per job;
+  `sr_job_thread_notes` — internal notes). Until it has run, the panel still
+  shows the emails, notes/claim read as none, and a note or claim POST
+  answers 503 naming the task. Models
+  `JobThreadState` / `JobThreadNote`, plain columns, no relations (the Job
+  and User models are untouched).
+- **The panel is `src/components/jobs/JobConversation.tsx`**, fed by
+  `GET /api/jobs/[id]/conversation` (`src/lib/email/jobConversation.ts`):
+  every `EmailMessage` on a thread with this `jobId`, canonical copies only
+  (`duplicateOfId: null`), merged with the notes by time. It is a READ — no
+  second copy of the mail. Four row kinds: client (left; quoted history
+  stripped by `stripQuotedReply`), staff (right, by name — a
+  `@sirreel.com` sender whatever the direction, so a Gmail reply Jose
+  sent shows as his), system (the notifications@ sender, one compact line
+  reading the send label back out of `triageNotes` — `recordOutboundOnThread`
+  now writes `label:<EmailPayload.label>` there; unknown label → "Sent by
+  HQ"), and note (violet, dashed, "Internal · never sent").
+- **Lanes are derived on read, no column** (`laneFor` in
+  `src/lib/email/conversationRules.ts`, pure, `npm run test:job-conversation`):
+  system → by label (invoice/pre-invoice = BILLING); staff → BILLING role
+  or a billing inbox; client → the inbox it landed in (`routingHeaders.
+  deliveredTo`, To, Cc) — billing@/payments@/ana@ = BILLING. Filter chips
+  All / Sales / Billing in the panel header; notes always show.
+- **Claim:** "<name> is answering" / "Handed to Billing" / "Handed to
+  Sales" / Release — `POST …/conversation/claim`, `applyClaim` is the pure
+  transition (a new claim replaces the old; a hand leaves nobody holding
+  it and points the lane). **Hand to Billing emails `COPY_RECIPIENTS.
+  billing`** with a link to `/jobs/[id]?tab=conversation` (label
+  `job-thread-handoff`). Audited `job.thread_claimed|handed|released`.
+- **Notes:** `POST …/conversation/notes`, `cleanNote` (4000 chars),
+  `@First` / `@First Last` mentions matched against HQ users into
+  `mentions` (ids). A plain note notifies nobody — the chip row under the
+  box is the nudge. Audited `job.note_added`. Do NOT use the legacy
+  `job_messages` table for this.
+- **URGENT notes (Wes 2026-09-17: "something that elevates it from an
+  internal chat … to 'this needs to be seen right now' by whomever is
+  tagged").** The "Mark urgent" toggle in note mode → `urgent: true` on the
+  POST → `raiseUrgentAlerts`: every tagged person (never the author) gets a
+  TEXT to `User.phone` (the /admin/assistant mobile) via `sendTracked`
+  with `source: 'staff'` — exempt from quiet hours on purpose, a person
+  pressed it — else an EMAIL (label `job-thread-urgent`), else recorded as
+  unreachable. Pure half in conversationRules: `urgentPlan` (who, how),
+  `urgentSmsText` (140-char excerpt + deep link), `alertSummary` ("texted
+  Ana · emailed Julian · Chris unreachable"). **Refused with nobody tagged**
+  (400) — the panel disables the button and says "Tag someone first".
+  **A note is urgent when it has rows in `sr_job_thread_alerts`** (one per
+  recipient: channel SMS/EMAIL/NONE, status SENT/FAILED/SKIPPED, sentTo,
+  detail) — no column on the note, so the table went in by CREATE TABLE
+  alone: `JOB_THREAD_TABLES_DDL` now carries THREE tables and Wes re-runs
+  "Create the job Conversation tables" once (dry run shows one missing).
+  Until then the texts still go out and the audit row `job.note_urgent`
+  records them; only the red chip on the card is lost. The card is red
+  with an URGENT pill and the summary line; the sender's toast reads the
+  same summary, so a failed text is never mistaken for a sent one.
+- **A reply to the client is CONFIRMED before it goes (Wes 2026-09-17:
+  "Things that are going out to the client need to be flagged or confirmed
+  because I'm a little bit afraid that someone's going to try to write an
+  internal note and accidentally send an email to the client").** Two taps:
+  the first ARMS the reply and shows exactly who receives it (To, Cc,
+  from); the second sends. Any edit to the message, the recipients or the
+  mode disarms it, and ⌘↵ follows the same two taps. Notes never arm.
+- **The armed strip also reads the WORDS, not just the recipients.**
+  `internalNoteTells()` in conversationRules.ts (pure, in
+  `test:job-conversation`) looks for the marks of a team note — an
+  @mention of someone on staff, a "Hey team" / "Hi all" opener, a
+  colleague addressed by first name at a line start — and names each one
+  with a **"Keep it internal instead"** button that files the draft as a
+  note and emails nobody. Loud, never blocking: "Hi all" to a production
+  is a real thing to write. The recipient list answers "who gets this";
+  this answers "what IS this", which is the half Wes was afraid of.
+- **Server-side, `POST /api/jobs/[id]/email` refuses without
+  `confirmed: true`** (400). The arm step is what supplies it, so a
+  composer that skips the confirmation — a future one, or a stale tab —
+  cannot put a message in front of a client. `JobEmailButton`'s modal is
+  its own review and passes it. The Chat page does not send client mail.
+- **The composer is the Phase 1 send** (`POST /api/jobs/[id]/email`), now
+  **From = the author** (`Jose Pacheco <jose@sirreel.com>` through Resend's
+  verified domain — the cadence runner has sent as the agent that way since
+  it shipped); a sender outside `@sirreel.com` falls back to SirReel HQ.
+  Subject is the job's and read-only; the job address is implicit ("filed
+  to SR-JOB-…" chip). ⌘↵ sends. No attachment picker yet — the Send quote /
+  Send invoice buttons still carry the documents. **Cc from the job (Wes
+  2026-09-17):** under the free-text Cc box, "Cc someone on the job…" lists
+  the job's contacts not already in To/Cc (pick one, it re-lists the rest)
+  and "Cc everyone on the job (N)" adds them all; the box stays free-text
+  for an outside address. Both feed the same comma list the route parses
+  (`MAX_JOB_EMAIL_CC` 15). **A client email is TWO taps (Wes 2026-09-17:
+  "I'm a little bit afraid that someone's going to try to write an
+  internal note and accidentally send an email to the client"):** "Email
+  client…" ARMS it and shows To / Cc / from in an amber strip; "Yes, send
+  to the client" sends. Editing anything disarms. ⌘↵ follows the same two
+  steps; a note never arms. The @chip row shows EVERY active teammate but
+  yourself (the old `slice(0, 8)` hid Jose and Ana) and a chip already in
+  the note is lit and inert.
+- **Placement — a DOCK owned by the /jobs layout, not the job page**
+  (Wes 2026-09-17: "a minimize button for the chat window so that we can
+  leave it open on top of the other jobs that we are looking at. Also, a
+  close window button"). The panel used to be an `<aside>` in
+  `/jobs/[id]/page.tsx`, so it died on every walk from one job to the next
+  — there was nothing to leave open. `JobChatDock.tsx` mounts it from
+  `jobs/layout.tsx` (the same trick that keeps the rail's scroll
+  position), as the third flex child of the list|detail row.
+  - Three states, ONE mount: **open** = a reserved 400px column at 1280px+
+    (a flex child, so it never covers the job) and a `fixed inset-0`
+    window below that; **min** = a pill at the bottom right naming the job
+    it holds, over everything; **closed** = gone. Minimise HIDES the panel
+    rather than unmounting it, so a half-typed note survives.
+  - **Follow mode** is what preserves the old always-on rail: while
+    nobody has pressed either button the window re-binds to whichever job
+    is on screen. Minimise and close both stop it (that is what pinning
+    means); the job header's **Conversation** button is the only way back,
+    and it carries the "client replied" dot. Following is gated on 1280px
+    — below that an open window is the whole screen, and a job page that
+    buries itself under a chat on arrival is not a rail.
+  - The window can hold job A while you read job B — that IS the feature,
+    and also exactly how someone writes into the wrong conversation, so
+    the pane carries a **"Holding SR-JOB-A — you're on B · Switch"** strip
+    and an "Open SR-JOB-A" link. `key={target.id}` on the panel means a
+    draft never rides from one job to another.
+  - `?tab=conversation` is still the deep link (the Hand-to-Billing email,
+    an urgent note's text, the order page, /chat) — it OPENS the window,
+    once per job. The `ConversationTabs` strip is gone; the dock is the
+    entry point at every width. `JobEmailThreads` is gone from the job
+    page (still used by /rentalworks/reconcile); `JobEmailButton` stays
+    for the counter-proposal panel.
+- **Rail:** `/api/jobs` rows carry `conversation: { awaitingReply,
+  lastInboundAt }` from ONE `emailThread.groupBy` over the page
+  (`conversationSummaryForJobs`: newest inbound on any thread filed to the
+  job newer than our newest send). The rail shows a "Client replied" chip.
+  The order page shows a link to the job's conversation and no composer —
+  one place to write.
+- **The Chat page — /chat, every conversation YOU are in (2026-09-17 —
+  Wes: "a chat tab on the left menu … all chats, no matter which job, will
+  show up here … another way to communicate if you're not already in the
+  job", then at once "the chats shouldn't be for everyone. It should be
+  for everyone who is included in that chat. In other words if it was
+  directly @billing, it wouldn't show up in Hugo's and vice versa").**
+  - **INCLUSION, not a listing.** `chatInboxFor(actor)` in
+    `src/lib/email/chatInbox.ts` collects jobs by REASON and the row NAMES
+    the reason: `mentioned` (@you in a note) · `holding` (you hold the
+    claim) · `wrote` (your note, or mail from/to you on the thread) ·
+    `rep` (you are `Job.agentId`) · `desk` (handed to Billing, or it
+    landed in billing@/payments@/ana@, and you ARE the billing desk —
+    `isBillingDesk`, role BILLING or one of those inboxes). **Seniority is
+    not a reason**: an ADMIN sees what they are in, nothing more. If you
+    cannot see why a job is in your list, the rule is wrong.
+  - Scoped SERVER-side off the session (`GET /api/chat` passes no user id
+    and has no "all" mode). Bounded: 45-day window, ≤60 jobs, capped
+    sub-queries. Cc-only participation is NOT a reason — `EmailMessage`
+    has no cc column (Cc lives in `routingHeaders` JSON), and jobs@ is on
+    every send anyway.
+  - **Order is attention, not time** (`chatTier` / `sortChatRows`, pure):
+    urgent-for-you → tagged-you → client waiting → the rest, newest first
+    inside each. "Still on you" is DERIVED — tagged and you have not
+    written since; there is no read/unread table and this did not add one.
+  - **Replies here are INTERNAL NOTES only** (Wes asked which way; the
+    split is by risk). A note's context is the note, so it answers inline
+    — and it POSTs to the job's own notes route, so it is ONE record that
+    "shows up simultaneously in the chat page and the job internal notes",
+    never a copy. Urgent + @chips work the same as on the job. **A client
+    email needs the job**: that message quotes dates and money that live
+    on the job page, and the two-tap confirm lives there too — one
+    composer, so the guard rails cannot drift. Every row carries "Open the
+    job to email the client".
+  - **Company + job on every row AND above the reply box** (Wes: "it needs
+    to be very clear what company and job it is referring to") — the
+    header scrolls away on a phone, so the box repeats it.
+  - **Search at the top does TWO things** (Wes 2026-09-17: "we probably
+    need a search field at top of chat to find jobs or clients that we want
+    to message about"): it filters the rows you HAVE in the browser as you
+    type, and — debounced 250ms — asks `GET /api/chat?q=` for jobs you are
+    NOT in, listed under "Not in your chat" with the same two actions. That
+    is what lets a conversation be STARTED here, not only continued.
+    `searchJobsForChat` matches production / job code / CLIENT company /
+    a person on the job (the same four the /jobs box uses) and is scoped by
+    `resolveDataScope` + `jobScopeWhere` — the /jobs list's own helpers, so
+    chat opens no door that page does not. Archived jobs excluded.
+  - Nav: `CHAT_ITEM` in permissions.ts is in ALL FOUR branches (sales,
+    billing, yard, the fixed IA) — the yard gets tagged as often as sales.
+    A shared nav row is not a shared view; the page scopes it. **FIRST in
+    every branch, directly under the Incoming pill** (Wes 2026-09-17: "I
+    assume the chat item will sit at the top of the left menu, just under
+    Incoming?"). That NARROWS the 2026-09-03 ruling ("move the Reservations
+    tab to the top of the list and have that be the default view for
+    everyone") to its second half: Reservations is still where everyone
+    LANDS — `defaultLandingPath` is untouched — it is just no longer the
+    top row. A chat tab people have to hunt for is one nobody reads.
+- NOT built: an attachment picker in the composer; a mention notification;
+  the role gate on the Billing lane (Wes's recommendation was to leave it
+  visible); the New inbound column link; Phase 3 (Gmail-native sending).
 
 ## Active Roadmap
 1. AI fleet optimization

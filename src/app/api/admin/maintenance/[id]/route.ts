@@ -16,8 +16,10 @@
  *   · AUDITED. Every real run writes an AuditLog row carrying the ids it
  *     created — which is what makes the "cleanup by captured id only" rule
  *     workable when the run happened on a phone with no journal file.
- *   · NO SCHEMA CHANGES. The registry's `category` has no DDL member; see
- *     the header of maintenanceTasks.ts for why those stay on a laptop.
+ *   · NO SCHEMA CHANGES, bar one class: a `schema` task runs only the
+ *     CREATE … IF NOT EXISTS statements it carries in the registry, gated
+ *     by `isAdditiveStatement` at run time. See maintenanceTasks.ts for why
+ *     ALTERs and column adds stay on a laptop.
  *
  * A refusal the operator can act on (`SeedRefused`) comes back as a 409 with
  * a `fix` line, not a stack trace.
@@ -66,7 +68,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   try {
-    const result = await runner({ dryRun, params: safeParams })
+    const result = await runner({ dryRun, params: safeParams, actorUserId: user.id })
 
     if (!dryRun) {
       await prisma.auditLog.create({
@@ -82,6 +84,7 @@ export async function POST(req: NextRequest, { params }: Params) {
             // The captured ids. Without the journal file a phone run would
             // otherwise leave no record of what it made.
             createdIds: result.createdIds,
+            touchedIds: result.touchedIds ?? [],
             params: Object.keys(safeParams),
             ranFrom: 'hq-web',
           },

@@ -127,6 +127,112 @@ export function isUnholdableVehicleLine(li: HoldableLineShape): boolean {
   return !inv.legacyAssetCategoryId
 }
 
+/**
+ * The AssetCategory a line holds against, or null when it holds nothing.
+ * PURE — the one resolution rule, shared with the routes that need to know
+ * whether a line's DATES moving should move the reservation
+ * (lib/scheduling/followLineDates). The line-edit route used to test the
+ * line's own `assetCategoryId`, which every catalog-bound line leaves null
+ * (the category lives on the catalog row), so a vehicle's date change
+ * never reached the hold at all.
+ */
+export function holdCategoryForLine(li: HoldableLineShape): string | null {
+  if (li.assetCategoryId) {
+    const d = li.assetCategory?.department
+    return d === LineItemDepartment.VEHICLES || d === LineItemDepartment.STAGES ? li.assetCategoryId : null
+  }
+  const inv = li.inventoryItem
+  if (!inv) return null
+  if (inv.trackingMode !== 'UNIT_TRACKED') return null
+  if (inv.department !== LineItemDepartment.VEHICLES && inv.department !== LineItemDepartment.STAGES) return null
+  return inv.legacyAssetCategoryId ?? null
+}
+
+/**
+ * What a LINE EDIT owes the hold. PURE — the row editor's quantity /
+ * catalog-binding branch (`PUT /line-items/[lineId]`) reads this instead of
+ * testing the line's own `assetCategoryId`, which a catalog-bound vehicle
+ * leaves null: until 2026-09-17 a real van edited from 1 to 2 left the hold
+ * at 1, and the capacity confirm never fired. Both class ids come from
+ * `holdCategoryForLine`, before and after the edit.
+ *
+ *   · feasibilityDelta — units the NEW class must have room for before the
+ *     edit lands (0 = nothing to ask). Same class: only the increase.
+ *     A class the line did not hold before: the whole quantity.
+ *   · recompute — re-run `holdOnQuoteSend`, which SETs each quoted class to
+ *     its PEAK CONCURRENT need. Never a delta: two sequential blocks of one
+ *     van are one van, and a delta-accumulating write says two.
+ *   · releaseCategoryId — the class the line stopped holding. The recompute
+ *     only visits classes still quoted, so the caller hands this one back
+ *     when nothing quotes it any more (`categoryStillQuoted`).
+ */
+export interface LineEditHoldPlan {
+  feasibilityDelta: number
+  recompute: boolean
+  releaseCategoryId: string | null
+}
+
+export function planHoldSyncOnLineEdit(args: {
+  oldCategoryId: string | null
+  newCategoryId: string | null
+  oldQty: number
+  newQty: number
+}): LineEditHoldPlan {
+  const { oldCategoryId, newCategoryId } = args
+  const oldQty = Math.max(0, Math.floor(args.oldQty) || 0)
+  const newQty = Math.max(0, Math.floor(args.newQty) || 0)
+  if (!oldCategoryId && !newCategoryId) return { feasibilityDelta: 0, recompute: false, releaseCategoryId: null }
+  if (oldCategoryId === newCategoryId) {
+    return { feasibilityDelta: Math.max(0, newQty - oldQty), recompute: newQty !== oldQty, releaseCategoryId: null }
+  }
+  return {
+    feasibilityDelta: newCategoryId ? newQty : 0,
+    recompute: true,
+    releaseCategoryId: oldCategoryId,
+  }
+}
+
+/** The sibling orders whose vehicle lines share this order's job-level
+ *  booking — one definition for the peak and for `categoryStillQuoted`. */
+function siblingOrdersWhere(order: { id: string; jobId: string }, bookingId: string | null) {
+  return {
+    jobId: order.jobId,
+    id: { not: order.id },
+    status: { not: 'CANCELLED' as const },
+    quoteStatus: { notIn: ['LOST' as const, 'EXPIRED' as const] },
+    archivedAt: null,
+    OR: [{ bookingId }, { bookingId: null }],
+  }
+}
+
+/**
+ * Does any dated line on this order — or on the sibling orders sharing its
+ * booking — still hold against `categoryId`? False means the recompute will
+ * never visit that class again, so whatever it holds is the caller's to
+ * release.
+ */
+export async function categoryStillQuoted(orderId: string, categoryId: string): Promise<boolean> {
+  const lineSelect = {
+    pickupDate: true, returnDate: true, department: true, assetCategoryId: true,
+    assetCategory: { select: { department: true } },
+    inventoryItem: { select: { department: true, trackingMode: true, legacyAssetCategoryId: true } },
+  } as const
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { id: true, jobId: true, bookingId: true, lineItems: { select: lineSelect } },
+  })
+  if (!order) return false
+  const siblings = order.jobId
+    ? await prisma.order.findMany({
+        where: siblingOrdersWhere({ id: order.id, jobId: order.jobId }, order.bookingId),
+        select: { lineItems: { select: lineSelect } },
+      })
+    : []
+  return [...order.lineItems, ...siblings.flatMap((o) => o.lineItems)].some(
+    (li) => !!li.pickupDate && !!li.returnDate && holdCategoryForLine(li) === categoryId,
+  )
+}
+
 export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResult> {
   const out: HoldOnQuoteResult = {
     created: 0, reused: 0, adjusted: 0, skippedNoDates: 0, skippedNotUnitTracked: 0,
@@ -154,32 +260,24 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
 
     /** The AssetCategory this line should hold against, or null. */
     const categoryFor = (li: (typeof order.lineItems)[number]): string | null => {
-      // Legacy lines that carry the category directly.
-      if (li.assetCategoryId) {
-        const d = li.assetCategory?.department
-        return d === LineItemDepartment.VEHICLES || d === LineItemDepartment.STAGES
-          ? li.assetCategoryId
-          : null
+      const id = holdCategoryForLine(li)
+      if (id) return id
+      // A vehicle that resolves to NO category is a quoted truck nobody is
+      // holding — name it rather than letting it vanish into
+      // skippedNotUnitTracked beside the ladders and folding tables. Two
+      // ways in: a free-typed VEHICLES line with no catalog row
+      // ("Production Truck", S260903-002), or a unit-tracked catalog row
+      // with no legacyAssetCategoryId to hold against.
+      if (!li.assetCategoryId) {
+        const inv = li.inventoryItem
+        const vehicleDept = (d: LineItemDepartment | null | undefined) =>
+          d === LineItemDepartment.VEHICLES || d === LineItemDepartment.STAGES
+        const unresolved = !inv
+          ? vehicleDept(li.department)
+          : inv.trackingMode === 'UNIT_TRACKED' && vehicleDept(inv.department) && !inv.legacyAssetCategoryId
+        if (unresolved) out.unresolvedVehicles.push(li.description || 'unnamed line')
       }
-      // Current lines: resolve through the catalog row.
-      const inv = li.inventoryItem
-      if (!inv) {
-        // No catalog row at all. A free-typed VEHICLES line ("Production
-        // Truck", S260903-002) is a real vehicle on a quote that nothing
-        // can hold — and it used to vanish into skippedNotUnitTracked
-        // beside the ladders and folding tables. Name it instead.
-        if (li.department === LineItemDepartment.VEHICLES || li.department === LineItemDepartment.STAGES) {
-          out.unresolvedVehicles.push(li.description || 'unnamed line')
-        }
-        return null
-      }
-      if (inv.trackingMode !== 'UNIT_TRACKED') return null
-      if (inv.department !== LineItemDepartment.VEHICLES && inv.department !== LineItemDepartment.STAGES) return null
-      if (!inv.legacyAssetCategoryId) {
-        out.unresolvedVehicles.push(li.description || 'unnamed line')
-        return null
-      }
-      return inv.legacyAssetCategoryId
+      return null
     }
 
     const holdable = order.lineItems
@@ -307,14 +405,7 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
     // archived, or that hold on a DIFFERENT booking, stay out.
     const siblings = order.jobId
       ? await prisma.order.findMany({
-          where: {
-            jobId: order.jobId,
-            id: { not: order.id },
-            status: { not: 'CANCELLED' },
-            quoteStatus: { notIn: ['LOST', 'EXPIRED'] },
-            archivedAt: null,
-            OR: [{ bookingId }, { bookingId: null }],
-          },
+          where: siblingOrdersWhere({ id: order.id, jobId: order.jobId }, bookingId),
           select: {
             lineItems: {
               select: {

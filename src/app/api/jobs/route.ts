@@ -22,8 +22,10 @@ import { resolveDataScope, jobScopeWhere } from '@/lib/auth/scope'
 import { createJobFromDraft } from '@/lib/jobs/resolveJob'
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
 import { liveOrdersForRollup } from '@/lib/jobs/liveOrders'
+import { jobBlindRollup } from '@/lib/fleet/blindRule'
 import { countRedlinesAwaitingAction } from '@/lib/jobs/redlineAlert'
 import { WELCOME_SENT_ACTION, welcomeSignal } from '@/lib/jobs/welcomeReminder'
+import { conversationSummaryForJobs } from '@/lib/email/jobConversation'
 import { computeReadiness } from '@/lib/jobs/readiness'
 import { deriveJobStage, WAREHOUSE_DEPARTMENTS } from '@/lib/jobs/stage'
 import { PARTNER_LINE_WHERE } from '@/lib/orders/partnerLines'
@@ -303,6 +305,10 @@ export async function GET(req: NextRequest) {
                 assignments: {
                   select: {
                     status: true,
+                    // Per-vehicle blind override — the rail's eye-off
+                    // reads "any vehicle blind" (lib/fleet/blindRule).
+                    blindPickup: true,
+                    blindReturn: true,
                     // The return edge of a checked-out truck — the
                     // cadence rollup reads it (src/lib/jobs/cadence.ts).
                     endDate: true,
@@ -461,6 +467,9 @@ export async function GET(req: NextRequest) {
     // RW rollup for the listed jobs — one batch, so board cards don't
     // read "$— / 0 orders" for jobs whose money lives in RentalWorks.
     const jobIds = jobs.map((j) => j.id)
+    // One-thread-per-job: is the client waiting on us? One groupBy over the
+    // page's threads (lib/email/jobConversation); the rail shows a chip.
+    const convoByJob = await conversationSummaryForJobs(jobIds)
     const rwLinks = jobIds.length
       ? await prisma.jobRwOrder.findMany({
           where: { jobId: { in: jobIds } },
@@ -606,7 +615,9 @@ export async function GET(req: NextRequest) {
       // orders — a blind-pickup self check-out marks the assignment
       // CHECKED_OUT hours before anyone touches the order.
       const vehiclesOnJob = j.bookings.flatMap((b) =>
-        b.items.flatMap((it) => it.assignments.map((a) => ({ status: a.status, endDate: a.endDate }))),
+        b.items.flatMap((it) =>
+          it.assignments.map((a) => ({ status: a.status, endDate: a.endDate, blindPickup: a.blindPickup, blindReturn: a.blindReturn })),
+        ),
       )
       const cadence = rollupCadence(j.status, liveOrders, today, tomorrow, vehiclesOnJob)
 
@@ -620,10 +631,16 @@ export async function GET(req: NextRequest) {
       )
 
       // Blind handoff markers — true when ANY order on the job has the
-      // matching flag set. Surfaced as eye-off icons next to the job
+      // matching flag set, or any live vehicle is overridden blind on its
+      // own (Jose 2026-09-16). Surfaced as eye-off icons next to the job
       // name on the Jobs list.
-      const blindPickup = liveOrders.some((o) => (o as { blindPickup?: boolean }).blindPickup)
-      const blindReturn = liveOrders.some((o) => (o as { blindReturn?: boolean }).blindReturn)
+      const { blindPickup, blindReturn } = jobBlindRollup(
+        liveOrders.map((o) => ({
+          blindPickup: !!(o as { blindPickup?: boolean }).blindPickup,
+          blindReturn: !!(o as { blindReturn?: boolean }).blindReturn,
+        })),
+        vehiclesOnJob.filter((v) => v.status === 'ASSIGNED' || v.status === 'CHECKED_OUT'),
+      )
 
       // Stage-scope detection — drives whether the Stage Contract chip
       // renders on the Jobs list. True when ANY live order on the job
@@ -887,6 +904,7 @@ export async function GET(req: NextRequest) {
         approvedUnbooked,
         redlinePending,
         welcome,
+        conversation: convoByJob.get(j.id) ?? null,
         cadence,
         hasLD,
         hasStageScope,

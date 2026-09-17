@@ -262,6 +262,10 @@ export async function GET(
                     startDate: true,
                     endDate: true,
                     status: true,
+                    // Per-vehicle blind override (Jose 2026-09-16) — the
+                    // paperwork strip's violet reads any vehicle blind.
+                    blindPickup: true,
+                    blindReturn: true,
                     asset: { select: { id: true, unitName: true } },
                     // Which ORDER this unit goes out on — the yard's
                     // "Order attached" link, and what the Reserved

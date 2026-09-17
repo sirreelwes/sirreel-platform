@@ -33,6 +33,8 @@ interface AssignBody {
   /** Which order this unit goes out on. Optional: with one candidate
    *  order on the job we stamp it without asking. */
   orderId?: string
+  /** The order LINE this unit is for (the picker opened from a line). */
+  orderLineItemId?: string | null
   /** The date block being filled (YYYY-MM-DD), as shown in the picker.
    *  Optional — resolved from the quoted lines when absent. */
   windowStart?: string
@@ -71,6 +73,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     bufferDays: body.bufferDays,
     bufferOverride: body.bufferOverride,
     orderId: body.orderId,
+    orderLineItemId: body.orderLineItemId ?? null,
     windowStart: body.windowStart,
     windowEnd: body.windowEnd,
     replaceAssetId: body.replaceAssetId,
@@ -86,6 +89,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       bufferOverrideUsed: result.bufferOverrideUsed,
       window: result.window,
       replacedAssetId: result.replacedAssetId,
+      driversMoved: result.driversMoved,
     },
     { status: 201 },
   )

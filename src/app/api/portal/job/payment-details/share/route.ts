@@ -25,7 +25,7 @@ import {
   buildJobSessionCookieHeader,
 } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { sendPaymentShareEmail } from '@/lib/payments/paymentShare'
 
 export const dynamic = 'force-dynamic'
@@ -76,7 +76,8 @@ export async function POST(req: NextRequest) {
     orderRef: resolved.order?.orderNumber ? ` for order ${resolved.order.orderNumber}` : '',
     createdVia: 'PORTAL',
     portalAccessId: session.portalAccessId,
-    send: (msg) => sendAgreementEmail(msg),
+    // On the job's thread when the session resolves to an order on one.
+    send: (msg) => sendOnJobThread({ ...msg, jobId: resolved.order?.jobId ?? null }),
   })
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status })
 
