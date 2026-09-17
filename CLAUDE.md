@@ -1365,9 +1365,29 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `job-thread-handoff`). Audited `job.thread_claimed|handed|released`.
 - **Notes:** `POST …/conversation/notes`, `cleanNote` (4000 chars),
   `@First` / `@First Last` mentions matched against HQ users into
-  `mentions` (ids). Nothing notifies a mentioned person yet — the chip row
-  under the box is the nudge. Audited `job.note_added`. Do NOT use the
-  legacy `job_messages` table for this.
+  `mentions` (ids). A plain note notifies nobody — the chip row under the
+  box is the nudge. Audited `job.note_added`. Do NOT use the legacy
+  `job_messages` table for this.
+- **URGENT notes (Wes 2026-09-17: "something that elevates it from an
+  internal chat … to 'this needs to be seen right now' by whomever is
+  tagged").** The "Mark urgent" toggle in note mode → `urgent: true` on the
+  POST → `raiseUrgentAlerts`: every tagged person (never the author) gets a
+  TEXT to `User.phone` (the /admin/assistant mobile) via `sendTracked`
+  with `source: 'staff'` — exempt from quiet hours on purpose, a person
+  pressed it — else an EMAIL (label `job-thread-urgent`), else recorded as
+  unreachable. Pure half in conversationRules: `urgentPlan` (who, how),
+  `urgentSmsText` (140-char excerpt + deep link), `alertSummary` ("texted
+  Ana · emailed Julian · Chris unreachable"). **Refused with nobody tagged**
+  (400) — the panel disables the button and says "Tag someone first".
+  **A note is urgent when it has rows in `sr_job_thread_alerts`** (one per
+  recipient: channel SMS/EMAIL/NONE, status SENT/FAILED/SKIPPED, sentTo,
+  detail) — no column on the note, so the table went in by CREATE TABLE
+  alone: `JOB_THREAD_TABLES_DDL` now carries THREE tables and Wes re-runs
+  "Create the job Conversation tables" once (dry run shows one missing).
+  Until then the texts still go out and the audit row `job.note_urgent`
+  records them; only the red chip on the card is lost. The card is red
+  with an URGENT pill and the summary line; the sender's toast reads the
+  same summary, so a failed text is never mistaken for a sent one.
 - **The composer is the Phase 1 send** (`POST /api/jobs/[id]/email`), now
   **From = the author** (`Jose Pacheco <jose@sirreel.com>` through Resend's
   verified domain — the cadence runner has sent as the agent that way since
@@ -1379,7 +1399,14 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   the job's contacts not already in To/Cc (pick one, it re-lists the rest)
   and "Cc everyone on the job (N)" adds them all; the box stays free-text
   for an outside address. Both feed the same comma list the route parses
-  (`MAX_JOB_EMAIL_CC` 15).
+  (`MAX_JOB_EMAIL_CC` 15). **A client email is TWO taps (Wes 2026-09-17:
+  "I'm a little bit afraid that someone's going to try to write an
+  internal note and accidentally send an email to the client"):** "Email
+  client…" ARMS it and shows To / Cc / from in an amber strip; "Yes, send
+  to the client" sends. Editing anything disarms. ⌘↵ follows the same two
+  steps; a note never arms. The @chip row shows EVERY active teammate but
+  yourself (the old `slice(0, 8)` hid Jose and Ana) and a chip already in
+  the note is lit and inert.
 - **Placement** (`/jobs/[id]/page.tsx`): the page's outer wrapper is a
   2-column grid at `xl` (1280px+) — the job's column plus a 400px
   `<aside>` holding the panel, sticky, full height. Below `xl` a
