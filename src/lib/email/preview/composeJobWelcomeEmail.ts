@@ -13,6 +13,7 @@ import { prisma } from '@/lib/prisma'
 import { rankRecipients, type RankedRecipient } from '@/lib/email/recipients'
 import { buildJobWelcomeEmail } from '@/lib/email/templates/jobWelcome'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
+import { previewJobThreadSubject } from '@/lib/email/jobThread'
 import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { defaultJobWelcomeBody } from '@/lib/jobs/welcomeReminder'
 
@@ -137,7 +138,10 @@ export async function composeJobWelcomeEmail(
     to,
     alternatives: candidates,
     from: SEND_FROM,
-    subject,
+    // One thread per job: the send goes out under the job's subject
+    // (lib/email/jobThread), so the preview shows that one — the template
+    // subject is only the off-thread fallback.
+    subject: (await previewJobThreadSubject(args.jobId)) ?? subject,
     html,
     text,
     attachments: [],

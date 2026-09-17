@@ -100,6 +100,9 @@ export interface FilterInput {
    *  true = this message's Message-ID chain touches a stored
    *  EmailMessage. Undefined counts as false: default-drop. */
   conversationLink?: boolean
+  /** The job address (jobs+<jobcode>@) was on the message — anchor B of
+   *  the job thread. MONEY mode keeps such mail whatever the words. */
+  jobTagged?: boolean
 }
 
 export interface FilterDecision {
@@ -220,6 +223,13 @@ function evaluateSales(input: FilterInput): FilterDecision {
 }
 
 function evaluateMoney(input: FilterInput): FilterDecision {
+  // A reply on a job's thread is kept on the strength of the thread, not
+  // its words: "thanks, paid" or "who do I make the check out to" has no
+  // invoice keyword and used to be dropped here. The link is computed by
+  // the caller (hasKnownConversationLink) or read off the job address.
+  if (input.conversationLink || input.jobTagged) {
+    return { keep: true, reason: input.jobTagged ? 'job-thread-address' : 'job-thread-link', mode: 'MONEY' }
+  }
   const subj = input.subject
   const body = input.bodyText ?? input.bodyHtml ?? ''
   // Cap the keyword scan at the first 8KB of body — payment-related

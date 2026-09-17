@@ -31,7 +31,7 @@
 
 import { get as getBlob } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread, previewJobThreadSubject } from '@/lib/email/jobThread'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { rankRecipients } from '@/lib/email/recipients'
 import { withBillingCc } from '@/lib/email/billingVisibility'
@@ -264,7 +264,8 @@ export async function sendInvoice(args: {
       cc: ccList,
       orderAdvancedToInvoiced: false,
       preview: {
-        subject: rendered.subject,
+        // The subject the SEND will use — the job thread's, not the template's.
+        subject: (await previewJobThreadSubject(invoice.order.job?.id ?? '')) ?? rendered.subject,
         html: rendered.html,
         text: rendered.text,
         attachment: `${filename} (${(pdfBuffer.length / 1024).toFixed(0)} KB)`,
@@ -273,7 +274,11 @@ export async function sendInvoice(args: {
   }
 
   // ── Dispatch ────────────────────────────────────────────────────
-  const result = await sendAgreementEmail({
+  // Billing rides the job's thread too (Wes 2026-09-17): one conversation
+  // per job, and recipients are per MESSAGE — sales is not on this one
+  // unless the client copies them. Reply-To stays billing@.
+  const result = await sendOnJobThread({
+    jobId: invoice.order.job?.id ?? null,
     to: [primary.email],
     // The email is signed by billing (Ana) — a plain Reply ("run my
     // card", "wiring Friday") must reach the billing inbox, not the
@@ -299,7 +304,7 @@ export async function sendInvoice(args: {
       resendMessageId: result.id,
       toAddress: primary.email,
       ccAddresses: ccList,
-      subject: rendered.subject,
+      subject: result.subject,
       label: `send-invoice:${invoice.invoiceNumber}`,
       orderId: invoice.order.id,
       invoiceId: invoice.id,

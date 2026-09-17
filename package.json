@@ -153,6 +153,7 @@
     "test:job-preview": "tsx tests/portal/job-preview.test.ts",
     "test:email-vehicle": "tsx tests/sales/email-vehicle-match.test.ts",
     "test:auto-reply": "tsx tests/email/auto-reply.test.ts",
+    "test:job-thread": "tsx tests/email/job-thread.test.ts",
     "test:job-change-signals": "tsx tests/email/job-change-signals.test.ts",
     "rw:status": "tsx scripts/rw-sync-status.ts",
     "planyo:alignment": "tsx scripts/planyo-unit-alignment.ts",
