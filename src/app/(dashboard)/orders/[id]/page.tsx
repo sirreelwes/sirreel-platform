@@ -70,6 +70,7 @@ import {
 } from "@/lib/orders/lineItemDepartments";
 import { AlertTriangle, Send, Sparkles } from 'lucide-react'
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
+import { StockChip, useItemStock } from '@/components/inventory/StockChip';
 import { SwitchVehicleClassModal, type SwitchClassLine } from '@/components/orders/SwitchVehicleClassModal';
 import { GearLoadOnCard, type ReservedUnitChoice } from '@/components/orders/GearLoadOnCard';
 import { closureOn, calendarDayLabel } from '@/lib/site/yardHours';
@@ -1007,6 +1008,71 @@ export default function OrderDetailPage() {
     }
     setLoading(false);
   }, [orderId, router]);
+
+  // ── Stock beside every quantity (the RentalWorks number the crew
+  //    asked back for) ──────────────────────────────────────────────
+  // Only QUANTITY-tracked catalog rows answer: vehicles are the
+  // scheduler's business (the hold / Assign units UI on the same row),
+  // and an item nobody has counted stays silent rather than shouting a
+  // false zero. Both rules live in src/lib/inventory/stock.ts.
+  const stockLines = useMemo(
+    () => (order?.lineItems ?? []).filter((li) => li.inventoryItem?.trackingMode === 'QUANTITY'),
+    [order],
+  );
+  const dayOf = (d: string | null | undefined) => (d ? d.slice(0, 10) : null);
+  // One window covering everything on the order (plus whatever the Add
+  // form is pointing at), so the whole table costs one request. A line
+  // with a narrower window is measured against a slightly wider one —
+  // conservative in the right direction: it can under-state what is
+  // free, never over-state it.
+  const stockWindow = useMemo(() => {
+    const dates = [
+      dayOf(order?.startDate),
+      dayOf(order?.endDate),
+      ...stockLines.flatMap((li) => [
+        dayOf(li.startDate ?? li.pickupDate),
+        dayOf(li.endDate ?? li.returnDate),
+      ]),
+    ].filter((d): d is string => !!d);
+    if (dates.length === 0) return { start: null, end: null };
+    dates.sort();
+    return { start: dates[0], end: dates[dates.length - 1] };
+  }, [stockLines, order?.startDate, order?.endDate]);
+  const stockItemIds = useMemo(() => {
+    const ids = stockLines.map((li) => li.inventoryItem?.id).filter((id): id is string => !!id);
+    // The Add form's picked item isn't on the order yet — it is exactly
+    // the moment an agent most wants to know whether we have enough.
+    if (liInvItemId) ids.push(liInvItemId);
+    // Same for a line being re-pointed at a different catalog row in
+    // the inline editor.
+    if (editInvItemId) ids.push(editInvItemId);
+    return ids;
+  }, [stockLines, liInvItemId, editInvItemId]);
+  const { stock: itemStock, refresh: refreshStock } = useItemStock({
+    inventoryItemIds: stockItemIds,
+    start: stockWindow.start,
+    end: stockWindow.end,
+    excludeOrderId: orderId,
+  });
+  /** Same item, other lines of THIS order whose dates overlap this one.
+   *  The API leaves this order out of `committed`, so its own siblings
+   *  have to be netted here — two lines of 20 straps are 40 straps. */
+  const otherQtyOnOrder = useCallback(
+    (li: LineItem) => {
+      const itemId = li.inventoryItem?.id;
+      if (!itemId) return 0;
+      const start = dayOf(li.startDate ?? li.pickupDate);
+      const end = dayOf(li.endDate ?? li.returnDate);
+      return stockLines.reduce((sum, other) => {
+        if (other.id === li.id || other.inventoryItem?.id !== itemId) return sum;
+        const oStart = dayOf(other.startDate ?? other.pickupDate);
+        const oEnd = dayOf(other.endDate ?? other.returnDate);
+        if (start && end && oStart && oEnd && !(oStart <= end && oEnd >= start)) return sum;
+        return sum + other.quantity;
+      }, 0);
+    },
+    [stockLines],
+  );
 
   const saveBlindHandoff = useCallback(async () => {
     setBlindSaving(true);
@@ -2467,7 +2533,7 @@ export default function OrderDetailPage() {
         alert(`The tent was added, but the ${liSandbags.qty} sandbags were not — add them by hand.`);
       }
     }
-    resetForm(); setAdding(false); fetchOrder();
+    resetForm(); setAdding(false); fetchOrder(); refreshStock();
   };
 
   // Same rate-fallback math new-quote uses on its row picker. Most
@@ -2727,6 +2793,7 @@ export default function OrderDetailPage() {
     setSavingLineId(null);
     setEditingLineId(null);
     fetchOrder();
+    refreshStock();
   };
 
   /** Enter saves, Escape cancels — from any field in the edit row. The
@@ -2762,6 +2829,7 @@ export default function OrderDetailPage() {
     }
     await fetch(`/api/orders/${orderId}/line-items/${li.id}`, { method: "DELETE" });
     await fetchOrder();
+    refreshStock();
     setLineItemUndoToast({
       label: unitNames.length > 0
         ? `${snapshot.description || "(line item)"} — ${unitNames.join(', ')} released`
@@ -3161,6 +3229,16 @@ export default function OrderDetailPage() {
         <td className="px-4 py-2 text-center">
           <input type="number" value={editQty} onChange={(e) => setEditQty(e.target.value)}
             className="w-14 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-center" />
+          {/* Reads the typed value, not the saved one — the whole point
+              is that it goes red as the agent passes what we have. */}
+          <div className="mt-1 text-center">
+            <StockChip
+              stock={itemStock[(editInvItemId || li.inventoryItem?.id) ?? '']}
+              requested={parseInt(editQty) || 0}
+              otherOnThisOrder={otherQtyOnOrder(li)}
+              subRented={(li.subRentals?.length ?? 0) > 0}
+            />
+          </div>
         </td>
         <td className="px-4 py-2 text-center">
           <input type="number" step="0.5" value={editDays} onChange={(e) => setEditDays(e.target.value)}
@@ -3235,7 +3313,17 @@ export default function OrderDetailPage() {
         <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap">
           {fmt(li.rate)}<span className="text-lt-fg3 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
         </td>
-        <td className="px-4 py-3 text-center text-lt-fg2">{li.quantity}</td>
+        <td className="px-4 py-3 text-center text-lt-fg2">
+          <span className="inline-flex items-baseline gap-1">
+            {li.quantity}
+            <StockChip
+              stock={itemStock[li.inventoryItem?.id ?? '']}
+              requested={li.quantity}
+              otherOnThisOrder={otherQtyOnOrder(li)}
+              subRented={(li.subRentals?.length ?? 0) > 0}
+            />
+          </span>
+        </td>
         <td className="px-4 py-3 text-center text-lt-fg2">
           {(() => {
             const billed = li.billableDays ?? li.computedDays;
@@ -4597,6 +4685,17 @@ export default function OrderDetailPage() {
                 <label className="block text-xs text-lt-fg3 mb-1">Qty</label>
                 <input type="number" min="1" value={liQty} onChange={(e) => setLiQty(e.target.value)}
                   className="w-full px-2 py-1.5 bg-lt-inner border border-lt-hairline rounded text-sm text-lt-fg focus:outline-none focus:border-lt-fg2" />
+                {/* What the shelf has for these dates, before the line
+                    exists. Goes red as soon as the typed qty passes it. */}
+                <div className="mt-1">
+                  <StockChip
+                    stock={itemStock[liInvItemId]}
+                    requested={parseInt(liQty) || 0}
+                    otherOnThisOrder={stockLines
+                      .filter((li) => li.inventoryItem?.id === liInvItemId)
+                      .reduce((sum, li) => sum + li.quantity, 0)}
+                  />
+                </div>
               </div>
               {/* Dynamic col-span — fewer columns are visible when
                   Custom dates is OFF, so the Add/Cancel block stretches

@@ -32,6 +32,14 @@ export interface IntegerInputProps {
   ariaLabel?: string
   /** Blur (and therefore commit) on Enter. Default true. */
   blurOnEnter?: boolean
+  /**
+   * Every keystroke, before the blur-commit — the UNCOMMITTED number, or
+   * null while the field is empty mid-edit. For readouts that have to
+   * track what is being typed rather than what has been accepted: the
+   * stock chip beside a quantity has to go red the moment a rep types
+   * past what the shelf holds, not a Tab later. Never use it to write.
+   */
+  onDraftChange?: (next: number | null) => void
 }
 
 export function parseInteger(s: string): number | null {
@@ -43,7 +51,8 @@ export function parseInteger(s: string): number | null {
 
 export const IntegerInput = forwardRef<HTMLInputElement, IntegerInputProps>(
   function IntegerInput(
-    { value, onChange, min = 1, max, placeholder, disabled, className, ariaLabel, blurOnEnter = true },
+    { value, onChange, min = 1, max, placeholder, disabled, className, ariaLabel, blurOnEnter = true,
+      onDraftChange },
     ref,
   ) {
     const [focused, setFocused] = useState(false)
@@ -90,8 +99,14 @@ export const IntegerInput = forwardRef<HTMLInputElement, IntegerInputProps>(
         onBlur={() => {
           setFocused(false)
           commit()
+          // Hand the readout back to the committed value — the draft is
+          // gone and anything still watching it would be stale.
+          onDraftChange?.(null)
         }}
-        onChange={(e) => setDraft(e.target.value)}
+        onChange={(e) => {
+          setDraft(e.target.value)
+          onDraftChange?.(parseInteger(e.target.value))
+        }}
         onKeyDown={handleKeyDown}
         className={className}
       />

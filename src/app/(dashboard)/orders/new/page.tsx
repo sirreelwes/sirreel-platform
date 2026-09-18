@@ -33,6 +33,7 @@ import {
 import { AddItemModal, type CreatedInventoryItem } from '@/components/inventory/AddItemModal';
 import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { IntegerInput } from '@/components/ui/IntegerInput';
+import { StockChip, useItemStock, type ItemStock } from '@/components/inventory/StockChip';
 import { deriveProfileIdFromProductionType } from '@/lib/sales/productionTypeProfile';
 
 const PRODUCTION_TYPES: ProductionType[] = [
@@ -521,6 +522,52 @@ function NewQuotePageInner() {
     return () => window.removeEventListener('paste', onPaste);
   }, [inputMode, parsed, acceptPdfFile]);
   const [items, setItems] = useState<ResolvedItem[]>([]);
+
+  // ── Stock beside every quantity (the RentalWorks number) ──────────
+  // An agent building a quote needs to know the shelf covers it while
+  // they are still typing, not when the warehouse comes up short. Only
+  // QUANTITY-tracked catalog rows answer; vehicles and never-counted
+  // items stay silent on purpose — see src/lib/inventory/stock.ts.
+  const stockItemIds = useMemo(
+    () => items
+      .filter((it) => it.catalogType === 'INVENTORY' && it.catalogProductId)
+      .map((it) => it.catalogProductId as string),
+    [items],
+  );
+  // One window over the whole quote — a line with narrower dates is
+  // measured against a wider one, which can only under-state what is
+  // free, never over-state it.
+  const stockWindow = useMemo(() => {
+    const dates = items
+      .flatMap((it) => [it.pickupDate, it.returnDate])
+      .filter((d): d is string => !!d);
+    if (dates.length === 0) return { start: null, end: null };
+    dates.sort();
+    return { start: dates[0], end: dates[dates.length - 1] };
+  }, [items]);
+  const { stock: itemStock } = useItemStock({
+    inventoryItemIds: stockItemIds,
+    start: stockWindow.start,
+    end: stockWindow.end,
+  });
+  /** This row's stock, plus what the REST of this quote already asks of
+   *  the same item over overlapping dates — nothing has been saved yet,
+   *  so every sibling row is netted here. */
+  const stockForRow = useCallback(
+    (it: ResolvedItem): { stock?: ItemStock; otherOnThisOrder: number } => {
+      const id = it.catalogType === 'INVENTORY' ? it.catalogProductId : null;
+      if (!id) return { otherOnThisOrder: 0 };
+      const otherOnThisOrder = items.reduce((sum, other) => {
+        if (other.localId === it.localId || other.catalogProductId !== id) return sum;
+        const overlaps =
+          !it.pickupDate || !it.returnDate || !other.pickupDate || !other.returnDate ||
+          (other.pickupDate <= it.returnDate && other.returnDate >= it.pickupDate);
+        return overlaps ? sum + other.quantity : sum;
+      }, 0);
+      return { stock: itemStock[id], otherOnThisOrder };
+    },
+    [items, itemStock],
+  );
   const [undoToast, setUndoToast] = useState<LineItemUndoToastState | null>(null);
   const [editing, setEditing] = useState<ParsedTop>({});
   const [clientCandidates, setClientCandidates] = useState<ClientCandidate[]>([]);
@@ -2742,6 +2789,7 @@ function NewQuotePageInner() {
       onCommit={handleRowCommit}
       onPickPackage={handlePickPackage}
       registerDescriptionRef={registerDescriptionRef}
+      stockForRow={stockForRow}
     />
   );
 
@@ -3871,7 +3919,7 @@ const TABLE_GRID = 'grid-cols-[64px_minmax(280px,1fr)_90px_140px_140px_72px_90px
 
 function DepartmentGroup({
   department, rows, onChange, onDelete, onAdd, onBulkApply, onApplyWeekCap, onAddToCatalog, onCommit, onPickPackage, registerDescriptionRef,
-  companyId, derivedLine, notes, rowExtras,
+  companyId, derivedLine, notes, rowExtras, stockForRow,
 }: {
   department: LineItemDepartment;
   rows: ResolvedItem[];
@@ -3899,6 +3947,9 @@ function DepartmentGroup({
   onCommit?: (id: string) => void;
   onPickPackage?: (id: string, hit: import('@/components/orders/LineItemDescriptionCombobox').CatalogHit) => void;
   registerDescriptionRef?: (id: string) => (el: HTMLInputElement | null) => void;
+  /** On-hand vs. spoken-for for this row's catalog item — the number
+   *  that renders beside the qty and goes red when the row passes it. */
+  stockForRow?: (item: ResolvedItem) => { stock?: ItemStock; otherOnThisOrder: number };
 }) {
   const [bulkPickup, setBulkPickup] = useState('');
   const [bulkReturn, setBulkReturn] = useState('');
@@ -4071,6 +4122,7 @@ function DepartmentGroup({
               onCommit={onCommit}
               onPickPackage={onPickPackage}
               descriptionRef={registerDescriptionRef?.(it.localId)}
+              stockForRow={stockForRow}
             />
             {rowExtras?.(it)}
           </div>
@@ -4135,6 +4187,7 @@ function DepartmentGroup({
 
 function LineItemRow({
   item, onChange, onDelete, onCommit, onPickPackage, onAddToCatalog, descriptionRef, companyId,
+  stockForRow,
 }: {
   item: ResolvedItem;
   /** Custom-line promotion: opens the add-to-catalog modal for this row. */
@@ -4153,8 +4206,15 @@ function LineItemRow({
   /** Ref the parent passes for the row's description input so the
    *  next-row auto-append can move focus. */
   descriptionRef?: React.Ref<HTMLInputElement>;
+  /** On-hand vs. spoken-for for this row's catalog item. */
+  stockForRow?: (item: ResolvedItem) => { stock?: ItemStock; otherOnThisOrder: number };
 }) {
   const id = item.localId;
+  // The quantity BEING TYPED, so the stock number goes red on the
+  // keystroke that passes the shelf rather than on the next Tab.
+  // IntegerInput only commits on blur (it has to — see that file).
+  const [qtyDraft, setQtyDraft] = useState<number | null>(null);
+  const rowStock = stockForRow?.(item);
 
   const total = computeLineTotal({
     quantity: item.quantity,
@@ -4217,14 +4277,26 @@ function LineItemRow({
   return (
     <div className={`px-3 py-2 hover:bg-lt-card/30 ${isMember ? 'bg-violet-50/30 pl-8' : ''}`}>
       <div className={`grid ${TABLE_GRID} gap-2 items-start`}>
-        {/* QTY — primary scan target; bigger digit, no extra height */}
-        <IntegerInput
-          value={item.quantity}
-          onChange={(next) => onChange(id, { quantity: next })}
-          min={1}
-          ariaLabel="Quantity"
-          className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-base font-bold tabular-nums text-lt-fg"
-        />
+        {/* QTY — primary scan target; bigger digit, no extra height.
+            The stock line under it answers "do we have that many?"
+            while the agent is still typing. */}
+        <div>
+          <IntegerInput
+            value={item.quantity}
+            onChange={(next) => onChange(id, { quantity: next })}
+            onDraftChange={setQtyDraft}
+            min={1}
+            ariaLabel="Quantity"
+            className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-base font-bold tabular-nums text-lt-fg"
+          />
+          <div className="mt-0.5 text-center">
+            <StockChip
+              stock={rowStock?.stock}
+              requested={qtyDraft ?? item.quantity}
+              otherOnThisOrder={rowStock?.otherOnThisOrder ?? 0}
+            />
+          </div>
+        </div>
 
         {/* DESCRIPTION column — combobox + quiet status pill */}
         <div className="space-y-1 min-w-0">
