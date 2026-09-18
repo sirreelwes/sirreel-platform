@@ -149,6 +149,7 @@
     "test:measure-tokens": "tsx tests/sales/measure-tokens.test.ts",
     "coi:rerun": "tsx scripts/rerun-coi-reviews.ts",
     "test:company-rate": "tsx tests/pricing/company-rate.test.ts",
+    "test:standing-deal-check": "tsx tests/orders/standing-deal-check.test.ts",
     "test:quote-urgency": "tsx tests/sales/quote-urgency.test.ts",
     "test:company-sentinels": "tsx tests/companies/picker-sentinels.test.ts",
     "test:job-disambiguation": "tsx tests/jobs/job-disambiguation.test.ts",

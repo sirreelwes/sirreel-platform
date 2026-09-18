@@ -19,6 +19,16 @@
 import { useState } from 'react';
 import { CompanyPicker } from '@/components/orders/CompanyPicker';
 
+interface DiscountConflict {
+  orderId: string;
+  orderNumber: string;
+  departmentKey: string;
+  /** The new account's deal, e.g. "30% off Production supply orders". */
+  deal: string;
+  /** What is on the order instead. */
+  onOrder: string;
+}
+
 interface StaleAgreement {
   orderId: string;
   orderNumber: string;
@@ -59,6 +69,10 @@ export function ChangeProductionCompany({
   // Populated by the move: what the move just invalidated. Null until then —
   // distinct from an empty array, which means "nothing was signed".
   const [staleAgreements, setStaleAgreements] = useState<StaleAgreement[] | null>(null);
+  // Department deals the new account has that could NOT be seeded, because
+  // a discount row was already sitting in that department. Nothing here can
+  // tell the old account's row from a rep's own, so a person settles it.
+  const [discountConflicts, setDiscountConflicts] = useState<DiscountConflict[]>([]);
   const [priorCompanyName, setPriorCompanyName] = useState<string | null>(null);
   const [reissueReason, setReissueReason] = useState('');
 
@@ -83,13 +97,18 @@ export function ChangeProductionCompany({
       }
       setPriorCompanyName(d.previousCompanyName ?? null);
       setStaleAgreements(d.staleAgreements || []);
+      setDiscountConflicts(d.discountConflicts || []);
       setReissueReason(
         `The agreement was signed under ${d.previousCompanyName || 'the previous company'}; this rental is under ${d.company.name}.`,
       );
+      const seeded = (d.discountsSeeded || []).length;
       const moved = [
         d.ordersMoved ? `${d.ordersMoved} order${d.ordersMoved === 1 ? '' : 's'}` : '',
         d.bookingsMoved ? `${d.bookingsMoved} booking${d.bookingsMoved === 1 ? '' : 's'}` : '',
         d.coisMoved ? `${d.coisMoved} certificate${d.coisMoved === 1 ? '' : 's'}` : '',
+        // The new account's terms following the job is the half nobody can
+        // see from the outside — say it happened.
+        seeded ? `${seeded} standing discount${seeded === 1 ? '' : 's'} applied` : '',
       ].filter(Boolean);
       setFlash(`Moved to ${d.company.name}${moved.length ? ` · ${moved.join(', ')} re-pointed` : ''}.`);
       onChanged?.();
@@ -181,6 +200,27 @@ export function ChangeProductionCompany({
             {busy === 'MOVE' ? 'Moving…' : 'Change production company'}
           </button>
         </>
+      )}
+
+      {/* Only after the move: a deal the new account has that this order
+          already had a row in the way of. Amber, not rose — nothing is
+          broken, but the figure on the order is the old account's. */}
+      {moved && discountConflicts.length > 0 && (
+        <div className="rounded-xl border border-amber-500/40 bg-amber-500/5 px-3.5 py-3 space-y-2">
+          <div className="text-[13px] font-semibold text-amber-200">
+            Their discount could not be applied — a row is already there
+          </div>
+          {discountConflicts.map((c) => (
+            <div key={`${c.orderId}:${c.departmentKey}`} className="text-[12px] text-zinc-300">
+              <span className="text-white">{c.orderNumber}</span>
+              <span className="text-zinc-500"> · {c.deal} · on the order as {c.onOrder}</span>
+            </div>
+          ))}
+          <p className="text-[11px] text-zinc-500">
+            The existing row was left alone — it may be a discount someone gave on purpose.
+            Change it on the order&apos;s Discounts panel if the new account&apos;s deal should win.
+          </p>
+        </div>
       )}
 
       {/* Only after the move: the paper it invalidated. */}

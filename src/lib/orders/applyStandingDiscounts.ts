@@ -1,5 +1,5 @@
 /**
- * Put the client's standing discounts on a new order.
+ * Put the client's standing discounts on an order.
  *
  * Wes 2026-09-04: "These discounts should be auto applied in all orders
  * from that company going forward."
@@ -28,9 +28,15 @@
  * Idempotent: an order that already carries a discount row for a
  * department is left alone. Re-running this (a retry, a re-import) never
  * stacks a second 50% on the same section.
+ *
+ * That idempotence is also why this is not only a create-time call. The
+ * job company-change route runs it on every order it just moved, so the
+ * new account's terms follow the job — and relies on the skip to leave a
+ * rep's own department discount where it is. What the skip hides, that
+ * route reports as a conflict rather than resolving.
  */
 
-import type { Prisma, PrismaClient } from '@prisma/client'
+import type { LineItemDepartment, Prisma, PrismaClient } from '@prisma/client'
 import { prisma as defaultPrisma } from '@/lib/prisma'
 
 type Db = PrismaClient | Prisma.TransactionClient
@@ -42,21 +48,19 @@ export interface SeededDiscount {
 }
 
 /**
- * @param orderId   the freshly created order
- * @param companyId the client it belongs to — pass null and nothing happens
- * @param db        pass the transaction client when seeding inside the
- *                  order-create transaction, so a failed insert rolls the
- *                  discounts back with it
+ * The account's live DEPARTMENT-scoped deals, best first.
+ *
+ * Exported because the job company-change route needs the same list to
+ * report what it could NOT seed, and a second copy of the in-window
+ * filter is how a reminder starts disagreeing with what actually
+ * applied.
  */
-export async function applyStandingDiscounts(
-  orderId: string,
-  companyId: string | null | undefined,
+export async function activeStandingDepartmentDiscounts(
+  companyId: string,
   db: Db = defaultPrisma,
-): Promise<SeededDiscount[]> {
-  if (!companyId) return []
+): Promise<{ label: string; percentOff: number; departmentKey: LineItemDepartment | null }[]> {
   const now = new Date()
-
-  const standing = await db.companyDiscount.findMany({
+  return db.companyDiscount.findMany({
     where: {
       companyId,
       isActive: true,
@@ -71,6 +75,24 @@ export async function applyStandingDiscounts(
     orderBy: { percentOff: 'desc' },
     select: { label: true, percentOff: true, departmentKey: true },
   })
+}
+
+/**
+ * @param orderId   the order to seed — freshly created, or one whose
+ *                  production company just changed
+ * @param companyId the client it belongs to — pass null and nothing happens
+ * @param db        pass the transaction client when seeding inside the
+ *                  order-create transaction, so a failed insert rolls the
+ *                  discounts back with it
+ */
+export async function applyStandingDiscounts(
+  orderId: string,
+  companyId: string | null | undefined,
+  db: Db = defaultPrisma,
+): Promise<SeededDiscount[]> {
+  if (!companyId) return []
+
+  const standing = await activeStandingDepartmentDiscounts(companyId, db)
   if (standing.length === 0) return []
 
   const existing = await db.orderDiscount.findMany({

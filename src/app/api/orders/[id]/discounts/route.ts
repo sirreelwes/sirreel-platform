@@ -30,6 +30,7 @@ import { auditLineItemEdit, extractIp, resolveOperatorId } from '@/lib/orders/au
 import { isMoneyEditable } from '@/lib/orders/editability'
 import { gateFurtherDiscount } from '@/lib/orders/standingDealGate'
 import { partnerFloorGate, partnerMarginsForOrder } from '@/lib/sub-rentals/partnerMargins'
+import { standingDealsForOrder } from '@/lib/orders/standingDealsForOrder'
 
 export const dynamic = 'force-dynamic'
 
@@ -88,6 +89,9 @@ export async function GET(_req: NextRequest, { params }: Params) {
     // What the discounts leave each side on every partner unit — staff only
     // (the panel sits behind canSeeMoney and names the partner).
     partnerMargins: await partnerMarginsForOrder(id),
+    // The client's standing deals, reconciled against THIS order: which
+    // are applied, which never landed, which lines bill above them.
+    standingDeals: await standingDealsForOrder(id),
   })
 }
 

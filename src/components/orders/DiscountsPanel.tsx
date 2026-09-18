@@ -29,6 +29,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { flatTotalToDepartmentDiscount } from '@/lib/orders/discountedTotals'
 import { SIRREEL_FLOOR_PERCENT, type PartnerLineMargin } from '@/lib/sub-rentals/discountWaterfall'
+import { needsAttention, type StandingDealReport } from '@/lib/orders/standingDealCheck'
 
 const DEPT_LABELS: Record<string, string> = {
   VEHICLES: 'Vehicles',
@@ -83,6 +84,9 @@ export interface DiscountsPanelData {
   /** One row per partner unit on the order — what the discounts leave the
    *  partner and SirReel (discountWaterfall.ts). */
   partnerMargins?: PartnerLineMargin[]
+  /** The client's standing deals, reconciled against this order
+   *  (standingDealCheck.ts). */
+  standingDeals?: StandingDealReport[]
 }
 
 function fmt(n: number): string {
@@ -318,6 +322,24 @@ export function DiscountsPanel({
         )}
       </div>
 
+      {/* ── Their standing deals: is this order honouring them? ──
+          Not a list of the account's terms — the rep can read those on
+          the company page. This says which ones this ORDER carries, and
+          names the ones it is missing. */}
+      {data.standingDeals && data.standingDeals.length > 0 && (
+        <div className="mt-4 pt-3 border-t border-lt-hairline/60 text-sm">
+          <div className="text-lt-fg font-medium py-1">Their standing deals</div>
+          <div className="space-y-1.5">
+            {data.standingDeals.map((d) => <StandingDealRow key={d.dealId} d={d} />)}
+          </div>
+          <div className="mt-2 text-[11px] text-lt-fg3">
+            A department deal rides as a discount row on this order; an item deal is
+            priced into the line itself. Neither is applied from here — fix a miss with
+            the department row above, or by retyping the line&apos;s rate.
+          </div>
+        </div>
+      )}
+
       {/* ── Partner units: what the discounts leave each side ──── */}
       {data.partnerMargins && data.partnerMargins.length > 0 && (
         <div className="mt-4 pt-3 border-t border-lt-hairline/60 text-sm">
@@ -330,6 +352,48 @@ export function DiscountsPanel({
             SirReel&apos;s share — never below {SIRREEL_FLOOR_PERCENT}% of their list. Deeper is refused.
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+function StandingDealRow({ d }: { d: StandingDealReport }) {
+  // Only three of the verdicts ask for anything. 'not-quoted' stays
+  // quiet-neutral on purpose: a supplies deal on a vehicles-only order is
+  // not a miss, and a panel that cries about it is a panel nobody reads.
+  const chip =
+    d.verdict === 'applied' || d.verdict === 'priced-in'
+      ? { cls: 'bg-chip-good-bg text-chip-good-fg', text: d.scope === 'ITEMS' ? 'Priced in' : 'Applied' }
+      : d.verdict === 'missing'
+        ? { cls: 'bg-chip-bad-bg text-chip-bad-fg', text: 'Not on this order' }
+        : d.verdict === 'over-billed'
+          ? { cls: 'bg-chip-bad-bg text-chip-bad-fg', text: 'Billing above it' }
+          : d.verdict === 'differs'
+            ? { cls: 'bg-chip-warn-bg text-chip-warn-fg', text: 'Different figure' }
+            : d.verdict === 'unchecked'
+              ? { cls: 'bg-chip-neutral-bg text-chip-neutral-fg', text: 'Not checked' }
+              : { cls: 'bg-chip-neutral-bg text-chip-neutral-fg', text: 'Nothing quoted' }
+
+  return (
+    <div className={needsAttention(d) ? 'rounded border border-amber-300 bg-amber-50/60 px-2 py-1.5' : 'px-2 py-1'}>
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-lt-fg2">
+          {d.percentOff}% off {d.label}
+        </span>
+        <span className={`shrink-0 text-[11px] px-1.5 py-0.5 rounded ${chip.cls}`}>{chip.text}</span>
+      </div>
+      {d.detail && <div className="text-[11px] text-lt-fg3 mt-0.5">{d.detail}</div>}
+      {/* Naming the line is the point — "a line bills above their deal"
+          sends the rep hunting; "Cube Truck at $170, theirs is $136" is
+          one edit. */}
+      {d.lines.length > 0 && (
+        <ul className="mt-1 space-y-0.5">
+          {d.lines.map((l) => (
+            <li key={l.lineId} className="text-[11px] text-lt-fg3">
+              {l.description} — {fmt(l.rate)}/d, theirs is {fmt(l.dealRate)}/d
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   )
