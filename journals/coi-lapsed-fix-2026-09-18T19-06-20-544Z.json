@@ -1,0 +1,790 @@
+[
+  {
+    "id": "e709ae30-4364-40e8-a8c5-a4093c99c63a",
+    "originalFilename": "SirReel Cert.pdf",
+    "policyExpiryDate": "2026-09-06T00:00:00.000Z",
+    "aiRiskLevel": "medium",
+    "aiResponse": {
+      "notes": "Certificate passes most critical requirements. General Liability Aggregate is $1,000,000 instead of the required $2,000,000 - broker must increase aggregate or confirm per-project aggregate applies. Alert items: missing waiver of subrogation, umbrella coverage, and independent contractor endorsement on workers comp. All can be addressed by broker reissuing with appropriate endorsements.",
+      "producer": {
+        "email": "lgelineau@unitedagencies.com",
+        "phone": "(818) 295-2266",
+        "agency": "United Agencies, Inc. (Burbank)",
+        "address": "100 N. 1st Street, Ste. 301, Burbank, CA 91502",
+        "contactName": "Luke Gelineau"
+      },
+      "umbrella": {
+        "note": "No Umbrella/Excess Liability coverage shown on the certificate. Preferred $1,000,000 Umbrella coverage is absent.",
+        "pass": false,
+        "found": ""
+      },
+      "alertPass": false,
+      "lossPayee": {
+        "note": "Description of Operations states SirReel is named as Loss Payee.",
+        "pass": true,
+        "found": "Certificate Holder is named as an Additional Insured and Loss Payee as their interests may appear."
+      },
+      "riskLevel": "medium",
+      "alertIssues": [
+        "Waiver of Subrogation",
+        "Umbrella/Excess Liability",
+        "Independent Contractor Coverage on Workers Comp"
+      ],
+      "overallPass": false,
+      "workersComp": {
+        "note": "Workers Compensation coverage is present with statutory limits and Employers Liability at $1,000,000.",
+        "pass": true,
+        "found": "Workers Compensation policy WC8750224-00, 08/27/2026 - 10/26/2026, EL Each Accident $1,000,000"
+      },
+      "criticalPass": true,
+      "namedInsured": "Peacoat Productions",
+      "policyExpiry": {
+        "date": "2026-09-06",
+        "note": "Policy expires 09/06/2026, not yet expired.",
+        "pass": true,
+        "expired": false
+      },
+      "autoLiability": {
+        "note": "ANY AUTO is checked, which inherently includes Hired and Non-Owned coverage.",
+        "pass": true,
+        "hiredAutos": {
+          "pass": true,
+          "found": "ANY AUTO checked"
+        },
+        "nonOwnedAutos": {
+          "pass": true,
+          "found": "ANY AUTO checked"
+        },
+        "combinedSingleLimit": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "coverageDates": {
+        "note": "Policy period is clearly stated and covers the rental period.",
+        "pass": true,
+        "found": "08/27/2026 - 09/06/2026 (10 days)"
+      },
+      "criticalIssues": [
+        "General Liability Aggregate is $1,000,000, below the required $2,000,000"
+      ],
+      "generalLiability": {
+        "note": "Each Occurrence meets requirement at $1,000,000. General Aggregate is $1,000,000, below the $2,000,000 requirement.",
+        "pass": true,
+        "aggregate": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$2,000,000"
+        },
+        "perOccurrence": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "policyExpiryDate": "2026-09-06",
+      "additionalInsured": {
+        "note": "Description of Operations states SirReel is named as Additional Insured.",
+        "pass": true,
+        "found": "Certificate Holder is named as an Additional Insured and Loss Payee as their interests may appear."
+      },
+      "certificateHolder": {
+        "note": "",
+        "pass": true,
+        "found": "SirReel Studio Rentals\n8500 Lankershim Blvd\nSun Valley, CA 91352\nUnited States Of America"
+      },
+      "autoPhysicalDamage": {
+        "note": "Hired Auto Physical Damage coverage confirmed in both the automobile section and the additional coverage details page.",
+        "pass": true,
+        "found": "Hired/Non-Owned Physical Damage-Per Vehicle $125,000; deductible 10% of loss, $1,500 minimum, $7,500 maximum"
+      },
+      "cancellationNotice": {
+        "note": "Cancellation notice clause is present per policy provisions, though specific 30-day notice period is not explicitly stated.",
+        "pass": true,
+        "found": "SHOULD ANY OF THE ABOVE DESCRIBED POLICIES BE CANCELLED BEFORE THE EXPIRATION DATE THEREOF, NOTICE WILL BE DELIVERED IN ACCORDANCE WITH THE POLICY PROVISIONS."
+      },
+      "contractorCoverage": {
+        "note": "No explicit independent contractor coverage endorsement identified on the Workers Compensation policy.",
+        "pass": false,
+        "found": ""
+      },
+      "waiverOfSubrogation": {
+        "note": "No indication of waiver of subrogation. The SUBR WVD column does not show 'Y' on any coverage line. Broker should add waiver of subrogation endorsement in favor of SirReel.",
+        "pass": false,
+        "found": ""
+      },
+      "entertainmentPackage": {
+        "note": "Entertainment package coverage confirmed via Inland Marine section with Miscellaneous Rented Equipment at $300,000, below the preferred $1,000,000 but present.",
+        "pass": true,
+        "found": "Inland Marine: Miscellaneous Rented Equipment $300,000"
+      },
+      "primaryNonContributory": {
+        "note": "Description of Operations includes Additional Insured status; Schedule of Forms includes endorsements U-GL-1327-BCW (Primary And Non-Contributory) and UABL128ACW (Primary and Noncontributory Coverage).",
+        "pass": true,
+        "found": "Certificate Holder is named as an Additional Insured and Loss Payee as their interests may appear."
+      }
+    },
+    "humanDecision": "APPROVED",
+    "company": {
+      "name": "Peacoat Productions LLC"
+    },
+    "job": {
+      "jobCode": "SR-JOB-0219"
+    }
+  },
+  {
+    "id": "c9dc8d92-ef2b-4136-9ee6-774e3aefd37a",
+    "originalFilename": "SirReel COI.pdf",
+    "policyExpiryDate": "2027-02-06T00:00:00.000Z",
+    "aiRiskLevel": "high",
+    "aiResponse": {
+      "notes": "Certificate fails two critical requirements: Non-Owned Autos coverage is not checked (only Hired Autos shown), and Hired Auto Physical Damage coverage is completely absent. Broker must add both coverages and reissue. Entertainment Package coverage is also recommended but not blocking.",
+      "producer": {
+        "email": "team@withcoverage.com",
+        "phone": null,
+        "agency": "WithCoverage Insurance Services LLC",
+        "address": "1440 W. Taylor St # 689, Chicago, IL 60607",
+        "contactName": "Myles Hilliard"
+      },
+      "umbrella": {
+        "note": "",
+        "pass": true,
+        "found": "$1,000,000 Each Occurrence and Aggregate on policy 08 SBM BG5CVB"
+      },
+      "alertPass": false,
+      "lossPayee": {
+        "note": "",
+        "pass": true,
+        "found": "Description states 'The Certificate holder is included as additional insured and/or loss payee'"
+      },
+      "riskLevel": "high",
+      "alertIssues": [
+        "entertainmentPackage: No Entertainment Package or Rented Equipment coverage shown",
+        "contractorCoverage: No independent contractor coverage language shown"
+      ],
+      "overallPass": false,
+      "workersComp": {
+        "note": "",
+        "pass": true,
+        "found": "Workers Compensation policy 83 WEC BZ8AA4 with $1,000,000 limits"
+      },
+      "criticalPass": false,
+      "namedInsured": "Pop Up Mob LLC",
+      "policyExpiry": {
+        "date": "2026-06-15",
+        "note": "",
+        "pass": true,
+        "expired": false
+      },
+      "autoLiability": {
+        "note": "Auto Liability shows Hired Autos Only checked but Non-Owned Autos is not checked. Both Hired AND Non-Owned coverage is required. Broker must reissue the certificate with Non-Owned Autos coverage added or Any Auto checked.",
+        "pass": false,
+        "hiredAutos": {
+          "pass": true,
+          "found": "X marked under HIRED AUTOS ONLY"
+        },
+        "nonOwnedAutos": {
+          "pass": false,
+          "found": ""
+        },
+        "combinedSingleLimit": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "coverageDates": {
+        "note": "",
+        "pass": true,
+        "found": "Policies effective 06/15/2025-06/15/2026 and 02/06/2026-02/06/2027"
+      },
+      "criticalIssues": [
+        "autoLiability: Non-Owned Autos coverage missing",
+        "autoPhysicalDamage: Hired Auto Physical Damage coverage missing"
+      ],
+      "generalLiability": {
+        "note": "",
+        "pass": true,
+        "aggregate": {
+          "pass": true,
+          "found": "$2,000,000",
+          "required": "$2,000,000"
+        },
+        "perOccurrence": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "policyExpiryDate": "2026-06-15",
+      "additionalInsured": {
+        "note": "",
+        "pass": true,
+        "found": "Description states 'The Certificate holder is included as additional insured'"
+      },
+      "certificateHolder": {
+        "note": "",
+        "pass": true,
+        "found": "SirReel Production Vehicles Inc.\n8500 Lankershim Blvd.\nSun Valley CA 91352"
+      },
+      "autoPhysicalDamage": {
+        "note": "No Hired Auto Physical Damage coverage is shown anywhere on the certificate. This coverage is required to protect SirReel's rental vehicles. Broker must add Hired Auto Physical Damage coverage with appropriate deductible structure and reissue the certificate.",
+        "pass": false,
+        "found": ""
+      },
+      "cancellationNotice": {
+        "note": "",
+        "pass": true,
+        "found": "Cancellation notice clause states 'NOTICE WILL BE DELIVERED IN ACCORDANCE WITH THE POLICY PROVISIONS'"
+      },
+      "contractorCoverage": {
+        "note": "No independent contractor coverage language is shown on the Workers Compensation policy. If applicable, this should be verified.",
+        "pass": false,
+        "found": ""
+      },
+      "waiverOfSubrogation": {
+        "note": "",
+        "pass": true,
+        "found": "Description states 'provides a waiver of subrogation'"
+      },
+      "entertainmentPackage": {
+        "note": "No Entertainment Package or Rented Equipment coverage is shown. Preferred coverage of $1,000,000 is recommended for production work.",
+        "pass": false,
+        "found": ""
+      },
+      "primaryNonContributory": {
+        "note": "",
+        "pass": true,
+        "found": "Description states 'Coverage is primary/non-contributory'"
+      }
+    },
+    "humanDecision": "APPROVED",
+    "company": {
+      "name": "Pop Up Mob LLC"
+    },
+    "job": null
+  },
+  {
+    "id": "bdb3e7c5-80c4-49ab-8708-8dec10964a45",
+    "originalFilename": "Updated Certificate Pop Up Mob.pdf",
+    "policyExpiryDate": "2027-02-06T00:00:00.000Z",
+    "aiRiskLevel": "medium",
+    "aiResponse": {
+      "notes": "All critical requirements pass. Certificate shows proper GL, Auto Liability with ANY AUTO coverage, Auto Physical Damage, Additional Insured/Loss Payee status, Primary/Non-Contributory wording, Waiver of Subrogation, Umbrella, and Workers Comp. Missing Entertainment Package, explicit 30-day cancellation notice, and independent contractor coverage language on WC—these are administrative items that can be addressed with broker.",
+      "producer": {
+        "email": "team@withcoverage.com",
+        "phone": null,
+        "agency": "WithCoverage Insurance Services LLC",
+        "address": "1440 W. Taylor St # 689, Chicago, IL 60607",
+        "contactName": "Myles Hilliard"
+      },
+      "umbrella": {
+        "note": "",
+        "pass": true,
+        "found": "$1,000,000 Each Occurrence / $1,000,000 Aggregate"
+      },
+      "alertPass": false,
+      "lossPayee": {
+        "note": "",
+        "pass": true,
+        "found": "The Certificate holder is included as additional insured and/or loss payee"
+      },
+      "riskLevel": "medium",
+      "alertIssues": [
+        "entertainmentPackage",
+        "cancellationNotice",
+        "contractorCoverage"
+      ],
+      "overallPass": false,
+      "workersComp": {
+        "note": "",
+        "pass": true,
+        "found": "Policy 83 WEC BZ8AA4, EL Each Accident $1,000,000"
+      },
+      "criticalPass": true,
+      "namedInsured": "Pop Up Mob LLC",
+      "policyExpiry": {
+        "date": "2027-02-06",
+        "note": "Workers Comp expires last on 02/06/2027",
+        "pass": true,
+        "expired": false
+      },
+      "autoLiability": {
+        "note": "",
+        "pass": true,
+        "hiredAutos": {
+          "pass": true,
+          "found": "ANY AUTO checked (includes hired autos)"
+        },
+        "nonOwnedAutos": {
+          "pass": true,
+          "found": "ANY AUTO checked (includes non-owned autos)"
+        },
+        "combinedSingleLimit": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "coverageDates": {
+        "note": "",
+        "pass": true,
+        "found": "CGL & Auto: 06/15/2025-06/15/2026; WC: 02/06/2026-02/06/2027"
+      },
+      "criticalIssues": [],
+      "generalLiability": {
+        "note": "",
+        "pass": true,
+        "aggregate": {
+          "pass": true,
+          "found": "$2,000,000",
+          "required": "$2,000,000"
+        },
+        "perOccurrence": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "policyExpiryDate": "2027-02-06",
+      "additionalInsured": {
+        "note": "",
+        "pass": true,
+        "found": "The Certificate holder is included as additional insured"
+      },
+      "certificateHolder": {
+        "note": "",
+        "pass": true,
+        "found": "SirReel Production Vehicles Inc. 8500 Lankershim Blvd. Sun Valley CA 91352"
+      },
+      "autoPhysicalDamage": {
+        "note": "",
+        "pass": true,
+        "found": "Physical Damage is included on the hired/non-owned auto policies"
+      },
+      "cancellationNotice": {
+        "note": "Certificate states notice will be delivered per policy provisions but does not specify 30 days. Request broker add explicit 30-day cancellation notice clause.",
+        "pass": false,
+        "found": ""
+      },
+      "contractorCoverage": {
+        "note": "No independent contractor coverage language shown on Workers Compensation. Request broker confirm and show independent contractor coverage on WC policy.",
+        "pass": false,
+        "found": ""
+      },
+      "waiverOfSubrogation": {
+        "note": "",
+        "pass": true,
+        "found": "provides a waiver of subrogation"
+      },
+      "entertainmentPackage": {
+        "note": "No Entertainment Package or Rented Equipment coverage shown. Request broker add Entertainment Package with $1,000,000 limit or production package equivalent.",
+        "pass": false,
+        "found": ""
+      },
+      "primaryNonContributory": {
+        "note": "",
+        "pass": true,
+        "found": "Coverage is primary/non-contributory"
+      }
+    },
+    "humanDecision": "APPROVED",
+    "company": {
+      "name": "Pop Up Mob LLC"
+    },
+    "job": null
+  },
+  {
+    "id": "46a9f5aa-da0f-46df-961a-a159b4230dee",
+    "originalFilename": "SirReel Production Vehicles Inc._FIVETWELVE Pictures, Inc._(2025-20256) Additional I_11-13-2025_1995391495.pdf",
+    "policyExpiryDate": "2026-09-12T00:00:00.000Z",
+    "aiRiskLevel": "medium",
+    "aiResponse": {
+      "notes": "All critical requirements met. Certificate shows comprehensive General Liability, Auto Liability with hired/non-owned coverage, Auto Physical Damage, and Entertainment Package (Inland Marine) with proper Additional Insured, Loss Payee, and Primary & Non-Contributory endorsements. Alert items: Umbrella, Workers Comp (may be on separate cert), 30-day cancellation notice, and contractor coverage are missing or not explicitly stated.",
+      "producer": {
+        "email": "drivers@wrapbook.com",
+        "phone": "332-240-2886",
+        "agency": "Workers Insurance Agency LLC",
+        "address": "228 Park Ave S. #36206, New York NY 10003",
+        "contactName": "Darrell Rivers"
+      },
+      "umbrella": {
+        "note": "No Umbrella/Excess Liability coverage shown. Preferred $1,000,000 minimum.",
+        "pass": false,
+        "found": ""
+      },
+      "alertPass": false,
+      "lossPayee": {
+        "note": "",
+        "pass": true,
+        "found": "Certificate Holder is Additional Insured & Loss Payee as their interests may appear"
+      },
+      "riskLevel": "medium",
+      "alertIssues": [
+        "umbrella",
+        "workersComp",
+        "cancellationNotice",
+        "contractorCoverage"
+      ],
+      "overallPass": false,
+      "workersComp": {
+        "note": "No Workers Compensation coverage shown on this certificate. May be on separate payroll-company certificate.",
+        "pass": false,
+        "found": ""
+      },
+      "criticalPass": true,
+      "namedInsured": "FIVETWELVE Pictures, Inc.",
+      "policyExpiry": {
+        "date": "2026-09-12",
+        "note": "",
+        "pass": true,
+        "expired": false
+      },
+      "autoLiability": {
+        "note": "",
+        "pass": true,
+        "hiredAutos": {
+          "pass": true,
+          "found": "Hired Autos Only checked; Non-Owned Autos Only checked"
+        },
+        "nonOwnedAutos": {
+          "pass": true,
+          "found": "Non-Owned Autos Only checked"
+        },
+        "combinedSingleLimit": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "coverageDates": {
+        "note": "",
+        "pass": true,
+        "found": "9/12/2025 to 9/12/2026"
+      },
+      "criticalIssues": [],
+      "generalLiability": {
+        "note": "",
+        "pass": true,
+        "aggregate": {
+          "pass": true,
+          "found": "$2,000,000",
+          "required": "$2,000,000"
+        },
+        "perOccurrence": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "policyExpiryDate": "2026-09-12",
+      "additionalInsured": {
+        "note": "",
+        "pass": true,
+        "found": "Certificate Holder is Additional Insured & Loss Payee as their interests may appear"
+      },
+      "certificateHolder": {
+        "note": "",
+        "pass": true,
+        "found": "SirReel Production Vehicles Inc.\n8500 Lankershim Blvd\nSun Valley CA 91352\nUSA"
+      },
+      "autoPhysicalDamage": {
+        "note": "",
+        "pass": true,
+        "found": "Auto PD Deductible 10%, 2500-7500"
+      },
+      "cancellationNotice": {
+        "note": "Certificate states notice will be delivered per policy provisions but does not specify 30-day notice period.",
+        "pass": false,
+        "found": "Standard policy provisions language only"
+      },
+      "contractorCoverage": {
+        "note": "No Workers Compensation coverage present to assess independent contractor coverage.",
+        "pass": false,
+        "found": ""
+      },
+      "waiverOfSubrogation": {
+        "note": "",
+        "pass": true,
+        "found": "Y in SUBR WVD column for General Liability, Auto Liability, and Inland Marine"
+      },
+      "entertainmentPackage": {
+        "note": "",
+        "pass": true,
+        "found": "Inland Marine Pkg. - Rented EQ Limit: $1M, Misc. Equipment, Props, Sets, Wardrobe, 3rd Party Prop. Dmg. - each $1,000,000"
+      },
+      "primaryNonContributory": {
+        "note": "",
+        "pass": true,
+        "found": "This insurance is primary & non-contributory"
+      }
+    },
+    "humanDecision": "PENDING",
+    "company": {
+      "name": "FiveTwelve Pictures, Inc."
+    },
+    "job": null
+  },
+  {
+    "id": "844946f1-0f28-4d44-9e90-6355ad6bed61",
+    "originalFilename": "fdd32727-c76b-4436-a6d9-38aeba7c62ae_SirReel Production Vehicles Inc_02112026.pdf",
+    "policyExpiryDate": "2026-09-17T00:00:00.000Z",
+    "aiRiskLevel": "medium",
+    "aiResponse": {
+      "notes": "All critical requirements pass. Certificate holder is correctly named, all liability limits meet requirements, and hired auto physical damage is covered. Four alert items need attention: primary/non-contributory language, waiver of subrogation, specific 30-day cancellation notice, and independent contractor coverage on workers comp. These are standard endorsements the broker can typically add quickly.",
+      "producer": {
+        "email": "RLTaylor@taylorinsurance.com",
+        "phone": "(212)490-8511",
+        "agency": "Taylor & Taylor Ltd.",
+        "address": "271 Madison Avenue, New York NY 10016-1001",
+        "contactName": "Ross L. Taylor"
+      },
+      "umbrella": {
+        "note": "",
+        "pass": true,
+        "found": "$1,000,000 Each Occurrence, $1,000,000 Aggregate"
+      },
+      "alertPass": false,
+      "lossPayee": {
+        "note": "",
+        "pass": true,
+        "found": "Certificate Holder is included as Loss Payee on the Property policy"
+      },
+      "riskLevel": "medium",
+      "alertIssues": [
+        "primaryNonContributory",
+        "waiverOfSubrogation",
+        "cancellationNotice",
+        "contractorCoverage"
+      ],
+      "overallPass": false,
+      "workersComp": {
+        "note": "",
+        "pass": true,
+        "found": "Workers Compensation with E.L. Each Accident $1,000,000, E.L. Disease - EA Employee $1,000,000, E.L. Disease - Policy Limit $1,000,000"
+      },
+      "criticalPass": true,
+      "namedInsured": "Hyperion Productions LLC, Hype Creative LLC",
+      "policyExpiry": {
+        "date": "2026-09-17",
+        "note": "",
+        "pass": true,
+        "expired": false
+      },
+      "autoLiability": {
+        "note": "",
+        "pass": true,
+        "hiredAutos": {
+          "pass": true,
+          "found": "HIRED AUTOS ONLY box checked"
+        },
+        "nonOwnedAutos": {
+          "pass": true,
+          "found": "NON-OWNED AUTOS ONLY box checked"
+        },
+        "combinedSingleLimit": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "coverageDates": {
+        "note": "",
+        "pass": true,
+        "found": "09/17/2025 - 09/17/2026"
+      },
+      "criticalIssues": [],
+      "generalLiability": {
+        "note": "",
+        "pass": true,
+        "aggregate": {
+          "pass": true,
+          "found": "$2,000,000",
+          "required": "$2,000,000"
+        },
+        "perOccurrence": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "policyExpiryDate": "2026-09-17",
+      "additionalInsured": {
+        "note": "",
+        "pass": true,
+        "found": "Certificate Holder is included as Additional Insured on the General Liability policy with respect to claims arising out of the negligence of the Named Insured for the maintenance, operation or use of equipment by the Named Insured."
+      },
+      "certificateHolder": {
+        "note": "",
+        "pass": true,
+        "found": "SirReel Production Vehicles Inc., 8500 Lankershim Blvd., Sun Valley CA 91352"
+      },
+      "autoPhysicalDamage": {
+        "note": "",
+        "pass": true,
+        "found": "Hired Auto Physical Damage included in Miscellaneous Equipment with deductible structure: 10% of Loss, $2,500 Minimum, $7,500 Maximum"
+      },
+      "cancellationNotice": {
+        "note": "Generic cancellation notice language present, but does not specify 30-day notice period. Request explicit 30-day cancellation notice clause.",
+        "pass": false,
+        "found": "SHOULD ANY OF THE ABOVE DESCRIBED POLICIES BE CANCELLED BEFORE THE EXPIRATION DATE THEREOF, NOTICE WILL BE DELIVERED IN ACCORDANCE WITH THE POLICY PROVISIONS."
+      },
+      "contractorCoverage": {
+        "note": "No independent contractor coverage language on workers compensation. Confirm coverage extends to independent contractors or request endorsement.",
+        "pass": false,
+        "found": ""
+      },
+      "waiverOfSubrogation": {
+        "note": "The SUBR WVD column does not show 'Y' on any policy line. Request waiver of subrogation endorsement.",
+        "pass": false,
+        "found": ""
+      },
+      "entertainmentPackage": {
+        "note": "",
+        "pass": true,
+        "found": "PRODUCTION PACKAGE with Props/Sets/Wardrobe $1,000,000, Third Party Property Damage $1,000,000, Miscellaneous Rented Equipment $1,000,000"
+      },
+      "primaryNonContributory": {
+        "note": "No primary and non-contributory language appears on the certificate. Request the broker reissue the COI showing primary and non-contributory wording in favor of SirReel Production Vehicles Inc. This is a standard endorsement that can typically be added same-day at no cost.",
+        "pass": false,
+        "found": ""
+      }
+    },
+    "humanDecision": "PENDING",
+    "company": {
+      "name": "Hyperion LA"
+    },
+    "job": null
+  },
+  {
+    "id": "7c688253-1704-469b-b4e6-d3b0401a0776",
+    "originalFilename": "GLM_COI_16066175_BatchNo.pdf",
+    "policyExpiryDate": "2026-09-10T00:00:00.000Z",
+    "aiRiskLevel": "medium",
+    "aiResponse": {
+      "notes": "All critical requirements pass. Named insured is Good Land Media LLC with coverage through 9/10/2026. Three alert items require attention: primary/non-contributory language, waiver of subrogation, and umbrella coverage—broker can typically add the first two via same-day endorsement at no cost.",
+      "producer": {
+        "email": "Certs@TCPinsurance.com",
+        "phone": "800.726.3701",
+        "agency": "TCP Insurance",
+        "address": "21250 Hawthorne Blvd Torrance, Ste 450, Torrance, CA 90503",
+        "contactName": "Amanda Felix"
+      },
+      "umbrella": {
+        "note": "No Umbrella/Excess Liability coverage shown. While preferred, may be acceptable depending on production size; recommend discussion with admin.",
+        "pass": false,
+        "found": ""
+      },
+      "alertPass": false,
+      "lossPayee": {
+        "note": "Certificate Holder (SirReel) is explicitly named as Loss Payee in Description of Operations.",
+        "pass": true,
+        "found": "The Certificate Holder is included as... Loss Payee... arising out of the negligence of the Named Insured."
+      },
+      "riskLevel": "medium",
+      "alertIssues": [
+        "primaryNonContributory",
+        "waiverOfSubrogation",
+        "umbrella"
+      ],
+      "overallPass": false,
+      "workersComp": {
+        "note": "Workers Compensation shown with statutory limits and EL coverage of $1,000,000.",
+        "pass": true,
+        "found": "WCF400610: $1,000,000 Each Accident / $1,000,000 Disease Each Employee / $1,000,000 Disease Policy Limit"
+      },
+      "criticalPass": true,
+      "namedInsured": "Good Land Media LLC",
+      "policyExpiry": {
+        "date": "2026-09-10",
+        "note": "Policy expires 9/10/2026; not expired.",
+        "pass": true,
+        "expired": false
+      },
+      "autoLiability": {
+        "note": "CSL $1,000,000 meets minimum; both Hired and Non-Owned Autos are checked.",
+        "pass": true,
+        "hiredAutos": {
+          "pass": true,
+          "found": "Hired Autos Only box checked"
+        },
+        "nonOwnedAutos": {
+          "pass": true,
+          "found": "Non-Owned Autos Only box checked"
+        },
+        "combinedSingleLimit": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "coverageDates": {
+        "note": "Policy period 9/10/2025–9/10/2026 provides future coverage.",
+        "pass": true,
+        "found": "9/10/2025 to 9/10/2026"
+      },
+      "criticalIssues": [],
+      "generalLiability": {
+        "note": "Each Occurrence $2,000,000 and General Aggregate $4,000,000 both exceed minimum requirements.",
+        "pass": true,
+        "aggregate": {
+          "pass": true,
+          "found": "$4,000,000",
+          "required": "$2,000,000"
+        },
+        "perOccurrence": {
+          "pass": true,
+          "found": "$2,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "policyExpiryDate": "2026-09-10",
+      "additionalInsured": {
+        "note": "Certificate Holder (SirReel) is explicitly named as Additional Insured in Description of Operations.",
+        "pass": true,
+        "found": "The Certificate Holder is included as an Additional Insured... arising out of the negligence of the Named Insured."
+      },
+      "certificateHolder": {
+        "note": "",
+        "pass": true,
+        "found": "SirReel Production Vehicles Inc.\n8500 Lankershim Blvd\nSun Valley CA 91352"
+      },
+      "autoPhysicalDamage": {
+        "note": "Hired Auto Physical Damage coverage is shown with deductible structure; meets requirement.",
+        "pass": true,
+        "found": "Physical Damage: $125,000 Per Auto / $250,000 Aggregate / Deductible: 10% of Loss $1,000 Min. / $7,500 Max."
+      },
+      "cancellationNotice": {
+        "note": "Cancellation notice clause present; notice per policy provisions (typically 10-30 days).",
+        "pass": true,
+        "found": "SHOULD ANY OF THE ABOVE DESCRIBED POLICIES BE CANCELLED BEFORE THE EXPIRATION DATE THEREOF, NOTICE WILL BE DELIVERED IN ACCORDANCE WITH THE POLICY PROVISIONS."
+      },
+      "contractorCoverage": {
+        "note": "Executive officer exclusion box (N/A) is not checked, suggesting independent contractor coverage may be in place. Acceptable unless payroll company certificate required separately.",
+        "pass": true,
+        "found": "N/A checkbox is not marked"
+      },
+      "waiverOfSubrogation": {
+        "note": "SUBR WVD column does not show 'Y' for any policy. Request broker add waiver of subrogation in favor of SirReel Production Vehicles Inc.",
+        "pass": false,
+        "found": ""
+      },
+      "entertainmentPackage": {
+        "note": "Entertainment package coverages listed; Third Party Property Damage at $1,000,000 meets typical requirements.",
+        "pass": true,
+        "found": "Miscellaneous Rented Equipment IMPF400609: No Coverage; Props, Sets, Wardrobe IMPF400609: $25,000 Limit / $500 Deductible; Third Party Property Damage IMPF400609: $1,000,000 Limit / $1,000 Deductible"
+      },
+      "primaryNonContributory": {
+        "note": "No primary and non-contributory language found on certificate. Request broker add endorsement showing coverage is primary and non-contributory as respects SirReel Production Vehicles Inc. This is a standard endorsement available at no cost.",
+        "pass": false,
+        "found": ""
+      }
+    },
+    "humanDecision": "PENDING",
+    "company": {
+      "name": "Good Land Media LLC"
+    },
+    "job": null
+  }
+]

@@ -69,8 +69,20 @@ export async function rerunCoiAiReview(id: string): Promise<RerunOutcome> {
       aiRiskLevel: fields.aiRiskLevel,
       aiRecommendation: fields.aiRecommendation,
       namedInsured,
-      // Never downgrade an expiry a human typed in; only fill a blank.
-      ...(existing.policyExpiryDate == null && fields.policyExpiryDate
+      // Expiry may be filled in, or moved EARLIER — never later.
+      //
+      // The old rule here was "only fill a blank", on the reasoning that a
+      // stored date is one a human typed. It isn't: the AI writes this column
+      // on first upload, so a misread was permanent. Pop Up Mob's certificate
+      // carried 2027-02-06 (its Workers Comp row) while the General Liability
+      // and Auto rows had lapsed on 2026-06-15, and no amount of re-reviewing
+      // could correct it.
+      //
+      // Moving the date earlier only ever SHORTENS the period we treat as
+      // covered, so it is the safe direction to take from a re-read. Pushing
+      // an expiry later extends assumed coverage and stays a human's call.
+      ...(fields.policyExpiryDate &&
+      (existing.policyExpiryDate == null || fields.policyExpiryDate < existing.policyExpiryDate)
         ? { policyExpiryDate: fields.policyExpiryDate }
         : {}),
       // AI never flips additionalInsured off — it only confirms it.
