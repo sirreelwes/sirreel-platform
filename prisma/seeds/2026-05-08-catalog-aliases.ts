@@ -41,6 +41,20 @@ const INVENTORY_ALIASES: { codeContains: string; aliases: string[] }[] = [
     ],
   },
   {
+    // MiFis are one orderable product with two carriers behind it (Wes
+    // 2026-09-18, lib/catalog/stockFills.ts). The carrier rows are
+    // stock-only and excluded from every search, so a rep typing
+    // "verizon" or "t-mobile" has to land HERE or land nowhere — the
+    // same reason the CP200 row answers to "analog walkie".
+    codeContains: 'COM-MOBILE-INTERNET-MIFI',
+    aliases: [
+      'mifi', 'mi-fi', 'mifis', 'hotspot', 'hot spot', 'hotspots',
+      'wifi', 'wi-fi', 'wifi hotspot', 'mobile internet', 'internet',
+      'verizon', 'verizon mifi', 't-mobile', 'tmobile', 't-mobile mifi',
+      '5g', 'air card', 'aircard',
+    ],
+  },
+  {
     codeContains: 'Surveillance Kit',
     aliases: [
       'surveillance', 'surveillances', 'earpiece', 'earpieces',

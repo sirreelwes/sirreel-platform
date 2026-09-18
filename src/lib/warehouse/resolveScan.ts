@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { isStockOnlyCode, WALKIE_ORDER_CODE } from '@/lib/catalog/walkies'
+import { orderCodeForStockCode } from '@/lib/catalog/stockFills'
 
 /**
  * Turn whatever a scanner (or a picker's keyboard) put in the box into a
@@ -135,20 +135,24 @@ export async function resolveScan(raw: string): Promise<ScanResolution> {
 /**
  * A stock-only row answers as the row its orders are written against.
  *
- * Walkies (lib/catalog/walkies.ts): every walkie line binds to the
- * "Motorola CP200" row, but the shelf holds analog radios under their own
- * RentalWorks I-code. Without this, a picker grabbing an analog radio for
- * a walkie line would be told "this line expects 104387" — the floor
- * decides which CP200 goes out, not the order. The unit itself (id,
- * barcode) is untouched, so the scan still records exactly which radio
- * left.
+ * Walkies: every walkie line binds to the "Motorola CP200" row, but the
+ * shelf holds analog radios under their own RentalWorks I-code. MiFis:
+ * every line binds to "Mobile Internet MiFi" while the shelf holds
+ * T-Mobile and Verizon hotspots. Without this, a picker grabbing an
+ * analog radio — or whichever carrier has coverage at that location —
+ * would be told "this line expects something else"; the floor decides
+ * which one goes out, not the order. The unit itself (id, barcode) is
+ * untouched, so the scan still records exactly which one left.
+ *
+ * The pairs live in lib/catalog/stockFills.ts.
  */
 async function orderableRow<T extends { id: string; code: string | null }>(
   row: T,
 ): Promise<{ id: string; code: string | null }> {
-  if (!isStockOnlyCode(row.code)) return row
+  const orderCode = orderCodeForStockCode(row.code)
+  if (!orderCode) return row
   const target = await prisma.inventoryItem.findFirst({
-    where: { code: WALKIE_ORDER_CODE, isActive: true },
+    where: { code: orderCode, isActive: true },
     select: { id: true, code: true },
   })
   return target ?? row

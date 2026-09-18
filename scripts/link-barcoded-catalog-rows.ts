@@ -112,10 +112,11 @@ async function main() {
   for (const link of LINKS) {
     const live = await prisma.inventoryItem.findFirst({
       where: { code: link.code },
-      select: { id: true, code: true, description: true, rwICode: true, archivedAt: true, qtyOwned: true },
+      select: { id: true, code: true, description: true, rwICode: true, archivedAt: true, isActive: true, qtyOwned: true },
     })
     if (!live) { console.log(`SKIP ${link.icode} — no catalog row with code ${link.code}`); continue }
-    if (live.archivedAt && !link.unarchive) {
+    const retired = !!live.archivedAt || !live.isActive
+    if (retired && !link.unarchive) {
       console.log(`SKIP ${link.icode} — ${link.code} is archived; add \`unarchive: true\` only if SirReel really stocks it`)
       continue
     }
@@ -131,13 +132,18 @@ async function main() {
       `\n${link.icode} → ${live.code}  "${live.description}"\n` +
       `  ${units} units (${active} active) · ${link.why}\n` +
       `  rwICode ${live.rwICode ?? '—'} → ${link.icode}` +
-      (link.unarchive && live.archivedAt ? `\n  UN-ARCHIVING (archived ${live.archivedAt.toISOString().slice(0, 10)}) — it becomes bookable again` : '') +
+      (link.unarchive && retired
+        ? `\n  UN-RETIRING (archivedAt ${live.archivedAt ? live.archivedAt.toISOString().slice(0, 10) : 'null'}, isActive ${live.isActive}) — both fields, or the row is live in the list and refused by every isActive query`
+        : '') +
       (others.length ? `\n  clearing rwICode on: ${others.map((o) => `${o.code}${o.archivedAt ? '[archived]' : ' [LIVE]'}`).join(', ')}` : ''),
     )
 
     journal.push({
       icode: link.icode,
-      live: { id: live.id, code: live.code, rwICodeBefore: live.rwICode, archivedAtBefore: live.archivedAt },
+      live: {
+        id: live.id, code: live.code, rwICodeBefore: live.rwICode,
+        archivedAtBefore: live.archivedAt, isActiveBefore: live.isActive,
+      },
       cleared: others.map((o) => ({ id: o.id, code: o.code, rwICodeBefore: o.rwICode, archived: !!o.archivedAt })),
       unitCount: units,
     })
@@ -149,7 +155,15 @@ async function main() {
       }
       await tx.inventoryItem.update({
         where: { id: live.id },
-        data: { rwICode: link.icode, ...(link.unarchive ? { archivedAt: null } : {}) },
+        // Retirement is TWO fields, and clearing only `archivedAt` leaves
+        // a row that reads live in the catalog list and is refused by
+        // every `isActive: true` query — including the scan resolver's
+        // look-up of an order row (2026-09-18: 105020 spent an hour in
+        // exactly that state).
+        data: {
+          rwICode: link.icode,
+          ...(link.unarchive ? { archivedAt: null, isActive: true } : {}),
+        },
       })
       const moved = await tx.inventoryUnit.updateMany({
         where: { rwICode: link.icode },
@@ -164,11 +178,12 @@ async function main() {
           oldValues: {
             rwICode: live.rwICode,
             archivedAt: live.archivedAt,
+            isActive: live.isActive,
             clearedFrom: others.map((o) => ({ id: o.id, code: o.code })),
           },
           newValues: {
             rwICode: link.icode,
-            ...(link.unarchive ? { archivedAt: null } : {}),
+            ...(link.unarchive ? { archivedAt: null, isActive: true } : {}),
             unitsRepointed: moved.count,
             why: link.why,
           },

@@ -35,6 +35,7 @@
     "test:photo-stamp": "tsx tests/fleet/photo-stamp.test.ts",
     "test:pick-sections": "tsx tests/warehouse/pick-sections.test.ts",
     "test:icode-owner": "tsx tests/warehouse/icode-owner.test.ts",
+    "test:stock-fills": "tsx tests/catalog/stock-fills.test.ts",
     "test:maintenance-tasks": "tsx tests/admin/maintenance-tasks.test.ts",
     "test:order-back": "tsx tests/nav/order-back-target.test.ts",
     "test:dropdown-placement": "tsx tests/ui/dropdown-placement.test.ts",
