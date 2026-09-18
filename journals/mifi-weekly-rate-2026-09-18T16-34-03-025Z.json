@@ -1,0 +1,15 @@
+{
+  "ranAt": "2026-09-18T16:34:03.026Z",
+  "authorisedBy": "Wes, 2026-09-18 — \"yes set the weekly to 297\"",
+  "itemId": "7f638ba1-04c6-4119-aa7d-8b80ba174058",
+  "code": "COM-MOBILE-INTERNET-MIFI",
+  "before": {
+    "dailyRate": "99",
+    "weeklyRate": "0"
+  },
+  "after": {
+    "dailyRate": "99",
+    "weeklyRate": "297"
+  },
+  "existingLinesUntouched": 7
+}
