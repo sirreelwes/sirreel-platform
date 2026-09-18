@@ -325,6 +325,19 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   moving. So the page SAYS it is the current copy for review rather than the
   executed agreement (`isCurrentDraft`), and a later correction needs no
   re-send. Once signed it flips to "Executed — this copy is for your file".
+- **There is a REVIEW step, and it is the mail** (Wes 2026-09-18: "Where is
+  the review of the email to Marell?"). The first cut composed the body
+  inside the POST, so the only thing on screen was the note box — for the
+  one message in HQ most worth reading twice. `renderCounselReviewEmail`
+  (`counselReviewEmail.ts`) is now the ONE renderer and the route's **GET**
+  returns exactly what its POST will send: subject, rendered html, Reply-To,
+  and "no Cc" stated. Two taps in the panel — **Review the email** then
+  **Send it** — and any edit to the address, the name or the note clears the
+  preview, the way the job composer's armed strip disarms. The GET mints its
+  own display token and the POST mints the one it sends; both are valid for
+  the same agreement. The test pins that a note cannot remove the LINK
+  (blank, one-word, or one carrying a rival URL) and that a note is escaped
+  before it reaches HTML.
 - **Sent from /crm/companies → Annual agreement → "Send to their counsel ↗"**
   (`POST …/agreements/[agreementId]/counsel-review`). Posture copied from
   the COI broker desk: the EMAIL IS THE ACT (a send failure stamps nothing),

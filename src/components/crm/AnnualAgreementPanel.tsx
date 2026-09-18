@@ -91,6 +91,40 @@ export function AnnualAgreementPanel({
   const [counselName, setCounselName] = useState('');
   const [counselMessage, setCounselMessage] = useState('');
   const [counselSent, setCounselSent] = useState<string | null>(null);
+  /**
+   * The REVIEW (Wes 2026-09-18: "Where is the review of the email to
+   * Marell?"). Non-null = the composer is showing the rendered mail and the
+   * button has become "Send it". Loaded from the route's GET, which calls the
+   * SAME renderer as the send — so this is the mail, not a mock-up of it.
+   * Any edit clears it, the way the job composer's armed strip disarms.
+   */
+  const [counselPreview, setCounselPreview] = useState<
+    { subject: string; html: string; replyTo: string; reviewUrl: string } | null
+  >(null);
+
+  const previewCounsel = async (agreementId: string) => {
+    if (busyId) return;
+    setBusyId(agreementId);
+    setError(null);
+    try {
+      const qs = new URLSearchParams();
+      if (counselName.trim()) qs.set('name', counselName.trim());
+      if (counselMessage.trim()) qs.set('message', counselMessage.trim());
+      const r = await fetch(
+        `/api/crm/companies/${companyId}/agreements/${agreementId}/counsel-review?${qs.toString()}`,
+      );
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) {
+        setError(d.fix ? `${d.error} ${d.fix}` : d.error || 'Could not build the preview.');
+        return;
+      }
+      setCounselPreview({ subject: d.subject, html: d.html, replyTo: d.replyTo, reviewUrl: d.reviewUrl });
+    } catch {
+      setError('Could not build the preview.');
+    } finally {
+      setBusyId(null);
+    }
+  };
 
   const sendToCounsel = async (agreementId: string) => {
     if (busyId) return;
@@ -116,6 +150,7 @@ export function AnnualAgreementPanel({
       }
       setCounselSent(`Sent to ${d.to}. The link shows the current copy — a later change needs no re-send.`);
       setCounselFor(null);
+      setCounselPreview(null);
       setCounselEmail('');
       setCounselName('');
       setCounselMessage('');
@@ -423,37 +458,66 @@ export function AnnualAgreementPanel({
                         They get a read-only page with the whole agreement and a button to download it
                         as Word — composed from the agreement text, not converted from the PDF. No Cc:
                         this goes to them alone. The link is added by HQ, so editing the note below
-                        can&rsquo;t remove it.
+                        can&rsquo;t remove it. <span className="font-semibold">Nothing sends until you
+                        read it</span> — the next button shows the email itself.
                       </p>
                       <input
                         value={counselEmail}
-                        onChange={(e) => setCounselEmail(e.target.value)}
+                        onChange={(e) => { setCounselEmail(e.target.value); setCounselPreview(null); }}
                         placeholder="counsel@theirfirm.com"
                         className="mt-2 w-full rounded-md border border-lt-hairline bg-lt-card px-2 py-1.5 text-[13px]"
                       />
                       <input
                         value={counselName}
-                        onChange={(e) => setCounselName(e.target.value)}
+                        onChange={(e) => { setCounselName(e.target.value); setCounselPreview(null); }}
                         placeholder="Their name (optional — used for the greeting)"
                         className="mt-1.5 w-full rounded-md border border-lt-hairline bg-lt-card px-2 py-1.5 text-[13px]"
                       />
                       <textarea
                         value={counselMessage}
-                        onChange={(e) => setCounselMessage(e.target.value)}
+                        onChange={(e) => { setCounselMessage(e.target.value); setCounselPreview(null); }}
                         rows={3}
                         placeholder="Your note (optional — leave blank and HQ writes the standard one)"
                         className="mt-1.5 w-full rounded-md border border-lt-hairline bg-lt-card px-2 py-1.5 text-[13px]"
                       />
+                      {counselPreview && (
+                        <div className="mt-2 rounded-md border border-lt-hairline bg-lt-card">
+                          <div className="border-b border-lt-hairline px-2.5 py-1.5 text-[11px] text-lt-fg2">
+                            <div><span className="text-lt-fg3">To</span> {counselEmail.trim()}</div>
+                            <div><span className="text-lt-fg3">Subject</span> {counselPreview.subject}</div>
+                            <div><span className="text-lt-fg3">Reply-To</span> {counselPreview.replyTo} · no Cc</div>
+                          </div>
+                          {/* The rendered mail. Its own document, so the
+                              email's styles cannot leak into the dashboard
+                              (and the dashboard's cannot flatter the email
+                              into looking like something it isn't). */}
+                          <iframe
+                            title="Email preview"
+                            srcDoc={`<!doctype html><meta charset="utf-8"><body style="font:14px/1.5 -apple-system,Segoe UI,sans-serif;color:#111;margin:10px">${counselPreview.html}</body>`}
+                            className="h-56 w-full"
+                          />
+                        </div>
+                      )}
                       <div className="mt-2 flex items-center gap-2">
+                        {counselPreview ? (
+                          <button
+                            onClick={() => sendToCounsel(a.id)}
+                            disabled={busyId === a.id || !counselEmail.trim()}
+                            className="rounded-md bg-amber-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-amber-500 disabled:opacity-50"
+                          >
+                            {busyId === a.id ? 'Sending…' : 'Send it'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => previewCounsel(a.id)}
+                            disabled={busyId === a.id || !counselEmail.trim()}
+                            className="rounded-md bg-lt-fg px-3 py-1.5 text-[12px] font-bold text-white hover:bg-black disabled:opacity-50"
+                          >
+                            {busyId === a.id ? 'Building…' : 'Review the email'}
+                          </button>
+                        )}
                         <button
-                          onClick={() => sendToCounsel(a.id)}
-                          disabled={busyId === a.id || !counselEmail.trim()}
-                          className="rounded-md bg-amber-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-amber-500 disabled:opacity-50"
-                        >
-                          {busyId === a.id ? 'Sending…' : 'Send it'}
-                        </button>
-                        <button
-                          onClick={() => { setCounselFor(null); setError(null); }}
+                          onClick={() => { setCounselFor(null); setCounselPreview(null); setError(null); }}
                           className="text-[12px] font-semibold text-lt-fg2 hover:text-lt-fg"
                         >
                           Cancel
@@ -462,7 +526,7 @@ export function AnnualAgreementPanel({
                     </div>
                   ) : (
                     <button
-                      onClick={() => { setCounselFor(a.id); setCounselSent(null); setError(null); }}
+                      onClick={() => { setCounselFor(a.id); setCounselSent(null); setCounselPreview(null); setError(null); }}
                       className="text-[11px] font-semibold text-lt-fg hover:text-black"
                       title="Email their lawyer a read-only link to this agreement, with a Word download"
                     >
