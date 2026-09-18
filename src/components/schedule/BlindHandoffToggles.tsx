@@ -28,6 +28,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { EyeOff } from 'lucide-react'
+import { describeNotices, type DriverNoticeOutcome } from '@/lib/drivers/driverNoticeRule'
 
 export type BlindOrder = {
   id: string
@@ -55,6 +56,9 @@ export type BlindVehicleRow = {
 }
 
 export type BlindState = { orders: BlindOrder[]; vehicles: BlindVehicleRow[] }
+
+/** The POST answers with the state AND who was told about the flip. */
+type BlindWriteResult = BlindState & { notices?: DriverNoticeOutcome[] }
 
 const LABEL: Record<Kind, string> = { blindPickup: 'Blind pickup', blindReturn: 'Blind return' }
 
@@ -99,6 +103,10 @@ export function BlindHandoffToggles({
 }) {
   const [pending, setPending] = useState<string | null>(null)
   const [err, setErr] = useState('')
+  // Flipping this chip can change what a named driver was told to expect
+  // at the yard (Jose 2026-09-18). The route messages them; this says so,
+  // and says loudly when it could not.
+  const [driverNotice, setDriverNotice] = useState<{ text: string; tone: 'good' | 'warn' } | null>(null)
   const [localOrders, setLocalOrders] = useState<BlindOrder[]>(orders)
   const [vehicleRows, setVehicleRows] = useState<BlindVehicleRow[] | null>(null)
   const [localVehicle, setLocalVehicle] = useState(vehicle?.effective ?? null)
@@ -141,9 +149,10 @@ export function BlindHandoffToggles({
           setErr((data && data.error) || "Couldn't save — try again.")
           return
         }
-        const next = data as BlindState
+        const next = data as BlindWriteResult
         setLocalOrders(next.orders)
         setVehicleRows(next.vehicles)
+        setDriverNotice(describeNotices(next.notices ?? []))
         if (vehicle) {
           const mine = next.vehicles.find((v) => v.assignmentId === vehicle.assignmentId)
           if (mine) setLocalVehicle(mine.effective)
@@ -180,13 +189,35 @@ export function BlindHandoffToggles({
     } ${disabled ? 'opacity-50' : ''} ${busy ? 'opacity-60' : ''}`
 
   const note = `${size === 'md' ? 'text-[13px]' : 'text-[11px]'} ${tone === 'dark' ? 'text-zinc-400' : 'text-lt-fg3'}`
+
+  // Who was told. Rendered in all three shapes — a flip on the yard's
+  // check list matters to the driver exactly as much as one on the board.
+  const driverLine = driverNotice && (
+    <div
+      className={`mt-1 rounded-md px-2 py-1 ${size === 'md' ? 'text-[13px]' : 'text-[11px]'} ${
+        tone === 'dark'
+          ? driverNotice.tone === 'warn'
+            ? 'bg-amber-950 text-amber-200'
+            : 'bg-emerald-950 text-emerald-200'
+          : driverNotice.tone === 'warn'
+            ? 'bg-chip-warn-bg text-chip-warn-fg'
+            : 'bg-chip-good-bg text-chip-good-fg'
+      }`}
+    >
+      <span className="font-semibold">
+        {driverNotice.tone === 'warn' ? 'The driver may not know.' : 'Driver told.'}
+      </span>{' '}
+      {driverNotice.text}.
+    </div>
+  )
   const rowLabel = `${size === 'md' ? 'text-[14px]' : 'text-[12px]'} font-semibold ${tone === 'dark' ? 'text-zinc-100' : 'text-lt-fg'}`
 
   // ── Per-vehicle mode: this unit's chips. ──
   if (vehicle) {
     const eff = localVehicle ?? vehicle.effective
     return (
-      <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
+      <div className={className}>
+      <div className="flex flex-wrap items-center gap-1.5">
         {kinds.map((kind) => {
           const active = eff[kind]
           const busy = pending === `${vehicle.assignmentId}:${kind}`
@@ -211,6 +242,8 @@ export function BlindHandoffToggles({
         })}
         <span className={note}>This vehicle only</span>
         {err && <span className={`${note} !text-rose-500`}>{err}</span>}
+      </div>
+      {driverLine}
       </div>
     )
   }
@@ -262,6 +295,7 @@ export function BlindHandoffToggles({
           listBody
         )}
         {err && <div className={`${note} !text-rose-500 mt-1`}>{err}</div>}
+        {driverLine}
       </div>
     )
   }
@@ -305,6 +339,7 @@ export function BlindHandoffToggles({
         {!noOrders && rows.length <= 1 && live.length > 1 && <span className={note}>Applies to all {live.length} orders on this job</span>}
         {err && <span className={`${note} !text-rose-500`}>{err}</span>}
       </div>
+      {driverLine}
       {listBody}
     </div>
   )

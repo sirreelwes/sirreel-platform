@@ -90,6 +90,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       window: result.window,
       replacedAssetId: result.replacedAssetId,
       driversMoved: result.driversMoved,
+      // Who was told about the swap, and how — the rep should not have to
+      // wonder whether the driver still thinks they're on the old van.
+      driverNotices: result.driverNotices,
     },
     { status: 201 },
   )

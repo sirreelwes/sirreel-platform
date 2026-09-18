@@ -2005,8 +2005,83 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   refuses the swap up front (`replace-checked-out`) — its FK is RESTRICT and
   would otherwise fail after every other check passed. The replacement is
   created BEFORE the outgoing row is deleted so those rows have somewhere to
-  go. Response carries `driversMoved`. Nobody is TOLD the driver's van
-  changed — open.
+  go. Response carries `driversMoved` and, since 2026-09-18, `driverNotices`
+  — the driver IS told now; see "The driver hears when the van or the handoff
+  changes" below.
+
+## The driver hears when the van or the handoff changes (2026-09-18 — Jose)
+
+- Jose, on SR-JOB-0379 (Bryght Young Things): "This was on P2 and driver info
+  was already submitted. I just changed it to P10 and made it Blind pick up.
+  Will driver get updated vehicle info and instructions for Blind pick up?"
+- **His PAGE always did; his INBOX never did.** `/api/drive/[token]` is
+  recomputed on every open and the swap re-points the `DriverAssignment` at
+  the replacement (`assignUnit.ts` — "the DRIVER goes with the job, not the
+  van"), so David Trinidad's link already said Pass 10. But `unattendedPickup`
+  on the INVITE is computed once, **at send time** (`inviteDriver.ts`), and
+  nothing re-sent on a swap or on a blind toggle. The only message he held
+  named Pass 2 and, if the job was not blind that morning, told him someone
+  would meet him. A driver who does not re-open the link drives to the yard
+  looking for the wrong van expecting the wrong handoff.
+- **The rule is `src/lib/drivers/driverNoticeRule.ts`** (pure — the
+  blindRule/blindHandoff split, so the test is offline and the two client
+  components read it); the sender is `driverChangeNotice.ts`.
+  `npm run test:driver-change-notice`.
+- **THE TOKEN IS NOT RE-MINTED.** Re-inviting was the only way to re-tell a
+  driver anything, and `inviteDriver` upserts a FRESH token — which kills the
+  link they may already have open. A change notice has no business revoking
+  their access, so this reads the existing `DriverAssignment.token` and sends
+  the same URL, and the mail says so ("nothing has been re-issued"). That is
+  the whole reason this is not just a re-invite.
+- **Only what a driver would DO differently** counts as a change: the vehicle,
+  and whether anybody is there at either end. Dates, kit and rates reach them
+  through the page. Nothing changed → nothing sent, which is what keeps a rep
+  double-tapping a chip off a stranger's phone.
+- **`lockboxMoved` is the line that earns the feature.** A swap on a blind
+  handoff replaces the one secret the driver was given: the code on their page
+  is the NEW van's and the old one does not open it. A driver told only
+  "you're on Pass 10" still tries the code they wrote down. On an ATTENDED
+  handoff no code was ever released, so the sentence does not print.
+- **`vehicleChanged` is an explicit flag, never inferred from
+  `previousUnitName` by a caller that knows better.** Reading the swap off the
+  name alone meant a failed lookup of the outgoing asset read as "nothing
+  changed" and the driver was told NOTHING — on the exact case this exists
+  for. The name is a nicety; the swap is a fact. Unnamed, the words fall back
+  to "You're now driving Pass 10."
+- **The notice travels the way the INVITE did** (`noticeRoute`): texted invite
+  → text, emailed invite → email, whatever the file has if the invite channel
+  is empty, and **null rather than a silent no-op** when there is neither.
+  SMS goes through `sendTracked` with `source: 'staff'` — a person pressed the
+  button, so a 5am change is not held for quiet hours. A text NEVER carries a
+  code; those are released on the page, once, to a driver with a name, a
+  number and a licence on file.
+- **Two doors, and they are the two that change these facts:** the swap
+  (`assignUnitToBookingItem`, when `driversMoved > 0`) and the blind toggle
+  (`POST /api/jobs/[id]/blind-handoff`, which diffs `loadJobBlindState` either
+  side of the write — a job-wide flip resets every override, so "what it was"
+  cannot be reconstructed afterwards).
+- **Best-effort, always.** The swap and the toggle are the act; a Resend
+  outage or an opted-out number must never roll one back. A finished job is
+  silent (`clientAskGuard`, same as the invite).
+- **"Sent" is an AuditLog row** (`driver_assignment.change_notified`), no
+  column — the job-welcome pattern. It carries who it went to and what
+  changed, never the token and never the body. It is also the dedupe: an
+  identical message inside 10 minutes is a double tap. The signature carries
+  the RESULT, not the kinds of change, so A→B then B→C both go out — keyed on
+  the kinds alone, the second swap would be swallowed and the driver left
+  believing they are on B. Only a send that actually WENT dedupes; a failure
+  stays retriable.
+- **The rep is told who was reached** (`describeNotices`, rendered by
+  `AssignUnitsModal` and all three shapes of `BlindHandoffToggles`). An
+  unreachable or failed driver is never folded into a count — it turns the
+  line amber and says "tell them yourself", because that rep has to pick up a
+  phone.
+- NOT done: nothing tells the driver when their DATES move (the same
+  send-time staleness, one door further away — `followLineDates` would be the
+  hook); a driver is still not told when a swap moves them onto a van whose
+  walk-around is the OLD van's (inspections are detached on purpose, so the
+  new unit has no checkout sheet and they are asked for the four sides
+  themselves); and nothing chases a notice that bounced.
 
 ## Cargo 20–25 have no lift gate (2026-09-16 — Wes)
 - Wes: "We haven't successfully changed cargos 20 through 25 to be without a

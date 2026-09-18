@@ -25,6 +25,7 @@ import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { blockCapacity, quotedBlocks, resolveAssignWindow, soleOrderCoveringHold, type ResolvedWindow } from '@/lib/scheduling/assignWindow'
 import { quotedLinesForHold } from '@/lib/scheduling/quotedLines'
 import { formatCalendarDate, formatCalendarRange } from '@/lib/dates/calendarDate'
+import { notifyDriversOfChange, type DriverNoticeOutcome } from '@/lib/drivers/driverChangeNotice'
 
 /** Two date ranges touching at all. Inclusive both ends: a return on the
  *  22nd and a pickup on the 22nd are the same day on this board. */
@@ -95,6 +96,12 @@ export type AssignUnitResult =
       replacedAssetId: string | null
       /** Driver invites carried from the replaced unit onto this one. */
       driversMoved: number
+      /**
+       * What each carried driver was TOLD about the swap — one row per
+       * driver. Empty when nobody was named. The link in the message is
+       * their existing one; nothing is re-minted.
+       */
+      driverNotices: DriverNoticeOutcome[]
     }
   | { ok: false; status: number; body: Record<string, unknown> }
 
@@ -560,6 +567,31 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
     }
   }
 
+  // ── Tell the driver their van changed (Jose 2026-09-18) ───────────
+  // Outside the transaction and best-effort: the swap is the act, and a
+  // Resend outage must never undo it. The driver's page was already
+  // right — this is the half that reaches someone who does not re-open
+  // their link. See lib/drivers/driverChangeNotice.
+  let driverNotices: DriverNoticeOutcome[] = []
+  if (result.driversMoved > 0 && outgoing) {
+    try {
+      const priorUnit = await prisma.asset.findUnique({
+        where: { id: outgoing.assetId },
+        select: { unitName: true },
+      })
+      driverNotices = await notifyDriversOfChange({
+        bookingAssignmentId: result.created.id,
+        // The swap is a fact here; the NAME of the old unit is a nicety
+        // that a failed lookup must not be able to silence.
+        vehicleChanged: true,
+        previousUnitName: priorUnit?.unitName ?? null,
+        actorUserId: args.actor?.userId ?? null,
+      })
+    } catch (err) {
+      console.error('[assignUnit] driver notice failed:', err instanceof Error ? err.message : err)
+    }
+  }
+
   return {
     ok: true,
     assignment: result.created,
@@ -578,5 +610,6 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
     },
     replacedAssetId: outgoing?.assetId ?? null,
     driversMoved: result.driversMoved,
+    driverNotices,
   }
 }

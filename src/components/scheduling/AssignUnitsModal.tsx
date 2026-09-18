@@ -33,6 +33,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { UNIT_STATE_BADGE, UNIT_STATE_LABEL } from '@/lib/scheduling/statusTokens'
+import { describeNotices, type DriverNoticeOutcome } from '@/lib/drivers/driverNoticeRule'
 
 type UnitState = 'free' | 'buffer' | 'booked'
 
@@ -192,6 +193,10 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
   const [error, setError] = useState<string | null>(null)
   /** Set when the error came from acting on one candidate row, so it can render there. */
   const [errorAssetId, setErrorAssetId] = useState<string | null>(null)
+  // What the drivers carried across a swap were told (Jose 2026-09-18).
+  // Held after the refresh, not toasted away: "nobody could reach David"
+  // is the line the rep has to act on.
+  const [driverNotice, setDriverNotice] = useState<{ text: string; tone: 'good' | 'warn' } | null>(null)
   const [pendingBuffer, setPendingBuffer] = useState<{ asset: Candidate; reason: string; replaceAssetId: string | null } | null>(null)
   /**
    * A swap in progress on a full block: the candidate the agent clicked,
@@ -401,6 +406,8 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
       if (res.ok && json.ok) {
         setPendingBuffer(null)
         setPendingSwap(null)
+        const notices: DriverNoticeOutcome[] = Array.isArray(json.driverNotices) ? json.driverNotices : []
+        setDriverNotice(describeNotices(notices))
         await refresh()
         onChanged?.()
         return
@@ -717,6 +724,21 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                     ))}
                   </ul>
                 </section>
+              )}
+
+              {driverNotice && (
+                <div
+                  className={`rounded border px-3 py-2 text-sm ${
+                    driverNotice.tone === 'warn'
+                      ? 'border-amber-300 bg-amber-50 text-amber-900'
+                      : 'border-emerald-200 bg-emerald-50 text-emerald-800'
+                  }`}
+                >
+                  <span className="font-semibold">
+                    {driverNotice.tone === 'warn' ? 'The driver may not know yet.' : 'The driver was told.'}
+                  </span>{' '}
+                  {driverNotice.text}. Their link is unchanged.
+                </div>
               )}
 
               {isFull && (

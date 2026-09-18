@@ -14,6 +14,13 @@
  *
  * Not gated on the sales permission on purpose (Wes 2026-09-15: "always
  * allow the fleet guy to change to a blind pickup") — any HQ session.
+ *
+ * A flip that changes a vehicle's EFFECTIVE answer also tells the drivers
+ * named on it (Jose 2026-09-18): their invite's "nobody will meet you"
+ * was computed once, at send time, so the only message they hold can say
+ * the opposite of what is now true. Best-effort and diffed either side of
+ * the write — see lib/drivers/driverChangeNotice. The response carries
+ * `notices` so the chip can say who was reached.
  * Rule + shapes: src/lib/fleet/blindHandoff.ts.
  */
 import { NextRequest, NextResponse } from 'next/server'
@@ -22,6 +29,7 @@ import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import type { Prisma } from '@prisma/client'
 import { loadJobBlindState } from '@/lib/fleet/blindHandoff'
+import { notifyDriversOfBlindChange } from '@/lib/drivers/driverChangeNotice'
 
 export const dynamic = 'force-dynamic'
 
@@ -56,6 +64,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   const job = await prisma.job.findUnique({ where: { id }, select: { id: true } })
   if (!job) return NextResponse.json({ error: 'job not found' }, { status: 404 })
 
+  // Read BEFORE the write: the notice is a diff of effective answers, and
+  // a job-wide flip resets overrides, so "what it was" cannot be
+  // reconstructed afterwards.
+  const beforeState = await loadJobBlindState(id)
+  const actor = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { id: true },
+  })
+
   const liveVehicleWhere: Prisma.BookingAssignmentWhereInput = {
     status: { in: ['ASSIGNED', 'CHECKED_OUT'] },
     bookingItem: { booking: { jobId: id, status: { notIn: ['CANCELLED', 'ARCHIVED'] }, archivedAt: null } },
@@ -85,5 +102,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     ])
   }
 
-  return NextResponse.json(await loadJobBlindState(id))
+  const afterState = await loadJobBlindState(id)
+  const notices = await notifyDriversOfBlindChange(beforeState, afterState, actor?.id ?? null)
+  return NextResponse.json({ ...afterState, notices })
 }
