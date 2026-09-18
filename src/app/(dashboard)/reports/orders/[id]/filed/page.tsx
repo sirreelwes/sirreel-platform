@@ -34,7 +34,7 @@ import { requireCollectionsUser } from '@/lib/collections/access'
 import { reportDraft } from '@/lib/orders/checkReports'
 import { SendCheckInReportButton } from '@/components/reports/SendCheckInReportButton'
 import { LdFromReportCue } from '@/components/reports/LdFromReportCue'
-import { missingOnCheckIn } from '@/lib/invoices/ldMissingGear'
+import { damagedOnCheckIn, missingOnCheckIn } from '@/lib/invoices/ldMissingGear'
 
 export const dynamic = 'force-dynamic'
 
@@ -136,6 +136,10 @@ export default async function FiledSheetPage({
   // shortfalls (ldMissingGear.ts).
   const missing = !isOut ? missingOnCheckIn(draft.lines) : []
   const missingPieces = missing.reduce((n, m) => n + m.missing, 0)
+  // Damage is NOT a shortfall — the case came back, it just came back
+  // broken — so it has its own count on the row and its own rule.
+  const damaged = !isOut ? damagedOnCheckIn(draft.lines) : []
+  const damagedPieces = damaged.reduce((n, d) => n + d.damaged, 0)
 
   return (
     <div className="max-w-3xl mx-auto px-1 py-2">
@@ -186,10 +190,7 @@ export default async function FiledSheetPage({
           orderNumber={draft.orderNumber}
           shortLines={missing.length}
           missingPieces={missingPieces}
-          // The inbound sheet grew a damaged-quantity column in a separate
-          // change; until that lands there is no damaged count to read, and
-          // a written-in damage line is still one tap away in the composer.
-          damagedPieces={0}
+          damagedPieces={damagedPieces}
         />
       )}
 

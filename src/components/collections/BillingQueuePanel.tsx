@@ -74,6 +74,7 @@ interface LdRowView {
   companyName: string | null
   shortLines: number
   missingPieces: number
+  damagedPieces: number
   damageFindings: number
   checkedInAt: string | null
   rentalInvoiceSent: boolean
@@ -315,6 +316,11 @@ export function BillingQueuePanel() {
               >
                 {r.missingPieces} missing on {r.shortLines} line
                 {r.shortLines === 1 ? '' : 's'}
+              </Chip>
+            )}
+            {r.damagedPieces > 0 && (
+              <Chip tone="warn" title="Came back broken — the case is on the shelf, so the count balanced and only the sheet's damaged column records it">
+                {r.damagedPieces} came back damaged
               </Chip>
             )}
             {r.damageFindings > 0 && (

@@ -33,7 +33,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { missingOnCheckIn } from '@/lib/invoices/ldMissingGear'
+import { damagedOnCheckIn, missingOnCheckIn } from '@/lib/invoices/ldMissingGear'
 
 /** Match the billing queue's own window — an order that came back four
  *  months ago is an aging-review question, not today's work. */
@@ -49,6 +49,10 @@ export interface LdOutstandingRow {
   shortLines: number
   /** Pieces missing across those lines — what the invoice would bill. */
   missingPieces: number
+  /** Pieces that DID come back, broken. Not a shortfall and not derived
+   *  from one: the case is on the shelf, so the count balances and only
+   *  `damagedQty` records it. */
+  damagedPieces: number
   /** Vehicle damage triaged SEND_TO_LD and not yet on any invoice. */
   damageFindings: number
   /** When the inbound sheet was filed, ISO. Null when the only finding is
@@ -149,6 +153,7 @@ export async function ldOutstanding(): Promise<LdOutstandingRow[]> {
               expectedQty: true,
               actualQty: true,
               change: true,
+              damagedQty: true,
               onSheet: true,
               note: true,
             },
@@ -166,8 +171,10 @@ export async function ldOutstanding(): Promise<LdOutstandingRow[]> {
   for (const o of orders) {
     const report = o.checkReports[0] ?? null
     const missing = report ? missingOnCheckIn(report.lines) : []
+    const damagedGear = report ? damagedOnCheckIn(report.lines) : []
+    const damagedPieces = damagedGear.reduce((n, d) => n + d.damaged, 0)
     const damageFindings = o.bookingId ? damageCounts.get(o.bookingId) ?? 0 : 0
-    if (missing.length === 0 && damageFindings === 0) continue
+    if (missing.length === 0 && damagedPieces === 0 && damageFindings === 0) continue
 
     rows.push({
       orderId: o.id,
@@ -177,6 +184,7 @@ export async function ldOutstanding(): Promise<LdOutstandingRow[]> {
       companyName: o.job?.company?.name ?? null,
       shortLines: missing.length,
       missingPieces: missing.reduce((s, m) => s + m.missing, 0),
+      damagedPieces,
       damageFindings,
       checkedInAt: report?.submittedAt.toISOString() ?? null,
       rentalInvoiceSent: o.invoices.some((i) => i.sentAt),
