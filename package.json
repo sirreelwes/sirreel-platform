@@ -23,6 +23,7 @@
     "test:scheduling": "tsx tests/scheduling/availability.test.ts",
     "test:assign-window": "tsx tests/scheduling/assign-window.test.ts",
     "test:follow-line-dates": "tsx tests/scheduling/follow-line-dates.test.ts",
+    "test:follow-booking-dates": "tsx tests/scheduling/follow-booking-dates.test.ts",
     "test:na-duration": "tsx tests/scheduling/na-duration.test.ts",
     "test:pull-ambiguity": "tsx tests/orders/pull-ambiguity.test.ts",
     "test:added-after-pull": "tsx tests/orders/added-after-pull.test.ts",

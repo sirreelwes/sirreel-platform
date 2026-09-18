@@ -264,6 +264,18 @@ interface RowResult {
   note: string | null
 }
 
+/** A live order on the chosen job — what the agent picks between. */
+interface OpenOrder {
+  id: string
+  orderNumber: string
+  status: string
+  startDate: string | null
+  endDate: string | null
+  total: number
+  lineCount: number
+  summary: string
+}
+
 interface Result {
   orderId: string
   orderNumber: string
@@ -413,6 +425,16 @@ export function MakeReservationModal({
   const [contactEmail, setContactEmail] = useState(prefill?.contact?.email ?? '')
   const [jobContacts, setJobContacts] = useState<{ id: string; name: string; email: string; role: string }[] | null>(null)
   const [contactsLoading, setContactsLoading] = useState(false)
+  /** The job's open orders, and which one this reservation goes on.
+   *  Wes 2026-09-18: "when you make a reservation and add it to a current
+   *  job, it needs to require the agent to add it to a specific open order
+   *  or start a new order in that job." This window used to mint a new
+   *  order every time, so a second reservation on a live job quietly
+   *  became a second quote, a second agreement and a second invoice. */
+  const [openOrders, setOpenOrders] = useState<OpenOrder[] | null>(null)
+  const [ordersLoading, setOrdersLoading] = useState(false)
+  /** An order id, 'new', or null = the agent has not said yet. */
+  const [orderChoice, setOrderChoice] = useState<string | null>(null)
 
   // Inline "+ New company" — same 409 near-match discipline the hold
   // modal uses: the agent picks "use existing" or "create anyway",
@@ -498,6 +520,42 @@ export function MakeReservationModal({
       cancelled = true
     }
   }, [job])
+
+  // Which orders this job already has open. Asked the moment a job is
+  // chosen, because the answer decides whether the agent has a choice to
+  // make at all: with none open there is nothing to attach to and a new
+  // order is the only reading.
+  useEffect(() => {
+    setOrderChoice(null)
+    if (!job) {
+      setOpenOrders(null)
+      return
+    }
+    let cancelled = false
+    setOrdersLoading(true)
+    fetch(`/api/jobs/${job.id}/open-orders`)
+      .then((r) => r.json())
+      .then((d) => {
+        if (cancelled) return
+        const list: OpenOrder[] = d?.ok ? d.orders || [] : []
+        setOpenOrders(list)
+        if (list.length === 0) setOrderChoice('new')
+      })
+      .catch(() => {
+        // Unknown: offer the new order rather than blocking the desk on a
+        // failed lookup. Nothing is attached to an order it never saw.
+        if (!cancelled) { setOpenOrders([]); setOrderChoice('new') }
+      })
+      .finally(() => { if (!cancelled) setOrdersLoading(false) })
+    return () => { cancelled = true }
+  }, [job])
+
+  /** The order this reservation lands on when it is one that already
+   *  exists. Null means a new one is being written. */
+  const attachOrder = useMemo(
+    () => (orderChoice && orderChoice !== 'new' ? openOrders?.find((o) => o.id === orderChoice) ?? null : null),
+    [orderChoice, openOrders],
+  )
 
   const catById = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories])
 
@@ -724,6 +782,9 @@ export function MakeReservationModal({
   if (liveRows.some((r) => r.quantity < 1)) blockers.push('how many?')
   if (!company) blockers.push('pick a company')
   if (!job) blockers.push('pick a job')
+  if (job && !ordersLoading && (openOrders?.length ?? 0) > 0 && !orderChoice) {
+    blockers.push('put it on an order, or start a new one')
+  }
   if (!contactReady && !contactsLoading) {
     if (!contactFirst.trim() || !contactLast.trim()) blockers.push("the contact's first and last name")
     if (!/\S+@\S+\.\S+/.test(contactEmail.trim())) blockers.push("the contact's email")
@@ -739,7 +800,8 @@ export function MakeReservationModal({
     ...[...new Set(windows.flatMap((w) => closedDayBlockers(w.start, w.end, closedDay(w))))],
   )
 
-  const canSubmit = blockers.length === 0 && !contactsLoading && !preflightLoading && !submitting
+  const canSubmit =
+    blockers.length === 0 && !contactsLoading && !ordersLoading && !preflightLoading && !submitting
 
   const patchRow = (key: string, patch: Partial<Row>) =>
     setRows((rs) => rs.map((r) => (r.key === key ? { ...r, ...patch } : r)))
@@ -879,10 +941,32 @@ export function MakeReservationModal({
       }
 
       // 1 — the Order, once. Job-as-root: jobId is required and never
-      // created here. A resumed run reuses the one it already made.
-      let order = createdOrder
+      // created here. A resumed run reuses the one it already made — and
+      // when the agent attached this reservation to an order the job
+      // already had, THAT is the order every line lands on. The window
+      // used to create one unconditionally, which is how a job ended up
+      // with a second quote for one rental.
+      let order = createdOrder ?? (attachOrder ? { id: attachOrder.id, orderNumber: attachOrder.orderNumber } : null)
       if (order) {
-        mark('order', 'done')
+        mark('order', createdOrder ? 'done' : 'skipped')
+        if (!createdOrder) {
+          setCreatedOrder(order)
+          // The two answers this window collects that live on the ORDER
+          // rather than on a line. Only ever turned ON: an existing order
+          // may already be blind for a reason nobody here knows about.
+          const flags = orderBlindFlags()
+          const patch: Record<string, unknown> = {}
+          if (flags.blindPickup) patch.blindPickup = true
+          if (flags.blindReturn) patch.blindReturn = true
+          if (warehouseExpected) patch.warehouseOrderExpected = true
+          if (Object.keys(patch).length > 0) {
+            await fetch(`/api/orders/${order.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(patch),
+            }).catch(() => null)
+          }
+        }
       } else {
         mark('order', 'running')
         const orderRes = await fetch('/api/orders', {
@@ -986,7 +1070,7 @@ export function MakeReservationModal({
             `${line?.error || `Could not add the ${category.name} line (${lineRes.status}).`} ` +
               `Order ${order.orderNumber} exists with ${n} of ${liveRows.length} line${
                 liveRows.length === 1 ? '' : 's'
-              } on it — open it to finish, or delete it.`,
+              } on it — open it to finish${attachOrder ? '.' : ', or delete it.'}`,
           )
           setLanded(done)
           setSubmitting(false)
@@ -2159,6 +2243,78 @@ export function MakeReservationModal({
                 )}
               </div>
 
+              {/* Order — REQUIRED once the job has one open. A reservation
+                  belongs to a line on an order; this is where it is said
+                  which order that is. */}
+              {job && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-lt-fg2 mb-1">Order</label>
+                  {ordersLoading && (
+                    <div className="text-[12px] text-lt-fg3">Looking for open orders on this job…</div>
+                  )}
+                  {!ordersLoading && (openOrders?.length ?? 0) === 0 && (
+                    <div className="rounded-lg bg-lt-inner border border-lt-hairline px-3 py-2 text-[12px] text-lt-fg2">
+                      Nothing open on this job — these vehicles start a new order.
+                    </div>
+                  )}
+                  {!ordersLoading && (openOrders?.length ?? 0) > 0 && (
+                    <div className="space-y-1">
+                      {openOrders!.map((o) => (
+                        <label
+                          key={o.id}
+                          className={`flex items-start gap-2 rounded-lg border px-3 py-2 cursor-pointer ${
+                            orderChoice === o.id
+                              ? 'border-amber-600 bg-amber-50'
+                              : 'border-lt-hairline bg-lt-card hover:bg-lt-inner'
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name="reservation-order"
+                            checked={orderChoice === o.id}
+                            onChange={() => setOrderChoice(o.id)}
+                            className="mt-0.5 accent-amber-600"
+                          />
+                          <span className="text-[12px] text-lt-fg2">
+                            <span className="font-semibold text-lt-fg">{o.orderNumber}</span>
+                            {' · '}
+                            {o.status.toLowerCase().replace(/_/g, ' ')}
+                            {o.startDate && o.endDate ? ` · ${o.startDate} – ${o.endDate}` : ''}
+                            <span className="block text-[11px] text-lt-fg3">
+                              {o.summary || `${o.lineCount} line${o.lineCount === 1 ? '' : 's'}`}
+                            </span>
+                          </span>
+                        </label>
+                      ))}
+                      <label
+                        className={`flex items-start gap-2 rounded-lg border px-3 py-2 cursor-pointer ${
+                          orderChoice === 'new'
+                            ? 'border-amber-600 bg-amber-50'
+                            : 'border-lt-hairline bg-lt-card hover:bg-lt-inner'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="reservation-order"
+                          checked={orderChoice === 'new'}
+                          onChange={() => setOrderChoice('new')}
+                          className="mt-0.5 accent-amber-600"
+                        />
+                        <span className="text-[12px] text-lt-fg2">
+                          <span className="font-semibold text-lt-fg">Start a new order</span>
+                          <span className="block text-[11px] text-lt-fg3">
+                            A separate quote, agreement and invoice on this job.
+                          </span>
+                        </span>
+                      </label>
+                      <p className="text-[11px] text-lt-fg3">
+                        Required. Every vehicle here is quoted on the order you pick.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+
               {/* Contact — asked for ONLY when the job has nobody. */}
               <div>
                 <label className="block text-[11px] font-semibold text-lt-fg2 mb-1">Contact</label>
@@ -2334,7 +2490,7 @@ export function MakeReservationModal({
               {submitting && (
                 <div className="rounded-lg bg-lt-inner border border-lt-hairline px-3 py-2 space-y-1">
                   {stepRow('contact', 'Attaching the contact')}
-                  {stepRow('order', 'Creating the order')}
+                  {stepRow('order', attachOrder ? `Adding to ${attachOrder.orderNumber}` : 'Creating the order')}
                   {liveRows.map((r) =>
                     stepRow(
                       `row:${r.key}`,

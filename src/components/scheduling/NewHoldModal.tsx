@@ -189,7 +189,12 @@ export function NewHoldModal({
   // Call-in intake: the agent declares up front that a billable Order is
   // coming. Purely a to-do marker — it keeps the reservation flagged
   // incomplete until an Order actually lands on the job.
-  const [expectsOrder, setExpectsOrder] = useState(false)
+  // Ticked by DEFAULT since 2026-09-18 (Wes: "every reservation should be
+  // locked to a line item on an order"). A +Hold placed here is a rental
+  // somebody is going to be billed for; the exception is the hold that
+  // never becomes one, and that is the one worth an explicit untick. Until
+  // an order lands on the job the reservation carries the board's triangle.
+  const [expectsOrder, setExpectsOrder] = useState(true)
   const [notes, setNotes] = useState('')
   // Dates start at the parent's pre-fill; the agent can extend / adjust
   // inside the modal (per the brief: "agent sets end + client/job in the modal").
@@ -828,7 +833,8 @@ export function NewHoldModal({
               <span className="text-sm text-amber-900">
                 An order will be attached
                 <span className="block text-[11px] text-amber-700 font-normal">
-                  Flags the reservation as awaiting its order until one lands on the job.
+                  Flags the reservation as awaiting its order until one lands on the job. Untick
+                  only for a hold nobody will be billed for.
                 </span>
               </span>
             </label>

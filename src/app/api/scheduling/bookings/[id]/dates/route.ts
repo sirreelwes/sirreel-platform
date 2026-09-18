@@ -8,6 +8,10 @@ import {
   ACTIVE_ASSIGNMENT_STATUSES,
   LIVE_ITEM_STATUSES,
 } from "@/lib/scheduling/availability";
+import {
+  planBookingDateFollow,
+  applyBookingDateFollow,
+} from "@/lib/scheduling/followBookingDates";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -39,7 +43,17 @@ const ymd = (d: Date) => d.toISOString().slice(0, 10);
  * spoken for). Buffer encroachment returns 409 needsOverride (same as
  * creation); over-capacity / hard overlap is a hard 409. On success the
  * booking window + its active assignments (which are date COPIES, not derived)
- * are shifted together. Dates only — assignment/status/backups untouched.
+ * are shifted together, and THE ORDER FOLLOWS (Wes 2026-09-18: "you should
+ * be able to edit the dates of the reservation and have it adjust the order
+ * and vice versa"). Until then this route moved the board and left the order
+ * on the old week — the quote, the pick list and the agreement's rental
+ * period all still read the days the rep had just moved off.
+ * lib/scheduling/followBookingDates plans both halves: which units move
+ * (a unit stamped for a line goes where its LINE goes — the through line —
+ * so a two-block order stops being smashed onto one envelope) and which
+ * order lines move with them. Closed-out orders are never re-dated; a
+ * translation changes no money, a resize re-prices what it moves.
+ * Status/backups untouched.
  */
 export async function POST(req: NextRequest, { params }: Params) {
   const { id } = await params;
@@ -76,6 +90,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     select: {
       id: true,
       agentId: true,
+      startDate: true,
+      endDate: true,
       items: {
         select: {
           id: true,
@@ -191,20 +207,42 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
   }
 
-  // All clear — shift the booking window AND its active assignments together
-  // (assignment dates are copies stamped at assign time, not derived).
+  // What moves with it: every unit on the reservation, and every line of
+  // every live order it belongs to. Planned BEFORE the write, off the
+  // window the booking still has.
+  const from = { start: booking.startDate, end: booking.endDate };
+  const to = { start, end };
+  const plan = await planBookingDateFollow({ bookingId: id, from, to });
+
+  // All clear — shift the booking window AND its active assignments
+  // together (assignment dates are copies stamped at assign time, not
+  // derived). Each unit takes ITS OWN new window, not the envelope: a
+  // blanket stamp collapsed the second leg of a two-block reservation
+  // onto one set of days.
   await prisma.$transaction([
     prisma.booking.update({ where: { id }, data: { startDate: start, endDate: end } }),
-    prisma.bookingAssignment.updateMany({
-      where: { id: { in: ownAssignmentIds } },
-      data: { startDate: start, endDate: end },
-    }),
+    ...plan.assignmentMoves.map((mv) =>
+      prisma.bookingAssignment.update({
+        where: { id: mv.id },
+        data: { startDate: mv.start, endDate: mv.end },
+      }),
+    ),
   ]);
+
+  // The order side. Non-fatal by contract — the reservation has already
+  // moved, so a failure here is reported, never thrown.
+  const followed = await applyBookingDateFollow({
+    plan,
+    actor: { userId: actor.id, ipAddress: req.headers.get("x-forwarded-for") },
+  });
+  if (followed.error) console.error("[bookings/dates] the order did not follow:", followed.error);
 
   return NextResponse.json({
     ok: true,
     startDate: ymd(start),
     endDate: ymd(end),
     bufferOverrideUsed: bufferOverride,
+    unitsMoved: plan.assignmentMoves.length,
+    ordersFollowed: followed,
   });
 }

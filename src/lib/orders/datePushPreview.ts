@@ -95,6 +95,48 @@ function deriveBillableDays(department: LineItemDepartment, calDays: number, par
   return computeBillableDays(calDays, rules.cap)
 }
 
+/**
+ * What a line costs on a NEW window — the one projection both the
+ * push-dates flow and a reservation move (lib/scheduling/followBookingDates)
+ * price through, so a day moved on the board and the same day moved on the
+ * order can never disagree about the money.
+ *
+ * DISCOUNT lines are day-INVARIANT: a "-$85" concession is -$85 whatever the
+ * window (Oliver, 2026-08-20 — deriving days for them multiplied the
+ * concession by the new day count).
+ */
+export function projectLineMoney(args: {
+  department: LineItemDepartment
+  type: LineItemType
+  rateType: RateType
+  rate: number
+  quantity: number
+  billableDays: number | null
+  lineTotal: number
+  partnerDaily?: boolean
+  pickupDate: Date
+  returnDate: Date
+}): { billableDays: number | null; lineTotal: number } {
+  if (args.type === 'DISCOUNT') {
+    return { billableDays: args.billableDays, lineTotal: args.lineTotal }
+  }
+  const billableDays = deriveBillableDays(
+    args.department,
+    calendarDays(args.pickupDate, args.returnDate),
+    args.partnerDaily,
+  )
+  return {
+    billableDays,
+    lineTotal: computeLineTotal({
+      quantity: args.quantity,
+      rate: args.rate,
+      billableDays,
+      rateType: args.rateType,
+      department: args.department,
+    }),
+  }
+}
+
 export function computePushDatesPreview(args: {
   currentStartDate: Date
   currentEndDate: Date
@@ -136,13 +178,8 @@ export function computePushDatesPreview(args: {
       }
     }
     if (it.inheritsDates) {
-      const newBillable = deriveBillableDays(it.department, newCal, it.partnerDaily)
-      const newLineTotal = computeLineTotal({
-        quantity: it.quantity,
-        rate: it.rate,
-        billableDays: newBillable,
-        rateType: it.rateType,
-        department: it.department,
+      const { billableDays: newBillable, lineTotal: newLineTotal } = projectLineMoney({
+        ...it, pickupDate: newStartDate, returnDate: newEndDate,
       })
       return {
         ...it,
@@ -177,14 +214,8 @@ export function computePushDatesPreview(args: {
     const endDate = it.endDate ? shiftDate(it.endDate, offsetMs) : shiftDate(it.returnDate, offsetMs)
     const pickupDate = shiftDate(it.pickupDate, offsetMs)
     const returnDate = shiftDate(it.returnDate, offsetMs)
-    const newCustomCal = calendarDays(pickupDate, returnDate)
-    const newBillable = deriveBillableDays(it.department, newCustomCal, it.partnerDaily)
-    const newLineTotal = computeLineTotal({
-      quantity: it.quantity,
-      rate: it.rate,
-      billableDays: newBillable,
-      rateType: it.rateType,
-      department: it.department,
+    const { billableDays: newBillable, lineTotal: newLineTotal } = projectLineMoney({
+      ...it, pickupDate, returnDate,
     })
     return {
       ...it,

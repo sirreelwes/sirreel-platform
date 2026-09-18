@@ -1172,7 +1172,8 @@ export function GanttBoard() {
       if (!res.ok || !json.ok) {
         throw new Error(json.reason || json.error || `reschedule failed (${res.status})`)
       }
-      setActionSuccess('Dates updated.')
+      const note = followNote(json.ordersFollowed)
+      setActionSuccess(note ? `Dates updated. ${note}` : 'Dates updated — no order is attached to this reservation.')
       setDateWarn(null)
       // Optimistically move the bar in the open popup; refreshTimeline re-fetches
       // so the rendered bar repositions/resizes.
@@ -1378,6 +1379,28 @@ export function GanttBoard() {
   // ── Job view: drag a bar sideways to move the whole reservation ──────
   // Job rows are BOOKINGS, not trucks, so the vertical drop that drives the
   // asset view has no meaning here — there is no "other job" to land on.
+  // What the order side of a reschedule did, in one line the rep can read.
+  // A reservation move re-dates the order it belongs to (2026-09-18) — and
+  // the cases where it deliberately did NOT (a closed-out order, a second
+  // block that sits inside the window) have to be said out loud, or the
+  // board and the order quietly disagree.
+  const followNote = (f: any): string => {
+    if (!f) return ''
+    const money = (o: any) => {
+      const delta = Number(o.totalAfter ?? 0) - Number(o.totalBefore ?? 0)
+      if (!delta) return ''
+      return ` (${delta > 0 ? '+' : '−'}$${Math.abs(delta).toLocaleString('en-US', { maximumFractionDigits: 2 })})`
+    }
+    const parts: string[] = []
+    for (const o of f.orders ?? []) {
+      if (o.to) parts.push(`${o.orderNumber} now ${o.to.start} – ${o.to.end}${money(o)}`)
+      for (const h of o.held ?? []) parts.push(`${o.orderNumber}: “${h.description}” ${h.why}`)
+    }
+    for (const sk of f.skipped ?? []) parts.push(`${sk.orderNumber} not moved — ${sk.why}`)
+    if (f.error) parts.push(`the order did not follow — ${f.error}`)
+    return parts.join(' · ')
+  }
+
   // The horizontal axis is the calendar, and dragging along it is the same
   // reschedule the drawer's date fields perform: POST .../bookings/[id]/dates,
   // which re-validates every held unit against the new window and shifts the
@@ -1387,6 +1410,8 @@ export function GanttBoard() {
   const [jobDrag, setJobDrag] = useState<null | { days: number; start: string; end: string }>(null)
   const [jobDragBusy, setJobDragBusy] = useState(false)
   const [jobDragErr, setJobDragErr] = useState<string | null>(null)
+  /** The order side of the last drag, reported where the error would be. */
+  const [jobDragNote, setJobDragNote] = useState<string | null>(null)
   const [jobDragBuffer, setJobDragBuffer] = useState<null | { bookingId: string; start: string; end: string; from: { start: string; end: string }; label: string; reason: string }>(null)
   /** Bookings whose reschedule is still in flight — their bar is stale. */
   const inFlightReschedules = useRef<Set<string>>(new Set())
@@ -1405,6 +1430,7 @@ export function GanttBoard() {
     inFlightReschedules.current.add(bookingId)
     setJobDragBusy(true)
     setJobDragErr(null)
+    setJobDragNote(null)
     try {
       const r = await fetch(`/api/scheduling/bookings/${bookingId}/dates`, {
         method: 'POST',
@@ -1414,6 +1440,8 @@ export function GanttBoard() {
       const j = await r.json().catch(() => ({} as any))
       if (r.ok && j.ok) {
         setJobDragBuffer(null)
+        const note = followNote(j.ordersFollowed)
+        setJobDragNote(note || null)
         refreshTimeline()
         return
       }
@@ -3229,6 +3257,16 @@ export function GanttBoard() {
           onClick={() => setJobDragErr(null)}
         >
           {jobDragErr}
+        </div>
+      )}
+
+      {/* The order followed — same slot, not an error. */}
+      {!jobDragErr && jobDragNote && (
+        <div
+          className="fixed z-[60] bottom-4 left-1/2 -translate-x-1/2 bg-zinc-900 text-white text-xs px-3 py-2 rounded-lg shadow-lg max-w-md cursor-pointer"
+          onClick={() => setJobDragNote(null)}
+        >
+          {jobDragNote}
         </div>
       )}
 
