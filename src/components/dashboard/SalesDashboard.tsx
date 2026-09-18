@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
+import { pacificYmd } from '@/lib/dates/pacificDay';
 import { ThankYousToSendWidget } from '@/components/orders/ThankYousToSendWidget';
 import { WeeklyCandidWidget } from '@/components/orders/WeeklyCandidWidget';
 
@@ -8,7 +9,6 @@ function fDate(ds: string): string {
   return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
-const today = toDS(new Date());
 const nowHour = new Date().getHours();
 const greeting = nowHour < 12 ? 'Good morning' : nowHour < 17 ? 'Good afternoon' : 'Good evening';
 
@@ -18,6 +18,9 @@ type RWOrder = {
 };
 
 export default function SalesDashboard({ agentName }: { agentName: string }) {
+  // The yard's date, read each render — not the UTC date frozen when the
+  // bundle loaded (a day ahead from 5pm Pacific; Wes 2026-09-16).
+  const today = pacificYmd();
   const [orders, setOrders] = useState<RWOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [inboxEmails, setInboxEmails] = useState<any[]>([]);

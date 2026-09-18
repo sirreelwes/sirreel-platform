@@ -43,6 +43,7 @@
     "test:df50-fluid": "tsx tests/inventory/df50-fluid.test.ts",
     "test:df50-cord": "tsx tests/inventory/df50-cord.test.ts",
     "test:cargo-lift-gate": "tsx tests/fleet/cargo-lift-gate.test.ts",
+    "test:pacific-day": "tsx tests/dates/pacific-day.test.ts",
     "test:public-listing": "tsx tests/sub-rentals/public-listing.test.ts",
     "test:photo-section": "tsx tests/sub-rentals/photo-shoot-roster.test.ts",
     "test:tent-sandbags": "tsx tests/sales/tent-sandbags.test.ts",

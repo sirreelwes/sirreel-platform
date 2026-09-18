@@ -1,5 +1,6 @@
 'use client';
 import { useState, useEffect, useMemo } from 'react';
+import { pacificYmd } from '@/lib/dates/pacificDay';
 import { NeedsAttentionAlerts } from '@/components/dashboard/NeedsAttentionAlerts';
 import { X } from 'lucide-react';
 
@@ -8,7 +9,6 @@ function fDate(ds: string): string {
   return new Date(ds + 'T12:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 function toDS(d: Date): string { return d.toISOString().split('T')[0]; }
-const today = toDS(new Date());
 const nowHour = new Date().getHours();
 const greeting = nowHour < 12 ? 'Good morning' : nowHour < 17 ? 'Good afternoon' : 'Good evening';
 
@@ -31,6 +31,9 @@ const MOCK_COLLECTIONS = [
 ];
 
 export default function CollectionsDashboard() {
+  // The yard's date, read each render — not the UTC date frozen when the
+  // bundle loaded (a day ahead from 5pm Pacific; Wes 2026-09-16).
+  const today = pacificYmd();
   const [orders, setOrders] = useState<RWOrder[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncedAt, setSyncedAt] = useState<string | null>(null);

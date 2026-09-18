@@ -12,17 +12,12 @@
  */
 
 import { isClosedDay } from '@/lib/site/yardHours'
+import { pacificYmd } from '@/lib/dates/pacificDay'
 
-/** YYYY-MM-DD in America/Los_Angeles, offset by N days. `now` exists so a
- *  window can be pinned to a date in a test; nothing passes it in app code. */
-export function pacificYmd(offsetDays = 0, now: number = Date.now()): string {
-  return new Intl.DateTimeFormat('en-CA', {
-    timeZone: 'America/Los_Angeles',
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).format(new Date(now + offsetDays * 86_400_000))
-}
+// The helper itself lives in lib/dates/pacificDay.ts (2026-09-16) so every
+// screen's "today" is the same function; re-exported so the importers of
+// this module keep working.
+export { pacificYmd }
 
 /**
  * Never walk back further than this past the budget, whatever the
