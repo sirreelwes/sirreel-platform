@@ -44,7 +44,13 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
     rules: [
       {
         userAgent: '*',
-        allow: '/',
+        // The catalog image proxy is the one thing under /api/ a crawler
+        // must reach: every vehicle and standing-set photo is served from
+        // it, so the Product structured data on those pages points at
+        // /api/public/catalog-image/... . An image a crawler is forbidden
+        // to fetch makes the markup ineligible for a rich result, and the
+        // more specific Allow wins over the /api/ Disallow below.
+        allow: ['/', '/api/public/catalog-image/'],
         disallow: [
           '/api/',
           '/portal/',
