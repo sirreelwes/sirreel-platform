@@ -6,6 +6,7 @@ import { textDeliveryForAssignments } from '@/lib/drivers/inviteDelivery'
 import { loadJobReplacementValue } from '@/lib/coi/replacementValue'
 import { isClientCreatedUnquoted } from '@/lib/sales/clientCreatedJobs'
 import { listDuplicateJobSignals, describeDuplicateSignal } from '@/lib/jobs/duplicateSignal'
+import { loadClientAskBlock } from '@/lib/jobs/clientAskGuard'
 import { resolveJobCoi, coiSourceSentence, newestFullCoi, withoutAiResponse } from '@/lib/coi/companyCoi'
 import { coiDocumentKind } from '@/lib/coi/coverageKind'
 import { VEHICLE_SCOPE_SELECT, deriveVehicleScope } from '@/lib/coi/vehicleScope'
@@ -686,6 +687,10 @@ export async function GET(
           })),
         })),
         selfServeUnquoted,
+        // Is the job still open to client-facing rental-time asks, or has
+        // it finished? One derivation, shared with the routes that refuse
+        // the send — so a button can say why before anybody presses it.
+        clientAsk: await loadClientAskBlock(job.id),
         duplicateSignals,
         replacementValue,
         // Feeds rollupCoiState on the page — a certificate approved before a

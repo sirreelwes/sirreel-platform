@@ -19,6 +19,12 @@
  * Re-inviting the same driver for the same vehicle REFRESHES the existing
  * row rather than creating a second one (see the composite unique) — a
  * client clicking twice shouldn't produce two links.
+ *
+ * An invite on a FINISHED job is refused for all three entry points. The
+ * message names a pickup, carries a 45-day link and, on a blind handoff,
+ * the codes; none of that should reach a stranger weeks after the unit
+ * came home. See src/lib/jobs/clientAskGuard.ts — a rep asked a
+ * coordinator who was driving nine days after her shoot wrapped.
  */
 
 import { randomUUID } from 'crypto'
@@ -27,6 +33,7 @@ import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail, type EmailResult } from '@/lib/email/sendAgreementEmail'
 import { buildDriverAssignmentEmail } from '@/lib/email/templates/driverAssignment'
 import { evaluateLicenseGate } from '@/lib/drivers/licenseGate'
+import { assertJobOpenForClientAsk, JobClosedError } from '@/lib/jobs/clientAskGuard'
 import { sendTracked } from '@/lib/sms/threads'
 import { toE164 } from '@/lib/sms/sendSms'
 import { buildDriverAssignmentSms } from '@/lib/sms/templates/driverAssignmentSms'
@@ -122,6 +129,16 @@ export async function inviteDriver(args: InviteDriverArgs): Promise<InviteDriver
     },
   })
   if (!assignment) throw new Error('That vehicle reservation could not be found')
+
+  const jobId = assignment.bookingItem.booking.jobId
+  if (jobId) {
+    try {
+      await assertJobOpenForClientAsk(jobId, 'inviting a driver to it')
+    } catch (e) {
+      if (e instanceof JobClosedError) throw new Error(e.message)
+      throw e
+    }
+  }
 
   const DRIVER_FILE = {
     id: true, firstName: true, phone: true, email: true,

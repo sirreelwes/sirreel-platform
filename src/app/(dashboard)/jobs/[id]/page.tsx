@@ -339,6 +339,12 @@ interface JobDetail {
   notes: string | null;
   driverRequestSentAt?: string | null;
   driverRequestSentTo?: string | null;
+  /** Set when the job has FINISHED — archived, off-ramped, marked
+   *  returned, entirely cancelled, or past its last live date. Derived
+   *  server-side by src/lib/jobs/clientAskGuard.ts, the same rule the
+   *  send routes refuse on, so what the page shows and what the API
+   *  allows cannot drift. Null while the job is still open. */
+  clientAsk?: { code: string; reason: string; endedOn: string | null } | null;
   createdAt: string;
   updatedAt: string;
   company: { id: string; name: string; notes: string | null };
@@ -2990,6 +2996,7 @@ const driverTone = (d: any): string => {
         jobId={job.id}
         driverRequest={job.driverRequestSentAt && job.driverRequestSentTo ? { sentAt: job.driverRequestSentAt, sentTo: job.driverRequestSentTo } : null}
         askContactName={signatory ? `${signatory.person.firstName} ${signatory.person.lastName}`.trim() : null}
+        closedReason={job.clientAsk?.reason ?? null}
       />
       )}
 

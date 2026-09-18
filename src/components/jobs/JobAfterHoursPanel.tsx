@@ -45,6 +45,11 @@ interface ShareRow {
 }
 
 interface AfterHoursState {
+  /** Set when the job has finished — see src/lib/jobs/clientAskGuard.ts.
+   *  Releasing, emailing or forwarding puts the gate and container codes
+   *  in front of somebody; on a job whose trucks came back weeks ago that
+   *  is somebody with no business at the lot. The route refuses it too. */
+  closedReason: string | null;
   releasedAt: string | null;
   releasedBy: string | null;
   sentAt: string | null;
@@ -227,6 +232,14 @@ export function JobAfterHoursPanel({ jobId }: { jobId: string }) {
                 </div>
               )}
 
+              {state.closedReason && (
+                <div className="text-[12px] text-zinc-700 bg-zinc-100 border border-zinc-300 rounded-lg px-3 py-2">
+                  <span className="font-semibold text-zinc-900">This job is finished.</span>{' '}
+                  {state.closedReason} The codes don&rsquo;t go out — not by email, not by
+                  release, not to a driver. Revoke still works.
+                </div>
+              )}
+
               {!state.hasPortalOrder && (
                 <div className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
                   No order on this job has a client portal yet — the after-hours page lives inside
@@ -280,7 +293,7 @@ export function JobAfterHoursPanel({ jobId }: { jobId: string }) {
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   onClick={() => act('send')}
-                  disabled={busy || !state.hasPortalOrder || state.contacts.length === 0}
+                  disabled={busy || !!state.closedReason || !state.hasPortalOrder || state.contacts.length === 0}
                   className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-white bg-amber-600 hover:bg-amber-500 disabled:bg-zinc-300"
                 >
                   {busy ? 'Working…' : state.sentAt ? 'Send again' : 'Email the instructions'}
@@ -288,7 +301,7 @@ export function JobAfterHoursPanel({ jobId }: { jobId: string }) {
                 {!released && (
                   <button
                     onClick={() => act('release')}
-                    disabled={busy}
+                    disabled={busy || !!state.closedReason}
                     className="px-3 py-1.5 rounded-lg text-[12px] font-semibold border border-zinc-300 hover:bg-zinc-50 disabled:opacity-50"
                     title="Turn the client's page on without emailing — for when you're reading it to them on the phone"
                   >
@@ -335,7 +348,7 @@ export function JobAfterHoursPanel({ jobId }: { jobId: string }) {
                   from their portal — this is for the call where they ask us
                   to send it to the PA instead. Recipient sees the codes and
                   nothing else: no order, no rates, no paperwork. */}
-              {released && (
+              {released && !state.closedReason && (
                 <div className="border-t border-zinc-200 pt-3">
                   <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-1">
                     Send straight to a driver or PA

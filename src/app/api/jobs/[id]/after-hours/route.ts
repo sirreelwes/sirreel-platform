@@ -11,6 +11,13 @@
  * exists. Staff session required, like every other job route.
  *
  * Wes 2026-09-02: replaces attaching "Afer Hours EQ P:R.pdf" by hand.
+ *
+ * FINISHED JOBS GET NOTHING. Releasing, sending or forwarding puts the
+ * gate and container codes in front of somebody; doing that for a job
+ * whose trucks came back weeks ago is the accident this guard exists to
+ * stop (see src/lib/jobs/clientAskGuard.ts — a driver-info mail went to
+ * a finished job's coordinator on 2026-09-18). REVOKE stays open in every
+ * state: taking access away must never be the thing that is refused.
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -25,6 +32,7 @@ import {
 } from '@/lib/afterHours/sendAfterHoursAccess'
 import { shareAfterHours } from '@/lib/afterHours/share'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
+import { assertJobOpenForClientAsk, JobClosedError, loadClientAskBlock } from '@/lib/jobs/clientAskGuard'
 
 export const dynamic = 'force-dynamic'
 
@@ -71,7 +79,13 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
       })
     : null
 
+  // Has the job finished? Same derivation the POST refuses on, so the
+  // panel can grey the send button out instead of taking the click and
+  // returning a 409.
+  const closed = await loadClientAskBlock(job.id)
+
   return NextResponse.json({
+    closedReason: closed?.reason ?? null,
     releasedAt: job.afterHoursReleasedAt,
     releasedBy: releasedBy?.name || releasedBy?.email || null,
     sentAt: job.afterHoursSentAt,
@@ -133,6 +147,17 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   }
   const action = body.action || 'send'
   const note = typeof body.note === 'string' ? body.note.slice(0, 2000) : undefined
+
+  // Everything that hands access out is gated on the job still running.
+  // 'revoke' is deliberately absent from this list.
+  if (action === 'send' || action === 'share' || action === 'release') {
+    try {
+      await assertJobOpenForClientAsk(params.id, 'releasing the after-hours codes')
+    } catch (e) {
+      if (e instanceof JobClosedError) return NextResponse.json({ error: e.message }, { status: e.status })
+      throw e
+    }
+  }
 
   // Staff-side forward — the same narrow driver link the client can mint
   // from their portal, for when the coordinator asks us to send it directly.

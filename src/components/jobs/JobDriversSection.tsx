@@ -97,6 +97,7 @@ export function JobDriversSection({
   jobId,
   driverRequest,
   askContactName,
+  closedReason,
 }: {
   vehicles: Vehicle[]
   pendingHolds?: PendingHold[]
@@ -107,6 +108,14 @@ export function JobDriversSection({
   driverRequest?: { sentAt: string; sentTo: string } | null
   /** Who the ask goes to — shown on the button so the rep isn't guessing. */
   askContactName?: string | null
+  /** Set when the JOB has finished — the sentence from clientAskGuard.
+   *  Wider than isOver() below, which only reads this card's unit dates:
+   *  a job that is archived, wrapped, lost or entirely cancelled is
+   *  closed even while a unit still looks live. The routes refuse it too
+   *  (2026-09-18: a coordinator was asked who was driving nine days after
+   *  her shoot ended), so this is about telling the rep BEFORE the click,
+   *  not about being the gate. */
+  closedReason?: string | null
   /** Opens the unit picker in place. Without it the row falls back to
    *  the calendar deep link, which a phone cannot use — see the job page. */
   onAssign?: (bookingItemId: string) => void
@@ -334,7 +343,7 @@ export function JobDriversSection({
         <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Drivers</h2>
         <div className="flex items-center gap-3">
           <span className="text-[12px] text-zinc-600">{vehicles.length} unit{vehicles.length === 1 ? '' : 's'}</span>
-          {nameable.length > 0 && (
+          {nameable.length > 0 && !closedReason && (
             <button
               type="button"
               onClick={() => (formOpen ? closeForm() : openForm())}
@@ -352,7 +361,15 @@ export function JobDriversSection({
       {/* Units with no driver, and the client is the one who knows. The
           ask lands on the drivers section of their portal; the driver
           then gets their own link and uploads their own licence. */}
-      {jobId && nameable.some((v) => v.drivers.length === 0) && (
+      {closedReason && (
+        <div className="mb-3 rounded-lg border border-zinc-300 bg-zinc-100 px-3 py-2.5 text-[12px] text-zinc-700">
+          <span className="font-semibold text-zinc-900">This job is finished.</span>{' '}
+          {closedReason} Nothing driver-shaped goes out from here — no ask, no invite, no
+          pickup link. Open the live job instead, or reopen this one first.
+        </div>
+      )}
+
+      {jobId && !closedReason && nameable.some((v) => v.drivers.length === 0) && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5">
           <div className="min-w-0 text-[12px] text-amber-900">
             {driverRequest
@@ -372,7 +389,7 @@ export function JobDriversSection({
 
       {/* Driver first, vehicle second — the order the information actually
           arrives in. */}
-      {openFor === 'HEADER' && nameable.length > 0 && inviteForm}
+      {openFor === 'HEADER' && nameable.length > 0 && !closedReason && inviteForm}
 
       <div className="space-y-2">
         {vehicles.map((v) => (
@@ -385,11 +402,14 @@ export function JobDriversSection({
                   {dateRange(v) && <span className="text-zinc-600"> · {dateRange(v)}</span>}
                 </div>
               </div>
-              {isOver(v) ? (
-                /* Came back (or the dates have passed). Who drove it stays
-                   below; there is nobody left to invite. */
+              {isOver(v) || closedReason ? (
+                /* Came back, the dates have passed, or the JOB itself is
+                   closed. Who drove it stays below; there is nobody left
+                   to invite. The unit's own state is the truer sentence
+                   when it has one — "Job closed" is the fallback for a
+                   unit that still looks live on a job that isn't. */
                 <span className="flex-shrink-0 text-[12px] text-zinc-500">
-                  {v.unitReturned ? 'Returned' : 'Rental ended'}
+                  {v.unitReturned ? 'Returned' : isOver(v) ? 'Rental ended' : 'Job closed'}
                 </span>
               ) : (
                 <button

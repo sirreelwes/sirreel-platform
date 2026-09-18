@@ -68,6 +68,7 @@
     "test:license-badge": "tsx tests/drivers/license-badge.test.ts",
     "test:driver-sweep-window": "tsx tests/drivers/request-sweep-window.test.ts",
     "test:display-name": "tsx tests/jobs/display-name.test.ts",
+    "test:client-ask-guard": "tsx tests/jobs/client-ask-guard.test.ts",
     "test:order-summary": "tsx tests/orders/content-summary.test.ts",
     "test:order-day-tally": "tsx tests/orders/day-tally.test.ts",
     "test:cadence": "tsx tests/jobs/cadence.test.ts",

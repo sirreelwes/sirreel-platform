@@ -13,6 +13,14 @@
  * contactId. The link is a REFRESHED portal magic link for that person
  * on the job's live order — the same access they already hold, not a
  * second row per nudge.
+ *
+ * LIVENESS IS NOT OPTIONAL HERE. Every gate below answers "is there
+ * anything to ask?" — a contact, a portal, an uncovered unit — and none
+ * of them ever asked whether the job was still HAPPENING. On 2026-09-18
+ * that sent a "who's driving?" mail to a coordinator nine days after her
+ * shoot ended. The first thing this function now does is refuse a job
+ * that is finished (see src/lib/jobs/clientAskGuard.ts), which is the
+ * same set of gates the 48-hour sweep already applied to itself.
  */
 
 import { prisma } from '@/lib/prisma'
@@ -22,6 +30,7 @@ import { sendOnJobThread } from '@/lib/email/jobThread'
 import { withTeamCc } from '@/lib/email/teamVisibility'
 import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { buildDriverRequestEmail } from '@/lib/email/templates/driverRequest'
+import { assertJobOpenForClientAsk, JobClosedError } from '@/lib/jobs/clientAskGuard'
 
 export class DriverRequestError extends Error {
   constructor(message: string, public status = 400) { super(message) }
@@ -49,6 +58,16 @@ const fmtDay = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day:
  * rather than re-deriving the candidates somewhere else.
  */
 export async function requestDriverFromClient(args: { jobId: string; contactId?: string | null; dryRun?: boolean }): Promise<RequestDriverResult> {
+  // Before anything else: is this job still live? Translated into a
+  // DriverRequestError so the button gets the sentence as a 409 and the
+  // sweep records it as a skip rather than logging it as a bug.
+  try {
+    await assertJobOpenForClientAsk(args.jobId, 'emailing them about a driver')
+  } catch (e) {
+    if (e instanceof JobClosedError) throw new DriverRequestError(e.message, e.status)
+    throw e
+  }
+
   const job = await prisma.job.findUnique({
     where: { id: args.jobId },
     select: {
