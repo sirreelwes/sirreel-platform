@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { REVIEW_MODEL } from '@/lib/ai/models'
 import { parseAiJson } from '@/lib/ai/extractJson'
 import { evaluateHolderMatch } from '@/lib/coi/holderMatch'
+import { extractPdfFormFields, formatPdfFormFieldsForReview } from '@/lib/coi/pdfFormFields'
 
 /**
  * Shared AI Certificate-of-Insurance review — ONE prompt, every surface.
@@ -132,7 +133,15 @@ CRITICAL REQUIREMENTS (cannot be waived — all must pass):
    verbatim into "found" (name and address, as printed) and leave "pass" true.
    Whether it names us is decided outside this review.
 2. generalLiability — Each Occurrence min $1,000,000 AND General Aggregate min $2,000,000
-3. autoLiability — CSL min $1,000,000, must cover Hired AND Non-Owned Autos
+3. autoLiability — CSL min $1,000,000, must cover Hired AND Non-Owned Autos.
+   The ACORD auto section offers ANY AUTO / OWNED AUTOS ONLY / SCHEDULED AUTOS /
+   HIRED AUTOS ONLY / NON-OWNED AUTOS ONLY. "ANY AUTO" is the BROADEST of these
+   and already includes hired and non-owned autos — a certificate with ANY AUTO
+   checked PASSES this requirement on its own, and the separate Hired and
+   Non-Owned boxes are then redundant, not missing. Never fail a cert for
+   unchecked Hired/Non-Owned boxes when ANY AUTO is checked. FAIL only when the
+   auto coverage is genuinely narrower than hired + non-owned (e.g. only OWNED
+   AUTOS ONLY or only SCHEDULED AUTOS).
 4. autoPhysicalDamage — Hired Auto Physical Damage. The certificate MUST show
    physical damage coverage on the hired/rented autos; this is the coverage that
    pays to repair or replace SirReel's vehicles, so it is REQUIRED. On SirReel
@@ -343,6 +352,13 @@ export async function runCoiAiReview(buffer: Buffer, mimeType: string): Promise<
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const isPdf = mimeType === 'application/pdf'
     const base64 = buffer.toString('base64')
+
+    // A fillable ACORD form prints as a BLANK template with every value in
+    // form-field annotations over it — the checkmarks and the Description of
+    // Operations box come out too small to read in the page image, and the
+    // model reports present coverages as missing. Read them out of the file
+    // and hand them over as text. See src/lib/coi/pdfFormFields.ts.
+    const formFieldsBlock = isPdf ? formatPdfFormFieldsForReview(await extractPdfFormFields(buffer)) : null
     const res = await client.messages.create({
       model: REVIEW_MODEL,
       // The per-check output runs ~1.5k tokens on a busy certificate; a
@@ -362,6 +378,9 @@ export async function runCoiAiReview(buffer: Buffer, mimeType: string): Promise<
                     data: base64,
                   },
                 },
+            // Evidence before instructions: the prompt stays the last thing
+            // the model reads.
+            ...(formFieldsBlock ? [{ type: 'text', text: formFieldsBlock }] : []),
             { type: 'text', text: COI_PROMPT },
           ] as any,
         },

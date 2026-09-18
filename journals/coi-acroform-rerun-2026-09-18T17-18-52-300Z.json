@@ -1,0 +1,517 @@
+[
+  {
+    "id": "407ce335-fb59-4345-a7fe-51e53f1e8ad8",
+    "originalFilename": "COI for Bear Valley Springs Association 25-26.pdf",
+    "aiResponse": {
+      "notes": "This certificate is issued to Bear Valley Springs Cultural Arts Association and names Bear Valley Springs Association (not SirReel) as certificate holder and additional insured. Critical failures include: no automobile liability coverage, no hired auto physical damage coverage, and SirReel not named as additional insured or loss payee. A completely new certificate naming SirReel Production Vehicles Inc. as certificate holder, additional insured, and loss payee, with proper auto coverages, is required.",
+      "umbrella": {
+        "note": "No umbrella or excess liability coverage is shown. Preferred coverage of $1,000,000 minimum.",
+        "pass": false,
+        "found": ""
+      },
+      "alertPass": false,
+      "lossPayee": {
+        "note": "No loss payee designation is shown. SirReel Production Vehicles Inc. must be named as Loss Payee on the auto physical damage coverage.",
+        "pass": false,
+        "found": ""
+      },
+      "riskLevel": "high",
+      "alertIssues": [
+        "primaryNonContributory",
+        "waiverOfSubrogation",
+        "umbrella",
+        "entertainmentPackage",
+        "workersComp",
+        "contractorCoverage"
+      ],
+      "overallPass": false,
+      "workersComp": {
+        "note": "Workers Compensation section is present but marked N/A with no coverage details. If coverage exists on a separate payroll-company certificate, that should be provided.",
+        "pass": false,
+        "found": ""
+      },
+      "criticalPass": false,
+      "namedInsured": "Bear Valley Springs Cultural Arts Association",
+      "policyExpiry": {
+        "date": "2026-11-20",
+        "note": "",
+        "pass": true,
+        "expired": false
+      },
+      "autoLiability": {
+        "note": "No automobile liability coverage is shown on this certificate. SirReel requires Auto Liability with minimum $1,000,000 CSL covering both Hired and Non-Owned Autos.",
+        "pass": false,
+        "hiredAutos": {
+          "pass": false,
+          "found": ""
+        },
+        "nonOwnedAutos": {
+          "pass": false,
+          "found": ""
+        },
+        "combinedSingleLimit": {
+          "pass": false,
+          "found": "",
+          "required": "$1,000,000"
+        }
+      },
+      "coverageDates": {
+        "note": "No rental period was provided for comparison. Coverage dates shown are 11/20/2025 through 11/20/2026.",
+        "pass": false,
+        "found": "11/20/2025 - 11/20/2026"
+      },
+      "criticalIssues": [
+        "autoLiability",
+        "autoPhysicalDamage",
+        "additionalInsured",
+        "lossPayee"
+      ],
+      "generalLiability": {
+        "note": "",
+        "pass": true,
+        "aggregate": {
+          "pass": true,
+          "found": "$2,000,000",
+          "required": "$2,000,000"
+        },
+        "perOccurrence": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "policyExpiryDate": "2026-11-20",
+      "additionalInsured": {
+        "note": "The certificate names Bear Valley Springs Association as additional insured, not SirReel Production Vehicles Inc. The broker must issue a certificate naming SirReel Production Vehicles Inc. as additional insured.",
+        "pass": false,
+        "found": "Bear Valley Springs Association is listed as an additional insured per attached form CG 20 26 12 19"
+      },
+      "certificateHolder": {
+        "note": "The certificate holder reads \"Bear Valley Springs Association, 29600 Bear Valley Road, Tehachapi, CA 93561\". It needs to name SirReel Production Vehicles Inc., 8500 Lankershim Blvd, Sun Valley, CA 91352.",
+        "pass": false,
+        "found": "Bear Valley Springs Association, 29600 Bear Valley Road, Tehachapi, CA 93561"
+      },
+      "autoPhysicalDamage": {
+        "note": "No hired auto physical damage coverage appears on this certificate. SirReel requires physical damage coverage on rented/hired vehicles to protect the rental equipment.",
+        "pass": false,
+        "found": ""
+      },
+      "cancellationNotice": {
+        "note": "Standard cancellation notice language is present, though specific 30-day notice is not explicitly stated.",
+        "pass": true,
+        "found": "Notice will be delivered in accordance with the policy provisions"
+      },
+      "contractorCoverage": {
+        "note": "No independent contractor coverage language is shown on workers compensation.",
+        "pass": false,
+        "found": ""
+      },
+      "waiverOfSubrogation": {
+        "note": "The SUBR WVD column does not show 'Y' for any coverage. Waiver of subrogation should be added.",
+        "pass": false,
+        "found": ""
+      },
+      "entertainmentPackage": {
+        "note": "No entertainment package or rented equipment coverage is shown.",
+        "pass": false,
+        "found": ""
+      },
+      "primaryNonContributory": {
+        "note": "No primary and non-contributory language appears on the certificate. This is a standard endorsement the broker can add same-day at no cost. Ask the broker to reissue the COI showing primary and non-contributory wording in favor of SirReel Production Vehicles Inc.",
+        "pass": false,
+        "found": ""
+      }
+    },
+    "aiRiskLevel": "high",
+    "aiRecommendation": "review",
+    "namedInsured": "Bear Valley Springs Cultural Arts Association",
+    "humanDecision": "PENDING"
+  },
+  {
+    "id": "c157637e-b4c3-47f4-b816-c9760cbd545a",
+    "originalFilename": "Sweet Sadie- 7 Eleven 26- SirReel.pdf",
+    "aiResponse": {
+      "notes": "Certificate fails three critical requirements: Non-Owned Autos coverage is not checked on the auto liability policy, Hired Auto Physical Damage coverage is not explicitly documented with a deductible structure or limit, and SirReel is not named as Loss Payee. Broker must reissue the certificate adding Non-Owned coverage, clear physical damage coverage for hired vehicles, and Loss Payee designation for SirReel Production Vehicles Inc. Additionally, explicit 30-day cancellation notice language should be added.",
+      "umbrella": {
+        "note": "",
+        "pass": true,
+        "found": "Umbrella Liability policy 71UXP00003100 with $5,000,000 Each Occurrence and $5,000,000 Aggregate"
+      },
+      "alertPass": false,
+      "lossPayee": {
+        "note": "No Loss Payee designation for SirReel Production Vehicles Inc. is shown on the certificate. Broker must add SirReel as Loss Payee on the auto physical damage coverage.",
+        "pass": false,
+        "found": ""
+      },
+      "riskLevel": "high",
+      "alertIssues": [
+        "cancellationNotice: 30-day notice language not explicit",
+        "contractorCoverage: Cannot verify on this certificate (WC marked N/A)"
+      ],
+      "overallPass": false,
+      "workersComp": {
+        "note": "Workers Compensation marked N/A; may be on separate payroll company certificate if production uses loan-out or payroll service.",
+        "pass": true,
+        "found": "N/A checked in Workers Compensation section"
+      },
+      "criticalPass": false,
+      "namedInsured": "Sweet Sadie\n936 Kelly Road West\nBoulder, CO 80302",
+      "policyExpiry": {
+        "date": "2027-08-01",
+        "note": "",
+        "pass": true,
+        "expired": false
+      },
+      "autoLiability": {
+        "note": "Non-Owned Autos coverage is not checked on the Automobile Liability section. The policy must include Non-Owned Autos coverage. Broker must reissue with Non-Owned checkbox marked.",
+        "pass": false,
+        "hiredAutos": {
+          "pass": true,
+          "found": "HIRED AUTOS ONLY checked"
+        },
+        "nonOwnedAutos": {
+          "pass": false,
+          "found": ""
+        },
+        "combinedSingleLimit": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "coverageDates": {
+        "note": "",
+        "pass": true,
+        "found": "08/01/2026 to 08/01/2027"
+      },
+      "criticalIssues": [
+        "autoLiability: Non-Owned Autos coverage not checked",
+        "autoPhysicalDamage: No explicit Hired Auto Physical Damage coverage shown",
+        "lossPayee: SirReel not named as Loss Payee"
+      ],
+      "generalLiability": {
+        "note": "",
+        "pass": true,
+        "aggregate": {
+          "pass": true,
+          "found": "$2,000,000",
+          "required": "$2,000,000"
+        },
+        "perOccurrence": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "policyExpiryDate": "2027-08-01",
+      "additionalInsured": {
+        "note": "",
+        "pass": true,
+        "found": "ADDL INSD column shows 'Y' for both Commercial General Liability and Automobile Liability policies"
+      },
+      "certificateHolder": {
+        "note": "",
+        "pass": true,
+        "found": "SirReel Production Vehicles Inc.\n8500 Lankershim Blvd.\nSun Valley, CA 91352"
+      },
+      "autoPhysicalDamage": {
+        "note": "No clear Hired Auto Physical Damage coverage is documented. The certificate must show physical damage coverage (deductible structure or limit) for hired/rented vehicles. Broker must add explicit Hired Auto Physical Damage coverage in the Auto Liability section or Description of Operations.",
+        "pass": false,
+        "found": "Auto Physical Damage line mentions 'incl in Misc Equi' but no explicit Hired Auto Physical Damage coverage or deductible structure shown"
+      },
+      "cancellationNotice": {
+        "note": "Certificate does not explicitly state 30-day cancellation notice. Broker should add '30 days written notice of cancellation' language.",
+        "pass": false,
+        "found": "Top of certificate states notice will be delivered in accordance with policy provisions, but does not specify 30 days"
+      },
+      "contractorCoverage": {
+        "note": "Workers Compensation section marked N/A, so independent contractor coverage cannot be verified on this certificate. If applicable, should be confirmed on payroll company's workers comp certificate.",
+        "pass": false,
+        "found": ""
+      },
+      "waiverOfSubrogation": {
+        "note": "",
+        "pass": true,
+        "found": "SUBR WVD column shows 'Y' for both Commercial General Liability and Automobile Liability; also confirmed in Description of Operations"
+      },
+      "entertainmentPackage": {
+        "note": "",
+        "pass": true,
+        "found": "Miscellaneous Equipment Third Party Property Damage policy 71IML00001000 with $1,000,000 limit; Errors & Omissions policy 130027874 with $3Mil Agg/$1Mil Occ"
+      },
+      "primaryNonContributory": {
+        "note": "",
+        "pass": true,
+        "found": "Description of Operations states: 'Coverage is Primary and Noncontributory and Waiver of Subrogation apply'"
+      }
+    },
+    "aiRiskLevel": "high",
+    "aiRecommendation": "review",
+    "namedInsured": "Sweet Sadie\n936 Kelly Road West\nBoulder, CO 80302",
+    "humanDecision": "COUNTERED"
+  },
+  {
+    "id": "66da23fa-51bb-4d16-a216-bc6f0e7cb4f4",
+    "originalFilename": "Sweet Sadie- 7 Eleven 26- SirReel.pdf",
+    "aiResponse": {
+      "notes": "Certificate fails on four critical items: Non-Owned Autos not checked, Hired Auto Physical Damage not clearly shown, and SirReel not named as Additional Insured or Loss Payee. Primary & Non-Contributory and Waiver of Subrogation are properly documented. All liability limits meet requirements with strong $5M umbrella coverage and entertainment package present.",
+      "hardPass": false,
+      "umbrella": {
+        "note": "",
+        "pass": true,
+        "found": "$5,000,000 Each Occurrence / $5,000,000 Aggregate"
+      },
+      "alertPass": false,
+      "lossPayee": {
+        "note": "Certificate does not show SirReel Production Vehicles Inc. named as Loss Payee. The broker must add Loss Payee endorsement for SirReel and show this in the Description of Operations or on the policy schedule.",
+        "pass": false,
+        "found": ""
+      },
+      "riskLevel": "high",
+      "alertIssues": [
+        "contractorCoverage - No independent contractor coverage shown"
+      ],
+      "insuredName": {
+        "note": "",
+        "pass": true,
+        "found": "Sweet Sadie\n936 Kelly Road West\nBoulder, CO 80302"
+      },
+      "overallPass": false,
+      "workersComp": {
+        "note": "Workers Compensation marked N/A - acceptable if production is using loan-out companies or has separate payroll service COI.",
+        "pass": true,
+        "found": "N/A checked for Workers Compensation"
+      },
+      "criticalPass": false,
+      "namedInsured": "Sweet Sadie\n936 Kelly Road West\nBoulder, CO 80302",
+      "policyExpiry": {
+        "date": "2027-08-01",
+        "note": "",
+        "pass": true,
+        "expired": false
+      },
+      "autoLiability": {
+        "note": "Non-Owned Autos coverage is not checked on the automobile liability section. The broker must reissue the certificate with Non-Owned Autos box checked.",
+        "pass": false,
+        "hiredAutos": {
+          "pass": true,
+          "found": "HIRED AUTOS ONLY box checked"
+        },
+        "nonOwnedAutos": {
+          "pass": false,
+          "found": ""
+        },
+        "combinedSingleLimit": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "coverageDates": {
+        "note": "",
+        "pass": true,
+        "found": "08/01/2026 to 08/01/2027"
+      },
+      "criticalIssues": [
+        "autoLiability - Non-Owned Autos coverage not checked",
+        "autoPhysicalDamage - No clear Hired Auto Physical Damage coverage shown",
+        "additionalInsured - SirReel not named as Additional Insured",
+        "lossPayee - SirReel not named as Loss Payee"
+      ],
+      "generalLiability": {
+        "note": "",
+        "pass": true,
+        "aggregate": {
+          "pass": true,
+          "found": "$2,000,000",
+          "required": "$2,000,000"
+        },
+        "perOccurrence": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "policyExpiryDate": "2027-08-01",
+      "additionalInsured": {
+        "note": "Certificate does not show SirReel Production Vehicles Inc. named as Additional Insured on any policy. The broker must add Additional Insured endorsement for SirReel and reissue the certificate showing ADDL INSD column marked 'Y'.",
+        "pass": false,
+        "found": ""
+      },
+      "certificateHolder": {
+        "note": "",
+        "pass": true,
+        "found": "SirReel Production Vehicles Inc.\n8500 Lankershim Blvd.\nSun Valley, CA 91352"
+      },
+      "autoPhysicalDamage": {
+        "note": "No clear Hired Auto Physical Damage coverage shown. The certificate must explicitly show physical damage coverage (deductible structure or limit) for hired/rented autos. Broker must add this coverage or clarify the physical damage terms in the Description of Operations.",
+        "pass": false,
+        "found": "Auto Physical Damage line shows 'incl in Misc Equi' with no hired auto physical damage detail"
+      },
+      "cancellationNotice": {
+        "note": "Standard cancellation notice clause present, though specific 30-day period not stated.",
+        "pass": true,
+        "found": "SHOULD ANY OF THE ABOVE DESCRIBED POLICIES BE CANCELLED BEFORE THE EXPIRATION DATE THEREOF, NOTICE WILL BE DELIVERED IN ACCORDANCE WITH THE POLICY PROVISIONS"
+      },
+      "contractorCoverage": {
+        "note": "No independent contractor coverage language visible on workers compensation section (marked N/A). If using independent contractors, this coverage should be confirmed.",
+        "pass": false,
+        "found": ""
+      },
+      "waiverOfSubrogation": {
+        "note": "",
+        "pass": true,
+        "found": "SUBR WVD marked 'Y' on General Liability and Auto Liability; also stated in Description of Operations"
+      },
+      "entertainmentPackage": {
+        "note": "",
+        "pass": true,
+        "found": "Miscellaneous Equipment $1,000,000 Limit / Third Party Property Damage $1,000,000 Limit"
+      },
+      "requiresAdminApproval": false,
+      "primaryNonContributory": {
+        "note": "",
+        "pass": true,
+        "found": "Coverage is Primary and Noncontributory and Waiver of Subrogation apply"
+      }
+    },
+    "aiRiskLevel": "high",
+    "aiRecommendation": "review",
+    "namedInsured": "Sweet Sadie\n936 Kelly Road West\nBoulder, CO 80302",
+    "humanDecision": "COUNTERED"
+  },
+  {
+    "id": "661b9e61-8d6e-42e8-ba1a-59a7cc8bf716",
+    "originalFilename": "HighHorsesCOI2026.pdf",
+    "aiResponse": {
+      "notes": "This certificate fails four critical requirements: Non-Owned Auto coverage is not checked, no Hired Auto Physical Damage coverage is shown, and SirReel is not named as Additional Insured or Loss Payee. Additionally, primary/non-contributory language and waiver of subrogation are missing. The broker must reissue with all required endorsements and coverages clearly documented.",
+      "producer": {
+        "email": "gregory.smith@bbrown.com",
+        "phone": "212/2971404",
+        "agency": "Risk Strategies\n485 Lexington Avenue, 17th Floor\nNew York, NY 10017",
+        "address": "485 Lexington Avenue, 17th Floor, New York, NY 10017",
+        "contactName": "Tavy Smith"
+      },
+      "umbrella": {
+        "note": "",
+        "pass": true,
+        "found": "$10,000,000 Each Occurrence / $10,000,000 Aggregate"
+      },
+      "alertPass": false,
+      "lossPayee": {
+        "note": "SirReel Production Vehicles Inc. is not named as Loss Payee. The broker must add Loss Payee status for SirReel Production Vehicles Inc., typically shown in the Description of Operations section.",
+        "pass": false,
+        "found": ""
+      },
+      "riskLevel": "high",
+      "alertIssues": [
+        "primaryNonContributory",
+        "waiverOfSubrogation",
+        "entertainmentPackage",
+        "workersComp",
+        "contractorCoverage"
+      ],
+      "overallPass": false,
+      "workersComp": {
+        "note": "Workers Compensation section shows 'N/A' with limits listed but no carrier assigned (no letter in INSR column). The broker must either assign an insurer letter to show active Workers Comp coverage or provide a separate certificate if coverage is with a payroll company.",
+        "pass": false,
+        "found": ""
+      },
+      "criticalPass": false,
+      "namedInsured": "High Horses\n5301 Southwest Parkway, Suite 400\nAustin, TX 78735",
+      "policyExpiry": {
+        "date": "2027-01-01",
+        "note": "",
+        "pass": true,
+        "expired": false
+      },
+      "autoLiability": {
+        "note": "Non-Owned Autos coverage is not checked. Broker must reissue the certificate with the Non-Owned Autos box marked on the Automobile Liability section.",
+        "pass": false,
+        "hiredAutos": {
+          "pass": true,
+          "found": "Hired Autos box checked"
+        },
+        "nonOwnedAutos": {
+          "pass": false,
+          "found": ""
+        },
+        "combinedSingleLimit": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "coverageDates": {
+        "note": "",
+        "pass": true,
+        "found": "01/01/2026 to 01/01/2027"
+      },
+      "criticalIssues": [
+        "autoLiability",
+        "autoPhysicalDamage",
+        "additionalInsured",
+        "lossPayee"
+      ],
+      "generalLiability": {
+        "note": "",
+        "pass": true,
+        "aggregate": {
+          "pass": true,
+          "found": "$2,000,000",
+          "required": "$2,000,000"
+        },
+        "perOccurrence": {
+          "pass": true,
+          "found": "$1,000,000",
+          "required": "$1,000,000"
+        }
+      },
+      "policyExpiryDate": "2027-01-01",
+      "additionalInsured": {
+        "note": "SirReel Production Vehicles Inc. is not named as Additional Insured. The broker must add Additional Insured status for SirReel Production Vehicles Inc. on the General Liability and Auto Liability policies and mark the ADDL INSD column with 'X' or 'Y'.",
+        "pass": false,
+        "found": ""
+      },
+      "certificateHolder": {
+        "note": "",
+        "pass": true,
+        "found": "SirReel Production Vehicles, Inc.,\n8500 Lankershim Blvd\nSun Valley, CA 91352"
+      },
+      "autoPhysicalDamage": {
+        "note": "No Hired Auto Physical Damage coverage is shown on this certificate. The broker must add coverage for physical damage to hired/rented vehicles, typically shown as a separate line item or in the Description of Operations with applicable deductibles. This is required to cover damage to SirReel's rental vehicles.",
+        "pass": false,
+        "found": ""
+      },
+      "cancellationNotice": {
+        "note": "",
+        "pass": true,
+        "found": "Notice language present in cancellation section"
+      },
+      "contractorCoverage": {
+        "note": "No independent contractor coverage is mentioned on the Workers Compensation policy. If the insured uses subcontractors, this coverage should be confirmed.",
+        "pass": false,
+        "found": ""
+      },
+      "waiverOfSubrogation": {
+        "note": "The SUBR WVD column does not show 'Y' or 'X' on any policy line. The broker must add waiver of subrogation endorsement in favor of SirReel Production Vehicles Inc. and mark the SUBR WVD column accordingly.",
+        "pass": false,
+        "found": ""
+      },
+      "entertainmentPackage": {
+        "note": "No Entertainment Package or Rented Equipment coverage is shown. While not always required, this is preferred for production work. Consider requesting if appropriate for this rental.",
+        "pass": false,
+        "found": ""
+      },
+      "primaryNonContributory": {
+        "note": "No primary and non-contributory language appears on the certificate. The broker should reissue the COI showing primary and non-contributory wording in the Description of Operations (e.g., 'coverage is primary and non-contributory as respects SirReel Production Vehicles Inc.') or reference form CG 20 01. This is a standard endorsement available same-day at no cost.",
+        "pass": false,
+        "found": ""
+      }
+    },
+    "aiRiskLevel": "high",
+    "aiRecommendation": "review",
+    "namedInsured": "High Horses\n5301 Southwest Parkway, Suite 400\nAustin, TX 78735",
+    "humanDecision": "APPROVED"
+  }
+]
