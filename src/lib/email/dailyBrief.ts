@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { clientPaperworkIn } from '@/lib/orders/holdOnQuoteSend'
 import { renderEmailShell, renderEmailText } from '@/lib/email/templates/shell'
+import { orderContentsLine, type SummarizableLine } from '@/lib/orders/contentSummary'
 import {
   describeClientCreatedJob,
   listClientCreatedUnquoted,
@@ -89,6 +90,11 @@ interface BriefRow {
   companyName: string
   start: string | null
   end: string | null
+  /** The lines, kept so the contents line can be built once the units are in. */
+  lines: SummarizableLine[]
+  /** "SuperCube Truck ×2 · Pro Supplies — Cube 27" — filled for the rows
+   *  that actually render (see `nameContents`). */
+  contents: string | null
   blockers: string[]
 }
 
@@ -135,7 +141,18 @@ async function gather(now: Date): Promise<{ rows: BriefRow[]; today: string }> {
       status: true,
       startDate: true,
       endDate: true,
-      lineItems: { select: { pickupDate: true, returnDate: true } },
+      lineItems: {
+        select: {
+          pickupDate: true,
+          returnDate: true,
+          // What is IN the order, for the contents line under each row.
+          description: true,
+          department: true,
+          type: true,
+          quantity: true,
+          parentLineItemId: true,
+        },
+      },
       booking: { select: { startDate: true, endDate: true, status: true } },
       job: {
         select: {
@@ -165,10 +182,52 @@ async function gather(now: Date): Promise<{ rows: BriefRow[]; today: string }> {
       companyName: o.job?.company?.name ?? '',
       start: w.start ? w.start.toISOString().slice(0, 10) : null,
       end: w.end ? w.end.toISOString().slice(0, 10) : null,
+      lines: o.lineItems.map((li) => ({
+        description: li.description,
+        department: li.department,
+        type: li.type,
+        quantity: li.quantity,
+        parentLineItemId: li.parentLineItemId,
+      })),
+      contents: null,
       blockers: [],
     })
   }
   return { rows, today }
+}
+
+/**
+ * Fill in each row's contents line — what is in the order, and which units
+ * are reserved for it (Wes 2026-09-18, on the Going out list: "let's name
+ * the vehicles and or order type"). A job name and an order number say
+ * nothing about whether today's 8am is a Cube truck or a pallet of shoe
+ * covers.
+ *
+ * Units come from `BookingAssignment.orderId` in ONE query over the rows
+ * that actually render. Bookings are job-level and shared by sibling
+ * orders, so the assignment's own order stamp is the only safe attribution
+ * — reading the order's booking would name a truck going out on a
+ * different order. RETURNED and SWAPPED are left out: one is back, the
+ * other was taken off the job.
+ */
+async function nameContents(rows: BriefRow[]): Promise<void> {
+  const orderIds = [...new Set(rows.map((r) => r.orderId))]
+  const byOrder = new Map<string, string[]>()
+  if (orderIds.length) {
+    const assignments = await prisma.bookingAssignment.findMany({
+      where: { orderId: { in: orderIds }, status: { in: ['ASSIGNED', 'CHECKED_OUT'] } },
+      select: { orderId: true, asset: { select: { unitName: true } } },
+    })
+    for (const a of assignments) {
+      if (!a.orderId || !a.asset?.unitName) continue
+      const list = byOrder.get(a.orderId) ?? []
+      list.push(a.asset.unitName)
+      byOrder.set(a.orderId, list)
+    }
+  }
+  for (const r of rows) {
+    r.contents = orderContentsLine(r.lines, byOrder.get(r.orderId) ?? [])
+  }
 }
 
 function overdueLabel(r: BriefRow): string {
@@ -212,6 +271,11 @@ function rowHtml(
           &middot; ${esc(r.status.replace(/_/g, ' ').toLowerCase())}
           ${window ? `&middot; ${window}` : ''}
         </div>
+        ${
+          r.contents
+            ? `<div style="margin-top:3px;font-size:14px;color:${BODY};">${esc(r.contents)}</div>`
+            : ''
+        }
         ${blockers}
       </td>
     </tr>`
@@ -288,7 +352,9 @@ function textSection(title: string, rows: BriefRow[]): string[] {
       (r) =>
         `  ${r.jobName}${r.companyName ? ` (${r.companyName})` : ''} — ${r.orderNumber}, ${r.status
           .replace(/_/g, ' ')
-          .toLowerCase()}${r.blockers.length ? ` — ${r.blockers.join('; ')}` : ' — ready'}\n    ${
+          .toLowerCase()}${r.blockers.length ? ` — ${r.blockers.join('; ')}` : ' — ready'}${
+          r.contents ? `\n    ${r.contents}` : ''
+        }\n    ${
           r.jobId ? `${HQ}/jobs/${r.jobId}` : `${HQ}/orders/${r.orderId}`
         }`,
     ),
@@ -364,6 +430,9 @@ export async function buildDailyBrief(
   const ahead = movable
     .filter((r) => r.start !== null && r.start > focusDay && r.start <= weekEnd)
     .sort((a, b) => (a.start! < b.start! ? -1 : 1))
+
+  // What is in each rendered row — one query for all four sections.
+  await nameContents([...goingOut, ...comingBack, ...ahead, ...stillOut])
 
   const dayLabel = longDay(focusDay)
   const lead =

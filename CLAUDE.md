@@ -1967,6 +1967,34 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   the role gate on the Billing lane (Wes's recommendation was to leave it
   visible); the New inbound column link; Phase 3 (Gmail-native sending).
 
+## The brief says what is in the order (2026-09-18 — Wes)
+- Wes, on the morning brief's Going out list: "let's name the vehicles and
+  or order type." Every row read job · company · order number · status ·
+  blocker — nothing said whether today's 8am is a Cube truck or a pallet of
+  shoe covers.
+- **One contents line per row, and it reuses the job page's wording.**
+  `orderContentsLine()` in `src/lib/orders/contentSummary.ts` wraps the
+  existing `orderContentSummary` (vehicles/stages named individually,
+  everything else collapsed to its department label — the 2026-09-14 rule)
+  and appends the UNITS reserved for that order:
+  `SuperCube Truck ×2 · Pro Supplies — Cube 27, Cube 31`. The class says
+  what was sold; the unit says which truck leaves, and the yard reads this
+  email too. Capped at 4 units then "+N more"; deduped and numerically
+  sorted so the line reads the same every send.
+- **Units come from `BookingAssignment.orderId`, never from the order's
+  booking.** Bookings are JOB-level and shared by sibling orders
+  (`siblingOrdersWhere` in holdOnQuoteSend.ts), so reading units off
+  `order.booking` would name a truck going out on a different order. An
+  assignment with no order stamp (legacy rows, a hold placed before the
+  order existed) names no unit rather than guessing. RETURNED and SWAPPED
+  are excluded — one is back, the other was taken off the job.
+- Applies to all four sections (Going out, Coming back, Later this week,
+  Still out) — "which truck has not come back" is the same question. One
+  extra query for the whole brief (`nameContents` in dailyBrief.ts, over
+  the rows that actually render); the line items ride on the select
+  `gather()` already makes.
+- `npm run test:order-summary`.
+
 ## Active Roadmap
 1. AI fleet optimization
 2. RentalWorks token refresh automation
