@@ -1786,12 +1786,31 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   the human-reason allowlists in `/api/jobs/[id]/mark-lost` and
   `/api/orders/[id]/mark-lost`. Nothing else in the codebase branches on a
   lost reason.
-- **Enum value by additive SQL, NEVER `db push`, and BEFORE the deploy:**
-  `npx tsx scripts/add-insurance-lost-reason.ts` (one
-  `ALTER TYPE … ADD VALUE IF NOT EXISTS`, idempotent), or the same statement
-  pasted into the Neon console from an iPad. A Prisma client 500s reading an
-  enum value Postgres does not have, and the picker offers it the moment the
-  code is live.
+- **Enum value by additive SQL, NEVER `db push`:** /admin/maintenance →
+  **"Add the insurance lost reason"** (`insurance-lost-reason`), or on a
+  laptop `npx tsx scripts/add-insurance-lost-reason.ts [--dry]` — one
+  implementation (`INSURANCE_LOST_REASON_DDL` in
+  `src/lib/orders/lostReasonEnumSql.ts` + `runAdditiveDdl`), two doors. Run
+  it BEFORE or right after the deploy: the picker offers the option the
+  moment the code is live, and until the label exists Postgres refuses the
+  submit.
+- **This OPENED A SECOND SHAPE in the phone-runnable DDL gate** (Wes
+  2026-09-18: "Put this in HQ in the run a task"). `isAdditiveStatement` now
+  also passes `ALTER TYPE "X" ADD VALUE IF NOT EXISTS 'Y'` — on the SAME
+  reasoning that admitted `CREATE TABLE IF NOT EXISTS`, not as a relaxation
+  of it: one statement, nothing partial if it fails, a no-op run twice. The
+  regex is **anchored at both ends** around a quoted type and a quoted
+  label, so a `BEFORE`/`AFTER` clause, a `RENAME VALUE`, an unquoted
+  identifier or a second statement behind a semicolon are all still refused,
+  and `ALTER TABLE … ADD COLUMN` **stays a laptop job** — it touches an
+  existing table in a DB with known drift, which is the failure mode the
+  rule exists for. `npm run test:maintenance-tasks` pins all eight
+  directions.
+- `runAdditiveDdl` verifies an enum the way it verifies a table: reads
+  `pg_enum` before and after and prints the type's whole label list, so a
+  phone screen proves the run took. `AdditiveDdl.enums` is how a task
+  declares what it will add; `tables: []` is legal now, but a schema task
+  must declare one or the other or the test fails.
 - NOT done: nothing ties the loss back to the COI record that failed — the
   reason is a bare classification, and "which requirement did they miss" is
   still only in the rep's note. No reporting groups losses by reason yet.

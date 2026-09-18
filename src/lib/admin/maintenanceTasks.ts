@@ -18,19 +18,21 @@
  *    a script name from the request. A web endpoint that runs whatever it is
  *    handed is a remote shell with a login page in front of it.
  *
- * 2. **No schema changes — with ONE named exception.** `category: 'schema'`
- *    (2026-09-17, Wes: "It's not possible to do any of this from my phone")
- *    is allowed ONLY for `CREATE TABLE / INDEX … IF NOT EXISTS`: a task in
- *    that category carries its statements as `ddl` and every one must pass
- *    `isAdditiveStatement` (additiveDdl.ts) — the registry test checks it at
- *    build time, the runner refuses at run time. A brand-new table has no
- *    half-run state, so the reason the rule existed does not apply to it.
- *    The `add-*-columns` / `ALTER TYPE` scripts STAY on a laptop: the live
- *    DB carries objects no schema file knows, their failure mode is a
- *    half-migrated production database, and they are the class of change
- *    that genuinely wants someone at a keyboard who can read the error and
- *    act on it. Tasks that DEPEND on such a migration say so and refuse
- *    (see the enum preflight in seedVsmPlanet.ts).
+ * 2. **No schema changes — except TWO named statement shapes.**
+ *    `category: 'schema'` (2026-09-17, Wes: "It's not possible to do any of
+ *    this from my phone") is allowed ONLY for `CREATE TABLE / INDEX … IF NOT
+ *    EXISTS` and `ALTER TYPE "X" ADD VALUE IF NOT EXISTS 'Y'` (2026-09-18):
+ *    a task in that category carries its statements as `ddl` and every one
+ *    must pass `isAdditiveStatement` (additiveDdl.ts) — the registry test
+ *    checks it at build time, the runner refuses at run time. Both shapes
+ *    qualify for the same reason: ONE statement, nothing partial if it
+ *    fails, a no-op if it is run twice. The `add-*-columns` scripts — and
+ *    every other ALTER — STAY on a laptop: the live DB carries objects no
+ *    schema file knows, their failure mode is a half-migrated production
+ *    database, and they are the class of change that genuinely wants
+ *    someone at a keyboard who can read the error and act on it. Tasks that
+ *    DEPEND on such a migration say so and refuse (see the enum preflight
+ *    in seedVsmPlanet.ts).
  *
  * Every task is idempotent, supports a dry run, and reports what it did.
  */
@@ -39,6 +41,7 @@ import type { AdditiveDdl } from '@/lib/admin/additiveDdl'
 import { JOB_THREAD_TABLES_DDL } from '@/lib/email/jobThreadTableSql'
 import { DATE_CHANGE_REQUEST_TABLE_DDL } from '@/lib/portal/dateChangeTableSql'
 import { BROKER_TABLES_DDL } from '@/lib/coi/brokerTableSql'
+import { INSURANCE_LOST_REASON_DDL } from '@/lib/orders/lostReasonEnumSql'
 
 export type MaintenanceCategory = 'seed' | 'backfill' | 'schema'
 
@@ -185,6 +188,17 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     writes: 'sr_brokers, sr_broker_clients (each created only if absent, with its indexes) \u00b7 sr_audit_logs',
     cliEquivalent: 'npx tsx scripts/add-broker-tables.ts',
     ddl: BROKER_TABLES_DDL,
+  },
+  {
+    id: 'insurance-lost-reason',
+    title: 'Add the insurance lost reason',
+    summary: 'Adds INSURANCE to the LostReason enum, so "Insurance requirements not met" can be saved when a job is marked lost.',
+    detail:
+      'Wes 2026-09-18: "We\u2019ve lost a couple of jobs because of improper insurance from the Production. I\u2019d like to have this as an option." The option is in the Mark lost picker (and the one on /orders) as soon as the code is deployed, but Postgres types that column as an enum \u2014 until this has run, picking it and pressing Mark lost fails. This runs one statement, ALTER TYPE "LostReason" ADD VALUE IF NOT EXISTS \u2018INSURANCE\u2019, and then prints the type\u2019s whole label list so you can see it took. No row is read or rewritten, nothing else on the enum moves, and running it twice changes nothing. Dry run only reads the catalog and says whether the label is there.',
+    category: 'schema',
+    writes: 'the LostReason enum type (one new label) \u00b7 sr_audit_logs',
+    cliEquivalent: 'npx tsx scripts/add-insurance-lost-reason.ts',
+    ddl: INSURANCE_LOST_REASON_DDL,
   },
   {
     id: 'seed-known-brokers',

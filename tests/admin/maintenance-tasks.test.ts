@@ -13,9 +13,10 @@
  *   · `maintenanceRunner` refuses an id that is not in the registry, which
  *     is the allowlist itself;
  *   · NO TASK CHANGES SCHEMA except a `schema` task, and that one may only
- *     carry CREATE … IF NOT EXISTS statements (`isAdditiveStatement`) —
- *     this catches anyone smuggling an ALTER or a DROP in behind the one
- *     door that was opened for brand-new tables;
+ *     carry CREATE … IF NOT EXISTS or ALTER TYPE … ADD VALUE IF NOT EXISTS
+ *     statements (`isAdditiveStatement`) — this catches anyone smuggling a
+ *     DROP, an ADD COLUMN or a second statement in behind the two doors
+ *     that were opened for brand-new tables and single enum labels;
  *   · every task says what it writes and names its CLI equivalent, so the
  *     two entry points can never drift apart unnoticed;
  *   · declared params are the only ones the route will forward, so each
@@ -59,10 +60,18 @@ const schema = MAINTENANCE_TASKS.filter((t) => t.category === 'schema')
 const prose = nonSchema.map((t) => `${t.title} ${t.summary} ${t.writes}`).join(' ')
 yes('no seed/backfill advertises DDL', !/\bALTER\b|\bCREATE TABLE\b|\bDROP\b|add-.*-columns/i.test(prose))
 yes('only a schema task carries statements', nonSchema.every((t) => t.ddl === undefined))
-yes('every schema task carries statements', schema.every((t) => (t.ddl?.statements.length ?? 0) > 0 && (t.ddl?.tables.length ?? 0) > 0))
-yes('every schema statement is CREATE … IF NOT EXISTS', schema.every((t) => t.ddl!.statements.every(isAdditiveStatement)))
-yes('every schema statement names a table the task declares', schema.every((t) =>
-  t.ddl!.statements.every((sql) => t.ddl!.tables.some((tbl) => sql.includes(`"${tbl}"`)))))
+// A schema task declares what it will make — tables, enum values, or both —
+// so the runner has something to check the catalog against afterwards.
+yes('every schema task carries statements', schema.every((t) => (t.ddl?.statements.length ?? 0) > 0))
+yes('every schema task declares what it creates', schema.every((t) =>
+  (t.ddl?.tables.length ?? 0) > 0 || (t.ddl?.enums ?? []).some((e) => e.values.length > 0)))
+yes('every schema statement passes the gate', schema.every((t) => t.ddl!.statements.every(isAdditiveStatement)))
+// Every statement has to be accounted for by something the task declared —
+// a statement touching an object the task never named is one nothing checks.
+yes('every schema statement names a table or enum the task declares', schema.every((t) =>
+  t.ddl!.statements.every((sql) =>
+    t.ddl!.tables.some((tbl) => sql.includes(`"${tbl}"`)) ||
+    (t.ddl!.enums ?? []).some((e) => sql.includes(`"${e.type}"`) && e.values.some((v) => sql.includes(`'${v}'`))))))
 
 // The gate itself, both directions.
 yes('gate: CREATE TABLE IF NOT EXISTS passes', isAdditiveStatement('CREATE TABLE IF NOT EXISTS "x" ("id" TEXT NOT NULL)'))
@@ -72,6 +81,15 @@ yes('gate: ALTER is refused', !isAdditiveStatement('ALTER TABLE "x" ADD COLUMN I
 yes('gate: DROP is refused', !isAdditiveStatement('DROP TABLE IF EXISTS "x"'))
 yes('gate: a CREATE hiding a DROP is refused', !isAdditiveStatement('CREATE TABLE IF NOT EXISTS "x" ("id" TEXT); DROP TABLE "y"'))
 yes('gate: a CREATE hiding an UPDATE is refused', !isAdditiveStatement('CREATE INDEX IF NOT EXISTS "i" ON "x" ("id"); UPDATE "x" SET "id" = 1'))
+// The second door (2026-09-18): ONE enum label, whole statement, nothing else.
+yes('gate: ALTER TYPE ADD VALUE IF NOT EXISTS passes', isAdditiveStatement(`ALTER TYPE "LostReason" ADD VALUE IF NOT EXISTS 'INSURANCE'`))
+yes('gate: … with a trailing semicolon passes', isAdditiveStatement(`ALTER TYPE "LostReason" ADD VALUE IF NOT EXISTS 'INSURANCE';`))
+yes('gate: ALTER TYPE ADD VALUE without IF NOT EXISTS is refused', !isAdditiveStatement(`ALTER TYPE "LostReason" ADD VALUE 'INSURANCE'`))
+yes('gate: ALTER TYPE … BEFORE a label is refused', !isAdditiveStatement(`ALTER TYPE "LostReason" ADD VALUE IF NOT EXISTS 'INSURANCE' BEFORE 'OTHER'`))
+yes('gate: ALTER TYPE RENAME is refused', !isAdditiveStatement(`ALTER TYPE "LostReason" RENAME VALUE 'OTHER' TO 'INSURANCE'`))
+yes('gate: ALTER TYPE hiding a second statement is refused', !isAdditiveStatement(`ALTER TYPE "LostReason" ADD VALUE IF NOT EXISTS 'X'; DROP TABLE "sr_orders"`))
+yes('gate: ALTER TABLE ADD COLUMN is still refused', !isAdditiveStatement('ALTER TABLE "sr_orders" ADD COLUMN IF NOT EXISTS "y" TEXT'))
+yes('gate: ALTER TABLE DROP COLUMN is refused', !isAdditiveStatement('ALTER TABLE "sr_orders" DROP COLUMN "y"'))
 
 for (const t of MAINTENANCE_TASKS) {
   yes(`${t.id}: has a title`, t.title.length > 5)

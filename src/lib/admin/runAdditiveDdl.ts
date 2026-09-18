@@ -21,6 +21,20 @@ export interface AdditiveDdlResult {
   created: string[]
   /** Tables still absent after the run — non-empty means a statement did not do what it says. */
   missingAfter: string[]
+  /** Enum labels the run added, as "Type.VALUE" (empty on a dry run). */
+  enumValuesAdded: string[]
+  /** Enum labels still absent after the run. */
+  enumValuesMissingAfter: string[]
+}
+
+/** The labels a Postgres enum type currently carries, in sort order. */
+async function enumLabels(type: string): Promise<string[]> {
+  const rows = await prisma.$queryRawUnsafe<{ enumlabel: string }[]>(
+    `SELECT e.enumlabel FROM pg_type t JOIN pg_enum e ON e.enumtypid = t.oid
+      WHERE t.typname = $1 ORDER BY e.enumsortorder`,
+    type,
+  )
+  return rows.map((r) => r.enumlabel)
 }
 
 async function existingTables(names: readonly string[]): Promise<string[]> {
@@ -45,7 +59,7 @@ export async function runAdditiveDdl(ddl: AdditiveDdl, opts: { dryRun: boolean }
   const bad = ddl.statements.filter((s) => !isAdditiveStatement(s))
   if (bad.length) {
     throw new TaskRefused(
-      `Refusing: ${bad.length} statement${bad.length === 1 ? ' is' : 's are'} not CREATE … IF NOT EXISTS (${statementHeadline(bad[0])}).`,
+      `Refusing: ${bad.length} statement${bad.length === 1 ? ' is' : 's are'} neither CREATE … IF NOT EXISTS nor ALTER TYPE … ADD VALUE IF NOT EXISTS (${statementHeadline(bad[0])}).`,
       'Only additive, idempotent DDL runs from here. Anything else stays a laptop job.',
     )
   }
@@ -55,9 +69,28 @@ export async function runAdditiveDdl(ddl: AdditiveDdl, opts: { dryRun: boolean }
   const absent = ddl.tables.filter((t) => !before.includes(t))
   for (const t of ddl.tables) log.push(before.includes(t) ? `= ${t} already exists` : `+ ${t} would be created`)
 
+  // An enum value is checked the same way a table is: read the catalog
+  // before, read it again after, and say which labels are still missing.
+  const enums = ddl.enums ?? []
+  const labelsBefore = new Map<string, string[]>()
+  for (const e of enums) {
+    const have = await enumLabels(e.type)
+    labelsBefore.set(e.type, have)
+    for (const v of e.values) {
+      log.push(have.includes(v) ? `= ${e.type} already has ${v}` : `+ ${e.type} would gain ${v}`)
+    }
+  }
+  const enumsAbsent = enums.flatMap((e) =>
+    e.values.filter((v) => !(labelsBefore.get(e.type) ?? []).includes(v)).map((v) => `${e.type}.${v}`),
+  )
+
   if (opts.dryRun) {
-    log.push('', absent.length ? `Dry run — ${absent.length} table${absent.length === 1 ? '' : 's'} to create. Nothing written.` : 'Dry run — nothing to create.')
-    return { log, existedBefore: before, created: [], missingAfter: absent }
+    const todo = absent.length + enumsAbsent.length
+    log.push('', todo ? `Dry run — ${todo} change${todo === 1 ? '' : 's'} to make. Nothing written.` : 'Dry run — nothing to do.')
+    return {
+      log, existedBefore: before, created: [], missingAfter: absent,
+      enumValuesAdded: [], enumValuesMissingAfter: enumsAbsent,
+    }
   }
 
   log.push('')
@@ -72,5 +105,19 @@ export async function runAdditiveDdl(ddl: AdditiveDdl, opts: { dryRun: boolean }
   log.push('')
   for (const t of after) log.push(`${t}: ${(await columnsOf(t)).join(', ')}`)
   for (const t of missingAfter) log.push(`! ${t} is STILL missing — a statement did not create it`)
-  return { log, existedBefore: before, created, missingAfter }
+
+  const enumValuesAdded: string[] = []
+  const enumValuesMissingAfter: string[] = []
+  for (const e of enums) {
+    const have = await enumLabels(e.type)
+    // The whole label list, so a phone screen proves the run took.
+    log.push(`${e.type}: ${have.join(', ')}`)
+    for (const v of e.values) {
+      if (!have.includes(v)) enumValuesMissingAfter.push(`${e.type}.${v}`)
+      else if (!(labelsBefore.get(e.type) ?? []).includes(v)) enumValuesAdded.push(`${e.type}.${v}`)
+    }
+  }
+  for (const v of enumValuesMissingAfter) log.push(`! ${v} is STILL missing — a statement did not add it`)
+
+  return { log, existedBefore: before, created, missingAfter, enumValuesAdded, enumValuesMissingAfter }
 }

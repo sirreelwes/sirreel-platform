@@ -195,6 +195,23 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
           : `${n} table${n === 1 ? '' : 's'} created. The broker list works now.`
     return { log: r.log, createdIds: [], touchedIds: r.created, headline }
   },
+  'insurance-lost-reason': async ({ dryRun }) => {
+    const task = MAINTENANCE_TASKS.find((t) => t.id === 'insurance-lost-reason')
+    if (!task?.ddl) throw new TaskRefused('This task carries no statements.', 'Add `ddl` to its registry entry.')
+    const r = await runAdditiveDdl(task.ddl, { dryRun })
+    const headline = r.enumValuesMissingAfter.length && !dryRun
+      ? `${r.enumValuesMissingAfter.join(', ')} still missing after the run — read the log.`
+      : dryRun
+        ? r.enumValuesMissingAfter.length
+          ? 'Dry run — INSURANCE would be added to LostReason.'
+          : 'Dry run — LostReason already has INSURANCE. Nothing to do.'
+        : r.enumValuesAdded.length === 0
+          ? 'LostReason already had INSURANCE — nothing to do.'
+          : 'INSURANCE added. "Insurance requirements not met" can be saved on a lost job now.'
+    // An enum label is not a row: nothing to clean up by id. `touchedIds`
+    // names the labels added, which is what the audit row should carry.
+    return { log: r.log, createdIds: [], touchedIds: r.enumValuesAdded, headline }
+  },
   'seed-known-brokers': async ({ dryRun }) => {
     const r = await seedKnownBrokers({ dryRun })
     const headline =
