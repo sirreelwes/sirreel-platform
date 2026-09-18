@@ -26,6 +26,8 @@ import {
   agreementFilename,
   standingTermsSummary,
 } from '../../src/lib/contracts/fileNegotiatedAgreement'
+import { negotiatedAgreementForCompany } from '../../src/lib/contracts/negotiatedAgreement'
+import { negotiatedSource, negotiatedKeyFromSource } from '../../src/lib/portal/companyAnnual'
 
 const failures: string[] = []
 const check = (cond: unknown, msg: string) => {
@@ -63,6 +65,18 @@ const VERIFIED_CLAUSE_DIGEST = 'd9c6c5444393222d1fea3601fd3d1dbac1e0c896e86f72be
 const VERIFIED_WORD_COUNT = 2776
 
 /**
+ * The clauses SirReel appends, as they stand on 2026-09-18: §32 Third-Party
+ * Equipment, verbatim from `canonical('30')`.
+ *
+ * NOT verified against the client's PDF — it cannot be, because their May
+ * redline predates the clause. What this pins is that the text inside a
+ * FILED contract does not move without someone saying so: either our
+ * baseline clause changed under it, or an agreed override was added here.
+ * Both are legitimate; both must be deliberate.
+ */
+const APPENDED_CLAUSE_DIGEST = '7f9baeb1eb9ffeb40d78cddbd19e8339965345ae622f42926d1dd3ce47674ca0'
+
+/**
  * Layout wrapping and pdftotext-style hyphenation are extraction artifacts,
  * not content, so whitespace and hyphens are squashed before comparing.
  * Everything else — every word, in order — must match.
@@ -79,6 +93,9 @@ async function main() {
   const a = GRADUATION_DAY_2026
 
   // 0. The text is still the text that was verified against the client's PDF.
+  //    THEIR clauses only — this digest stands in for a comparison against
+  //    the client's own file, so nothing but their 31 clauses may enter it.
+  //    The clauses SirReel appends have their own digest below.
   const joined = a.clauses.map((c) => `${c.ref}|${c.title}|${c.body}`).join('\n')
   const digest = createHash('sha256').update(joined, 'utf8').digest('hex')
   check(
@@ -90,6 +107,32 @@ async function main() {
   check(
     joined.split(/\s+/).filter(Boolean).length === VERIFIED_WORD_COUNT,
     `negotiated clause word count changed (expected ${VERIFIED_WORD_COUNT})`,
+  )
+
+  // 0b. The clauses SIRREEL APPENDS are pinned separately.
+  //
+  //     Nothing guarded them until 2026-09-18, and the hole was real: §32's
+  //     body is `canonical('30')` — the BASELINE Third-Party Equipment
+  //     clause, shared with RentalAgreementBody, SignedAgreementDocument and
+  //     the review tooling's baseline map. So an edit to our standard clause
+  //     silently rewrote a clause inside a FILED client contract, and a
+  //     client's redline typed into contractClauses.ts would have
+  //     renegotiated that clause for every other client at once.
+  //
+  //     Graduation Day's counsel redlined exactly this clause on 2026-09-17.
+  //     When those words are agreed they go in `appendedClauses` as an
+  //     override with their provenance — and this digest is what says so out
+  //     loud. Re-verify the override against their signed-off text before
+  //     bumping it; do not bump it to make a red test green.
+  const appendedJoined = a.appendedClauses.map((c) => `${c.ref}|${c.title}|${c.body}`).join('\n')
+  const appendedDigest = createHash('sha256').update(appendedJoined, 'utf8').digest('hex')
+  check(
+    appendedDigest === APPENDED_CLAUSE_DIGEST,
+    `appended clause text changed.\n` +
+      `      expected ${APPENDED_CLAUSE_DIGEST}\n` +
+      `      got      ${appendedDigest}\n` +
+      `      If this is a client's agreed redline, it belongs in appendedClauses as an override —\n` +
+      `      NEVER in contractClauses.ts, which every other client's agreement renders from.`,
   )
 
   // 1. The client's clauses, and the deliberate gap where 15 was.
@@ -190,6 +233,76 @@ async function main() {
   check(named.endsWith('.pdf'), 'the filed document must be named as a PDF')
   check(named.includes('Party Giraffes LLC'), 'the filename must name the company it was rendered for')
   check(!/[,/\\]/.test(named), 'the filename must not carry a comma or a path separator')
+
+  // 12. WHICH document the account portal offers. A company in the registry
+  //     must reach its own agreement, and a company that is not must reach
+  //     NOTHING rather than the nearest match — offering one client's
+  //     negotiated terms to another is the worst failure in this file.
+  check(
+    negotiatedAgreementForCompany('Graduation Day Productions')?.key === a.key,
+    'the registry must resolve Graduation Day to their agreement',
+  )
+  check(
+    negotiatedAgreementForCompany('Party Giraffes, LLC')?.key === a.key,
+    'the registry must resolve the aliased company by its DB name',
+  )
+  check(
+    negotiatedAgreementForCompany('Giraffe Air LLC DBA Studio Sands') === undefined,
+    'a company that merely LOOKS similar must resolve to nothing',
+  )
+  check(negotiatedAgreementForCompany(null) === undefined, 'no company name resolves to nothing')
+  check(
+    negotiatedAgreementForCompany('graduation day productions') === undefined,
+    'matching is exact — case included',
+  )
+
+  // 13. The offer records which document it is, and the signature reads it
+  //     back. If this round-trip breaks, a negotiated offer countersigns as
+  //     the BASELINE — the client signs clauses they never read.
+  check(negotiatedKeyFromSource(negotiatedSource(a.key)) === a.key, 'the negotiated key must round-trip through source')
+  check(negotiatedKeyFromSource('INTERNAL') === null, 'a baseline offer must not read as negotiated')
+  check(negotiatedKeyFromSource(null) === null, 'a null source must not read as negotiated')
+  check(negotiatedKeyFromSource('NEGOTIATED:') === null, 'an empty key must not read as negotiated')
+
+  // 14. The countersigned copy is THEIR document with the signature on it.
+  //     Rendered here because the failure mode is silent: a signature block
+  //     over our canonical clauses looks like a valid contract.
+  const signedBuf = await generateNegotiatedAgreementPdf({
+    agreement: a,
+    companyName: 'Graduation Day Productions',
+    signature: {
+      signerName: 'Nicholas Marell',
+      signerTitle: 'General Counsel',
+      signerEmail: 'counsel@example.com',
+      acknowledgmentText: `I have read and agree to the ${a.title} above on behalf of my company.`,
+      signedAt: new Date('2026-09-18T17:00:00Z'),
+      ipAddress: '203.0.113.9',
+      userAgent: 'Mozilla/5.0 (iPhone)',
+    },
+  })
+  const signedFlat = squash(
+    ((await new PDFParse({ data: new Uint8Array(signedBuf) }).getText()).text ?? '').replace(/\u0000/g, ''),
+  )
+  for (const [probe, label] of [
+    [a.clauses[0].body, "their clause 1 in the SIGNED copy"],
+    [a.appendedClauses[0].body, 'the appended clause in the SIGNED copy'],
+    ['Nicholas Marell', 'the signer'],
+    ['General Counsel', "the signer's title"],
+    ['E-SIGN audit trail', 'the audit trail'],
+    ['203.0.113.9', 'the IP address'],
+  ] as const) {
+    check(signedFlat.includes(squash(probe)), `${label} is missing from the countersigned render`)
+  }
+  // The blank Lessee line is what a reader checks to see whether a document
+  // was executed. It must be GONE once it has been.
+  check(
+    !signedFlat.includes(squash('Signature of Authorized Representative')),
+    'the countersigned copy must not still offer a blank Lessee signature line',
+  )
+  check(
+    signedFlat.includes(squash('SirReel Representative Signature')),
+    "SirReel's own signature line stays on the countersigned copy",
+  )
 
   // 11. The standing-terms summary is what future-Wes reads to remember WHAT
   //     was negotiated — so it has to name the additions, not just the deal.

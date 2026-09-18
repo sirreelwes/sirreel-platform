@@ -212,9 +212,83 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   overrides it when the dry run says a name did not match — one per LINE or
   semicolon, never comma-separated, because the values carry commas.
 - Coverage is read live, so jobs already open for these companies are covered
-  on their next read; no backfill. **Not run yet** — this session had no
-  production access. `npm run test:negotiated-agreement`,
-  `npm run test:maintenance-tasks`.
+  on their next read; no backfill. **RAN 2026-09-18 (Wes, from the phone):
+  both masters filed, standing terms set on both companies.**
+  `npm run test:negotiated-agreement`, `npm run test:maintenance-tasks`.
+
+### They sign THEIR document, not ours (2026-09-18 — Wes: "build the proper door")
+- The filed masters cover with **no signature on them** — a third state the
+  two-state model in `companyAnnual.ts` did not have (covering, unsigned,
+  never offered). The door to fix that existed but pointed at the wrong
+  document: `offerAnnualForSignature` built EVERY offer from
+  `CANONICAL_CLAUSES` via `generateCounterPdf`, so offering an annual to
+  Graduation Day would have put our standard terms in front of the one
+  client whose lawyer spent five months not agreeing to them — and
+  `signAnnual` would then have countersigned OUR clauses under their
+  signature. Both paths now render the negotiated document.
+- **Which document a row IS lives in `CompanyAgreement.source`**
+  (`NEGOTIATED:<key>`, read by `negotiatedKeyFromSource`). Written at OFFER
+  time, read at SIGN time — so an offer signs as the document the client
+  actually read, even if next year's agreement lands in the registry in
+  between. No column: `source` is the existing free-text provenance field
+  and nothing else reads it (an ALTER is a laptop job).
+  `negotiatedAgreementForCompany()` is the registry lookup by the company's
+  own CRM name, aliases included, EXACT — a near-match would put one
+  client's negotiated terms in front of another.
+- **The countersigned copy is one renderer, two states.**
+  `NegotiatedAgreementDocument` takes an optional `signature` and swaps the
+  blank Lessee column for the executed block + E-SIGN audit trail (same
+  evidence and the same bundled handwriting face as the per-order signed
+  copy). SirReel's own line stays blank — countersigning our side is a
+  separate act nobody performed.
+- **Signing supersedes the unsigned master.** `signAnnual` switches
+  `autoCoverJobs` off on every OTHER covering RENTAL_AGREEMENT master for
+  that company **that nobody signed** (`signedAt: null`), appends why to its
+  note, audits `company_agreement.superseded`, and — only where the
+  company's standing terms point at the very file just superseded — moves
+  `negotiatedTermsUrl` to the executed copy. A master someone DID sign is
+  never quietly disabled by another signature. Nothing is deleted.
+- The portal's affirmation now names the document by its own title
+  (`acknowledgementFor(title)`); it used to say "the Annual Rental
+  Agreement" over a document titled "2026 Negotiated Rental Agreement" — the
+  one sentence in the flow that has to match what they read.
+- **Signing also fills the LCDW gap**: `standingLcdwDecision` is stamped from
+  the signer's election, which is what lets `fileJobAddendum` cut a job's
+  addendum from the master alone. Until then each job's addendum waits on a
+  per-job election, and its "Executed" row does not print (it renders only
+  with `masterSignerName` / `masterSignedAt`).
+
+### §32 is OPEN — do not ask them to sign yet (2026-09-17 redline)
+- Graduation Day's counsel (Nicholas Marell) redlined the filed document on
+  2026-09-17 — three edits, ALL in **§32 Third-Party Equipment**, the clause
+  SirReel appended on 9/15. Clauses 1–31, the Fleet Agreement and the whole
+  LCDW Addendum came back unmarked, and their numbering is unchanged so
+  `crossReferencesHold()` still passes. **Wes has not decided whether to
+  counter.** Two counters were raised for him: append ", subject to
+  Section 14" to their third edit ("in any event" is what someone argues
+  overrides the limitation of liability), and fix the garbled English in
+  their first ("any failure of such third party's or our failure to adhere").
+- **An agreed §32 goes in `GRADUATION_DAY_2026.appendedClauses` as a body
+  override — NEVER in `contractClauses.ts`.** `canonical('30')` is the
+  baseline Third-Party Equipment clause, and the same body is rendered by
+  `RentalAgreementBody` (the portal's readable agreement),
+  `SignedAgreementDocument` (every signed copy) and the review tooling's
+  baseline map. Editing it there renegotiates that clause for every client
+  at once, silently, on the strength of one client's counsel.
+- `APPENDED_CLAUSE_DIGEST` in the test pins the appended clauses. Nothing
+  did before 2026-09-18: a change to our baseline clause 30 altered a FILED
+  client contract with no test failure. The client-verified digest stays over
+  THEIR 31 clauses alone.
+- **Do not rebuild from the DOCX** Wes was sent (a PDF→Word conversion):
+  ten words carry literal ASCII hyphens from the conversion
+  (compen-sation, inde-pendent, cover-age, compre-hensive, insur-ance,
+  re-duced, Agree-ment, con-strued, arbitra-tion, circum-stances) while
+  "non-payment" in §21 is a REAL hyphen, and the file lost all front matter
+  (no Lessee block, no lede, no version line — the company name appears only
+  in the running header). Edit the clause text in the repo and re-render.
+- The coverage stays ON in the meantime: their redline touches one clause,
+  and the alternative puts their coordinators back to signing our baseline
+  per job — strictly worse paper than their negotiated document.
 
 ## The broker gets the review, not a forwarded paragraph (2026-09-17 — Wes)
 - Wes: "Is there a way to extract the broker from a COI and add an option to
