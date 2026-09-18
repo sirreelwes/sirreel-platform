@@ -168,6 +168,18 @@ export async function markAsPartner(vendorId: string, by: { userId: string | nul
   if (v._count.subcontractedVehicles === 0) {
     const prospect = findPartnerProspectByName(v.name)
     if (prospect) {
+      // A prospect queued before the registry carried these fields got the
+      // old hard-coded EQUIPMENT / Power & Generators / delivered. The roster
+      // about to be seeded is written for what they ACTUALLY rent, so bring
+      // the vendor row with it rather than leaving the two disagreeing.
+      await prisma.vendor.update({
+        where: { id: v.id },
+        data: {
+          partnerKind: prospect.partnerKind,
+          catalogSection: prospect.catalogSection,
+          defaultReceiveMethod: prospect.defaultReceiveMethod,
+        },
+      }).catch(() => {})
       for (const u of prospect.roster) {
         await prisma.subcontractedVehicle.create({
           data: {
@@ -178,7 +190,12 @@ export async function markAsPartner(vendorId: string, by: { userId: string | nul
             publicDescription: u.publicDescription,
             specs: u.specs.join('\n'),
             catalogSection: u.section,
-            defaultReceiveMethod: 'DELIVERY',
+            // The prospect's own default, not a hard-coded DELIVERY (2026-09-18).
+            // It was DELIVERY because every prospect was an equipment house;
+            // seeding that onto a truck-rental counter's stake bed would ask
+            // Suppose U Drive for a delivery window and an on-site contact
+            // they never agreed to, on every booking, silently.
+            defaultReceiveMethod: u.defaultReceiveMethod ?? prospect.defaultReceiveMethod,
             publiclyListed: false,
             offeredToSirReel: true,
           },

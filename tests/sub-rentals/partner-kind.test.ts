@@ -67,6 +67,15 @@ eq('generators share one section', groups.find((g) => g.meta.key === 'POWER_GENE
 eq('a sectionless partner unit resolves to the default before it reaches the grid', resolvePartnerSection({ catalogSection: null }, { catalogSection: null }).key, 'LOCATION_VEHICLES')
 eq('an owned specialty vehicle shares the section with partner coaches', groupPartnerUnits([unit('restroom2', 'LOCATION_VEHICLES', false), unit('starwagon', 'LOCATION_VEHICLES')]).map((g) => [g.meta.key, g.items.map((i) => i.id)]), [['LOCATION_VEHICLES', ['restroom2', 'starwagon']]])
 eq('Cars & SUVs sits right after Specialty Vehicles', groupPartnerUnits([unit('gen', 'POWER_GENERATORS'), unit('suv', 'CARS_SUVS'), unit('coach', 'LOCATION_VEHICLES')]).map((g) => g.meta.key), ['LOCATION_VEHICLES', 'CARS_SUVS', 'POWER_GENERATORS'])
+
+// ── Stake Beds & 5-Ton Trucks (2026-09-18, Suppose U Drive) ─────────────
+yes('PRODUCTION_TRUCKS is a section', isPartnerSectionKey('PRODUCTION_TRUCKS'))
+eq('the trucks heading names its contents', partnerSection('PRODUCTION_TRUCKS').title, 'Stake Beds & 5-Ton Trucks')
+// The whole reason it is not filed under Specialty Vehicles: that section is
+// a BILLING class (no LCDW, mileage from mile 1) and a stake bed is one of
+// the three classes the rental terms name as LCDW-eligible.
+eq('a stake bed quotes under Vehicles, not a department of its own', partnerUnitDepartment({ catalogSection: 'PRODUCTION_TRUCKS' }, { catalogSection: 'PRODUCTION_TRUCKS', partnerKind: 'VEHICLES' }), 'VEHICLES')
+eq('trucks sit between the cars and the generators', groupPartnerUnits([unit('gen', 'POWER_GENERATORS'), unit('stake', 'PRODUCTION_TRUCKS'), unit('suv', 'CARS_SUVS'), unit('coach', 'LOCATION_VEHICLES')]).map((g) => g.meta.key), ['LOCATION_VEHICLES', 'CARS_SUVS', 'PRODUCTION_TRUCKS', 'POWER_GENERATORS'])
 eq('no sectioned units → no groups', groupPartnerUnits([unit('cube', null, false)]).length, 0)
 
 // ── Agreement variant ───────────────────────────────────────────────────────

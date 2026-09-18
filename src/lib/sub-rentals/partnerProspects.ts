@@ -13,11 +13,21 @@
  * [company that] rents to productions in Los Angeles"). Ranked; the first is
  * the one to lead with.
  *
- * Every candidate is an EQUIPMENT partner in the PowerTrip mould: units are
- * delivered, set up and collected (no driver), rates are EMPTY on purpose —
- * the partner proposes them from their account page and HQ accepts — and
- * every seeded unit is unlisted until it has a photo, a rate and a signed
- * Partner Equipment Agreement.
+ * Second (2026-09-18): Suppose U Drive, a VEHICLES partner — which is what
+ * broke this registry open. Until today every field a prospect needed was
+ * the same for all four rows, so the KIND (EQUIPMENT), the vendor's default
+ * SECTION (Power & Generators) and the RECEIVE METHOD (delivered) were
+ * hard-coded — the section in scripts/onboard-partner-prospects.ts, the
+ * method in markAsPartner(). A truck-rental counter is none of those things,
+ * and a hard-coded default is silent when it is wrong: the vendor row would
+ * have read EQUIPMENT and every booking would have asked Suppose U Drive for
+ * a delivery window they never agreed to. All three are per-prospect fields
+ * now, and the four battery rows carry what the hard-coding used to supply.
+ *
+ * What stays true of EVERY prospect, whatever the kind: rates are EMPTY on
+ * purpose — the partner proposes them from their account page and HQ accepts
+ * — and every seeded unit is unlisted until it has a photo, a rate and a
+ * signed partner agreement.
  *
  * Contact details are what the public web says (the research session could
  * not open the companies' own sites — the network egress proxy blocks them —
@@ -26,20 +36,30 @@
  * seeded only where printed in full somewhere quotable: a guessed address
  * sends the introduction to nobody.
  *
- * PLAIN DATA, no Prisma import: scripts/onboard-battery-partners.ts reads it
+ * PLAIN DATA, no Prisma import: scripts/onboard-partner-prospects.ts reads it
  * to queue prospects, markAsPartner() reads it to seed the roster, and
  * tests/sub-rentals/battery-partner-candidates.test.ts guards its shape.
  */
 
+/** @deprecated the first cohort's narrow union; a prospect unit may sit in
+ *  any partner catalog section now. */
+import type { PartnerCatalogSectionKey } from '@/lib/site/partnerSections'
+import type { PartnerKindKey, ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
+
 export type BatteryPartnerSection = 'POWER_GENERATORS' | 'CABLES_DISTRO' | 'LIGHTING' | 'CARTS'
 
-export interface BatteryPartnerUnit {
+export interface PartnerProspectUnit {
   name: string
   vehicleType: string
-  section: BatteryPartnerSection
+  section: PartnerCatalogSectionKey
   specs: string[]
   publicDescription: string
+  /** Overrides the prospect's default for this one unit. Rarely needed. */
+  defaultReceiveMethod?: ReceiveMethodKey
 }
+
+/** @deprecated name kept for the first cohort's callers. */
+export type BatteryPartnerUnit = PartnerProspectUnit
 
 export interface PartnerProspect {
   /** CLI key: `--only saniset`. */
@@ -58,7 +78,20 @@ export interface PartnerProspect {
   /** Why this one, and what to watch — printed by the runner, shown to Wes. */
   fit: string
   caveat: string | null
-  roster: BatteryPartnerUnit[]
+
+  /** What they rent us, in the sense partnerVocab() means: EQUIPMENT is
+   *  delivered and set up, VEHICLES is driven or collected. Picks the words
+   *  on their page, their welcome email and their agreement. */
+  partnerKind: PartnerKindKey
+  /** The vendor's DEFAULT catalog section — where a unit lands when it does
+   *  not name its own. Usually the section the roster leads with. */
+  catalogSection: PartnerCatalogSectionKey
+  /** How their units normally reach a production. Seeded onto the Vendor and
+   *  onto every roster unit at mark time, so a booking asks for the right
+   *  thing (a driver, a delivery window, or nothing at all). */
+  defaultReceiveMethod: ReceiveMethodKey
+
+  roster: PartnerProspectUnit[]
 }
 
 /** @deprecated name kept for the first cohort's callers; the type is PartnerProspect. */
@@ -66,6 +99,8 @@ export type BatteryPartnerCandidate = PartnerProspect
 
 const DELIVERED = 'Delivered, set up and collected by the partner'
 const FUEL_FREE = 'No fuel, no exhaust, no engine noise — runs next to talent and sound'
+/** A counter rental: collected and returned at the branch, no driver. */
+const PICKED_UP = 'Picked up and returned at their branch — no driver, no delivery window'
 
 export const PARTNER_PROSPECTS: readonly PartnerProspect[] = [
   {
@@ -81,6 +116,11 @@ export const PARTNER_PROSPECTS: readonly PartnerProspect[] = [
     notes: 'Candidate battery-power partner (researched 2026-09-10). Van Nuys, moved to the Balboa Blvd facility March 2026 and toured by ICG Local 600 members 2026-05-21. Co-founder Steve Yandrich. Sunset Studios Cleantech Demo Days participant. Also partners with Creative Mandate on stage rental at the same address.',
     fit: 'LA-based (Van Nuys), battery-FIRST — the whole company is clean mobile power for productions — and already known to the camera guild. The CleanGEN J250 is a real diesel-generator replacement (250 kWh, ~800 A at 208 V), not a camera-battery box.',
     caveat: 'Also rents electric passenger/cargo vans, which sits next to our own fleet; the roster here is power only. No public email found — get it on the call.',
+    // What onboard-partner-prospects.ts and markAsPartner() used to
+    // hard-code for this cohort, now said out loud.
+    partnerKind: 'EQUIPMENT',
+    catalogSection: 'POWER_GENERATORS',
+    defaultReceiveMethod: 'DELIVERY',
     roster: [
       {
         name: 'CleanGEN J250 — 250 kWh battery generator',
@@ -118,6 +158,11 @@ export const PARTNER_PROSPECTS: readonly PartnerProspect[] = [
     notes: 'Candidate battery-power partner (researched 2026-09-10). Los Angeles County; phone listed as (310) 730-PIGS. Their core business is portable toilet and fence rental — battery power is a service line with dedicated film/TV, event and mobile-battery pages. Owner, yard address and email not found publicly.',
     fit: 'LA-native, delivers county-wide, publishes weekly pricing and has a page written specifically for film / TV / commercial production power (basecamp, charging, noise-sensitive shoots).',
     caveat: 'Battery power is a side line of a sanitation-and-fence rental company, and no unit sizes are published — confirm what they actually run before quoting. No named contact.',
+    // What onboard-partner-prospects.ts and markAsPartner() used to
+    // hard-code for this cohort, now said out loud.
+    partnerKind: 'EQUIPMENT',
+    catalogSection: 'POWER_GENERATORS',
+    defaultReceiveMethod: 'DELIVERY',
     roster: [
       {
         name: 'Mobile Battery System — mid-size',
@@ -155,6 +200,11 @@ export const PARTNER_PROSPECTS: readonly PartnerProspect[] = [
     notes: 'Candidate battery-power partner (researched 2026-09-10). Agua Dulce (LA County, north of Santa Clarita). Affiliate of B.I. Production Works (Madison, GA; bipworks.com) alongside Emerald Green. First to offer solar-powered trailers built for the entertainment industry; Moxion 600/75 units with real-time monitoring.',
     fit: 'LA County, production-only, with the biggest battery in the group — a Moxion 600/75 (530 kWh, 40 kW continuous at 480 V three-phase) that replaces a base-camp diesel outright, plus solar/electric trailers.',
     caveat: 'They ALSO rent star trailers, production trailers and trucks — that is our Specialty Vehicles category, so they are part competitor. Roster here is power only; decide on the call whether their trailers are in or out. Georgia parent.',
+    // What onboard-partner-prospects.ts and markAsPartner() used to
+    // hard-code for this cohort, now said out loud.
+    partnerKind: 'EQUIPMENT',
+    catalogSection: 'POWER_GENERATORS',
+    defaultReceiveMethod: 'DELIVERY',
     roster: [
       {
         name: 'Moxion 600/75 — 530 kWh battery power supply',
@@ -185,6 +235,11 @@ export const PARTNER_PROSPECTS: readonly PartnerProspect[] = [
     notes: 'Candidate battery-power partner (researched 2026-09-10). Vancouver-based, serves Vancouver, Toronto and Los Angeles; a Greenwave Rentals LLC is filed in Sacramento. Fleet is Portable Electric Voltstack (2K: 2.4 kW / 2.8 kWh · 5K: 4.8 kW / 5.6 kWh · 20K trailer: up to 20.4 kW). Credits include The Mandalorian, No Time to Die, Percy Jackson, Fire Country. Los Angeles depot address not published.',
     fit: 'The deepest film résumé of the four (Mandalorian set builds ran on their batteries) and a clean, well-known product line in three sizes.',
     caveat: 'Not LA-based — Canadian HQ with an LA service area and a BC phone number. Ask where the LA units actually sit and who answers at 6 a.m. before treating them as local.',
+    // What onboard-partner-prospects.ts and markAsPartner() used to
+    // hard-code for this cohort, now said out loud.
+    partnerKind: 'EQUIPMENT',
+    catalogSection: 'POWER_GENERATORS',
+    defaultReceiveMethod: 'DELIVERY',
     roster: [
       {
         name: 'Voltstack 20K — trailer battery generator',
@@ -206,6 +261,85 @@ export const PARTNER_PROSPECTS: readonly PartnerProspect[] = [
         section: 'POWER_GENERATORS',
         specs: ['2.4 kW continuous · 2.8 kWh stored', 'Carry-size — one person', FUEL_FREE, DELIVERED],
         publicDescription: 'A carry-size silent battery for camera, sound and a single light.',
+      },
+    ],
+  },
+  {
+    // Wes 2026-09-18: "start preparing a partner portal for suppose you
+    // drive. We are going to carry steak beds and 5 ton trucks only."
+    //
+    // NAME: Wes wrote "Suppose You Drive"; the company spells itself
+    // "Suppose U Drive" (supposeudrive.com), and Vendor.name is the upsert
+    // key, so the spelling on the sign is the one that goes in the row.
+    //
+    // SCOPE IS THE POINT, and it is Wes's, not an inference: stake beds and
+    // 5-tons ONLY. Suppose U Drive's own fleet runs from pickups through
+    // tractor-trailers, and the rest of it is either something SirReel
+    // already carries (cargo vans, cube trucks) or something SirReel does
+    // not rent to productions at all. A roster that mirrored their catalog
+    // would put our own vans on our own page under a partner's heading.
+    slug: 'suppose-u-drive',
+    name: 'Suppose U Drive',
+    contactName: null,
+    website: 'https://supposeudrive.com',
+    email: null,
+    phone: '(818) 243-3151',
+    lotAddress: '3809 San Fernando Rd, Glendale, CA 91204',
+    supplies: 'stake bed trucks and 5-ton box trucks for production hauling, set construction, art department and grip — rented by the day, week or month from their Southern California branches',
+    deliveryTerms:
+      'Picked up and returned at their branch counter (Glendale is the closest to Sun Valley). Rented by the day, week or month. Delivery, if they offer it, is arranged per booking — confirm before quoting it.',
+    notes:
+      'Candidate VEHICLES partner (researched 2026-09-18). Suppose U Drive, supposeudrive.com — Southern California and Arizona truck rental and leasing, four branches, in business since 1936. Their stakebeds are described on their own site as custom-built on Hino 268A frames. Glendale (3809 San Fernando Rd) is the branch nearest Sun Valley; Norwalk (13456 Rosecrans Ave) is their largest hub. Listed in LA411, so they already take production work. Phone and addresses are from directory listings — their own site is blocked to us by the egress proxy, so confirm everything on the first call. No public email found: do not guess one.',
+    fit: 'They fill a hole rather than competing with us. SirReel’s own Stakebed catalog row is ARCHIVED (isActive false in exports/catalog-export.json) and there is no owned 5-ton class at all — Cube Truck and Supercube are the owned box trucks — so every stake bed and 5-ton a production asks for today is a lost line. A four-branch commercial house with a 1936 trading history is also the kind of partner that can cover a same-week overflow when our own trucks are out.',
+    caveat:
+      '"5-ton" means different things on the two sides of this deal. In production it is a body size (roughly a 22–24 ft box); at a commercial truck counter it is a weight rating. Settle which truck we are actually renting on the call before a single one is quoted, or we will put the wrong truck on a set. Also: they are a counter business, not a production-vehicle house — they send no driver, they keep no call sheet, and nobody there is waiting for a 6 a.m. call from a UPM. Everything below is the SHAPE of their stake bed and 5-ton line, not a stock list.',
+    partnerKind: 'VEHICLES',
+    catalogSection: 'PRODUCTION_TRUCKS',
+    // A counter business. DELIVERY would ask them for a window and a contact
+    // they never agreed to; PICKUP would ask them for a driver from a roster
+    // they do not have. WILL_CALL is the honest default and is one edit on
+    // the Portals row if the call says otherwise.
+    defaultReceiveMethod: 'WILL_CALL',
+    roster: [
+      {
+        name: 'Stake Bed Truck — 16 ft',
+        vehicleType: 'Stake bed truck',
+        section: 'PRODUCTION_TRUCKS',
+        specs: [
+          'Bed length to be confirmed with Suppose U Drive',
+          'Flat deck with removable stake sides',
+          'Non-CDL class — confirm the rating for the exact truck',
+          PICKED_UP,
+        ],
+        publicDescription:
+          'A flat-deck stake bed for set construction, art department and oversized loads that will not fit through a box truck’s door. Removable sides, tie-downs along the deck.',
+      },
+      {
+        name: 'Stake Bed Truck — 24 ft',
+        vehicleType: 'Stake bed truck',
+        section: 'PRODUCTION_TRUCKS',
+        specs: [
+          'Their larger stake beds are built on Hino 268A frames (their own description)',
+          'Bed length and GVWR to be confirmed with Suppose U Drive',
+          'Flat deck with removable stake sides',
+          'May require a commercial licence — confirm before quoting',
+          PICKED_UP,
+        ],
+        publicDescription:
+          'A long flat-deck stake bed for a full set build or a scenery move — lumber, flats, platforms and anything that has to be loaded from the side.',
+      },
+      {
+        name: '5-Ton Box Truck',
+        vehicleType: 'Box truck',
+        section: 'PRODUCTION_TRUCKS',
+        specs: [
+          'Box length, GVWR and lift gate to be confirmed with Suppose U Drive',
+          'Enclosed box — loads stay dry and lock up overnight',
+          'May require a commercial licence — confirm before quoting',
+          PICKED_UP,
+        ],
+        publicDescription:
+          'An enclosed 5-ton box truck for grip, electric and production hauling — everything that has to stay dry, stay locked and travel in one trip.',
       },
     ],
   },

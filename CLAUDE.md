@@ -955,18 +955,88 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   (Agua Dulce, Moxion 600/75 530 kWh — also rents star trailers, so part
   competitor), **Greenwave Rentals** (Voltstack fleet, Vancouver HQ with an
   LA service area — not LA-based). Emails seeded only where quotable.
-- `npx tsx scripts/onboard-battery-partners.ts --list | --only <slug>… |
+- `npx tsx scripts/onboard-partner-prospects.ts --list | --only <slug>… |
   --all [--dry] [--email slug=… --phone slug=…]` queues PROSPECTS ONLY (the
   Vendor row + `partnerProspectAt`; journals the id). Then /crm/portals#partners:
-  introduction (Wes) → they reply → Mark as new partner → deal → standard
-  Partner Equipment Agreement → email the link. Nothing has been run yet.
+  introduction (Wes) → they reply → Mark as new partner → deal → the standard
+  partner agreement for their KIND → email the link. Nothing has been run yet.
+  (Renamed 2026-09-18 from `onboard-battery-partners.ts` — it was never about
+  batteries, that was just the only cohort in the registry.)
 - The introduction (`buildIntroDraft`) is first contact in Wes's words
   ("It's Wes Bailey from SirReel…", feature / order / confirm / deliver /
   bill / pay, "both parties", "win/win!"), signed name / Founder & CEO |
   SirReel Studio Services / M: (User.phone, dotted) / E:.
   `scripts/set-user-phone.ts` sets the phone.
-- `npm run test:battery-candidates` guards the registry; `npm run
-  test:partner-stage` guards the stage rule.
+- `npm run test:partner-prospects` guards the registry (was
+  `test:battery-candidates`); `npm run test:partner-stage` guards the stage
+  rule.
+- **The registry stopped being battery-shaped on 2026-09-18.** `partnerKind`,
+  `catalogSection` and `defaultReceiveMethod` were hard-coded — EQUIPMENT /
+  Power & Generators in the script, DELIVERY in `markAsPartner()` — because
+  every prospect was an equipment house. They are per-prospect fields now,
+  and the four battery rows carry what the hard-coding used to supply. A
+  hard-coded default is silent when it is wrong: on a truck-rental counter
+  it would have asked for a delivery window nobody agreed to, on every
+  booking. `markAsPartner()` also brings the VENDOR row in line with the
+  roster it is about to seed, so a prospect queued before today is corrected
+  at the mark rather than left disagreeing with its own units.
+
+## Suppose U Drive — stake beds and 5-tons only (2026-09-18 — Wes)
+- Wes: "Start preparing a partner portal for suppose you drive. We are going
+  to carry steak beds and 5 ton trucks only." Queued as a PROSPECT, which is
+  the whole of "preparing": the Vendor row + `partnerProspectAt`, so the
+  introduction can be sent. No roster, no account link, nothing sent — that
+  is `markAsPartner()` after they reply (2026-09-11 rule, unchanged).
+- **The name on the sign is `Suppose U Drive`**, not "Suppose You Drive" —
+  `Vendor.name` is the upsert key, so the spelling decides whether a second
+  run makes a second company. supposeudrive.com, four Southern California /
+  Arizona branches, trading since 1936, listed in LA411. Glendale (3809 San
+  Fernando Rd, (818) 243-3151) is the branch nearest Sun Valley; Norwalk is
+  their largest hub. **Their own site is egress-blocked to us**, so every
+  fact here is off directory listings and the search index — confirm on the
+  first call. **No public email was found and none was guessed**: set it on
+  /crm/portals before the introduction, or it goes to nobody.
+- **A new catalog section, `PRODUCTION_TRUCKS` → "Stake Beds & 5-Ton
+  Trucks"** (`#trucks`, order 17, between Cars & SUVs and Power). The other
+  two vehicle sections are both WRONG for a stake bed: Specialty Vehicles is
+  a BILLING class (no LCDW, mileage from mile 1) and a stake bed is one of
+  the three classes `LCDW_ELIGIBILITY_NOTE` names as LCDW-ELIGIBLE ("Cube
+  Trucks, Cargo Vans, Stake Bed Trucks"), so filing one there quotes it
+  against the wrong terms; Cars & SUVs is a passenger heading. Like Cars &
+  SUVs this is a HEADING ONLY — nothing in pricing reads it and the units
+  quote under Vehicles. The KEY is generic and the TITLE is not, on purpose:
+  a 10-ton tomorrow is a title edit, not a two-deploy enum dance.
+- **Enum value FIRST, then the deploy, then the rows.** `npx tsx
+  scripts/add-production-trucks-section.ts` (additive ALTER TYPE), or the one
+  statement in the Neon console from an iPad. This is NOT a
+  /admin/maintenance task — that class runs `CREATE … IF NOT EXISTS` only.
+  The onboarding script now PREFLIGHTS both enums (`PartnerCatalogSection`,
+  `ReceiveMethod`) against the database and refuses with the fix line, rather
+  than writing a label Postgres does not know and taking the partner page
+  down.
+- **`WILL_CALL`, like California Rent A Car.** They are a counter business:
+  DELIVERY would ask them for a window and an on-site contact they never
+  agreed to, PICKUP would ask them for a driver from a roster they do not
+  have. One edit on the Portals row if the call says otherwise.
+- **Why them, and why only two truck types.** SirReel's own `Stakebed`
+  catalog row is ARCHIVED (`isActive: false`) and there is no owned 5-ton
+  class at all — Cube Truck and Supercube are the owned box trucks — so every
+  stake bed and 5-ton asked for today is a lost line. Their real fleet runs
+  from pickups to tractor-trailers, and the rest of it is either something
+  SirReel already owns (cargo vans, cube trucks) or something we do not rent
+  to productions. A roster that drifted toward their catalog would put our
+  own classes on our own page under a partner's heading; the test pins the
+  scope so it cannot.
+- **Open question for the call, and it is not cosmetic: "5-ton" means two
+  different things here.** In production it is a body size (roughly a 22–24 ft
+  box); at a commercial truck counter it is a weight rating. Settle which
+  truck we are actually renting before one is quoted. The three seeded rows
+  (16 ft stake bed, 24 ft stake bed, 5-ton box truck) are the SHAPE of that
+  line, not a stock list — model detail is deliberately loose so a call
+  CORRECTS a row instead of discovering it was invented, and every row says
+  so in its specs.
+- Nothing reaches sirreel.com until a unit is listed, has a photo AND the
+  agreement is signed (`SUB_LISTED_WHERE`). `npm run test:partner-prospects`.
 
 ## Partners vs vendors — two words, two tabs (2026-09-11 — Wes)
 - Wes: "Vendors are companies that serve SirReel: plumber, electrician etc.
