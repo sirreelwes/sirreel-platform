@@ -170,7 +170,8 @@
     "test:fuel-levels": "tsx tests/fleet/fuel-levels.test.ts",
     "test:check-window": "tsx tests/fleet/check-window.test.ts",
     "test:desk-charge-payments": "tsx tests/collections/desk-charge-payments.test.ts",
-    "test:ld-reported": "tsx tests/collections/ld-reported.test.ts"
+    "test:ld-reported": "tsx tests/collections/ld-reported.test.ts",
+    "test:action-window": "tsx tests/actionItems/action-window.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
