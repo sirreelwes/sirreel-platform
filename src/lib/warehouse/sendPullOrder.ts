@@ -48,6 +48,8 @@
 
 import type { Prisma, PrismaClient } from '@prisma/client'
 import { isPartnerLineIn, PARTNER_SUB_RENTAL_WHERE } from '@/lib/orders/partnerLines'
+import { isPickableLine } from '@/lib/orders/lineType'
+import { addedAfterPullForOrder, type AddedLine } from '@/lib/orders/addedAfterPull'
 import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { renderEmailShell, renderEmailText, p, calloutBox, detailTable } from '@/lib/email/templates/shell'
@@ -84,11 +86,10 @@ async function recipientsForPullOrder(): Promise<string[]> {
   return dedupeEmails(await channelRecipients('warehouse-pull-orders'))
 }
 
-/** Physical goods only. Fees, discounts and labor have nothing to pull
- *  off a shelf — same filter the pull-sheet PDF applies. */
-export function isPickableLine(li: { type: string }): boolean {
-  return li.type !== 'FEE' && li.type !== 'DISCOUNT' && li.type !== 'LABOR'
-}
+/** Re-exported for the call sites that already import it from here. The
+ *  rule itself moved to lib/orders/lineType.ts on 2026-09-18 so the
+ *  added-after-the-pull derivation could share it. */
+export { isPickableLine }
 
 export interface PullOrderPreview {
   orderId: string
@@ -110,6 +111,10 @@ export interface PullOrderPreview {
   blockers: string[]
   ready: boolean
   recipientCount: number
+  /** Gear added to the order after its check-out sheet was filed — a
+   *  mid-job add the floor has never pulled (addedAfterPull.ts). The
+   *  send leads with these and attaches a sheet of just them. */
+  addedSincePull: AddedLine[]
   /** Null until someone has sent it. */
   lastSentAt: Date | null
   lastSentBy: string | null
@@ -207,6 +212,7 @@ export async function previewPullOrder(
   // Partner lines are not ours to pull (partnerLines.ts) — same filter the sheet applies.
   const pickable = order.lineItems.filter((li) => isPickableLine(li) && !isPartnerLineIn(li, order.lineItems))
   const recipients = await recipientsForPullOrder()
+  const added = await addedAfterPullForOrder(orderId)
 
   return {
     ok: true,
@@ -222,6 +228,7 @@ export async function previewPullOrder(
       deliveryRequested: order.deliveryRequested,
       pickableCount: pickable.length,
       warehouseLineCount: pickable.filter((li) => li.fulfillmentLane === 'WAREHOUSE').length,
+      addedSincePull: added.gear,
       ...jobReadiness(order.job),
       recipientCount: recipients.length,
       lastSentAt: order.pickList?.releasedAt ?? null,
@@ -425,12 +432,26 @@ export async function sendPullOrderToWarehouse(args: {
   // failure must not cost the floor its visibility on /warehouse/pick,
   // and the email still carries the live link.
   const rendered = await renderPickListPdf(args.orderId)
-  const attachments = rendered.ok
-    ? [{ filename: `${rendered.result.stem}.pdf`, content: rendered.result.pdf }]
-    : undefined
   if (!rendered.ok) {
     console.error(`[sendPullOrder] pull sheet render failed for ${preview.orderNumber}: ${rendered.error}`)
   }
+  // Gear added since the floor pulled this order is its OWN sheet, and it
+  // goes first (Wes, 2026-09-18: the add has to reach the warehouse as if
+  // it were a new order). The full sheet still rides along as the
+  // reference for what is already on the truck.
+  const addedCount = preview.addedSincePull.length
+  const addedSheet = addedCount > 0 ? await renderPickListPdf(args.orderId, { addedOnly: true }) : null
+  if (addedSheet && !addedSheet.ok) {
+    console.error(`[sendPullOrder] added-gear sheet render failed for ${preview.orderNumber}: ${addedSheet.error}`)
+  }
+  const attachmentList = [
+    ...(addedSheet?.ok ? [{ filename: `${addedSheet.result.stem}.pdf`, content: addedSheet.result.pdf }] : []),
+    ...(rendered.ok ? [{ filename: `${rendered.result.stem}.pdf`, content: rendered.result.pdf }] : []),
+  ]
+  const attachments = attachmentList.length > 0 ? attachmentList : undefined
+  const addedList = preview.addedSincePull
+    .map((l) => `${l.quantity} \u00d7 ${l.description}`)
+    .join(', ')
 
   const who = args.userName || 'A rep'
   const jobLine = preview.jobName
@@ -441,14 +462,26 @@ export async function sendPullOrderToWarehouse(args: {
       ? `${dayLabel(preview.startDate)} → ${dayLabel(preview.endDate)}`
       : dayLabel(preview.startDate)
 
-  const heading = resent
-    ? `Updated pull order — ${preview.orderNumber}`
-    : `Pull order — ${preview.orderNumber}`
+  const heading = addedCount > 0
+    ? `Added gear to pull — ${preview.orderNumber}`
+    : resent
+      ? `Updated pull order — ${preview.orderNumber}`
+      : `Pull order — ${preview.orderNumber}`
 
   const bodyHtml =
     p(
-      `<strong>${esc(who)}</strong> sent this pull order to the warehouse${resent ? ' again — it has changed since the last sheet, so pull from THIS one' : ''}.`,
+      addedCount > 0
+        ? `<strong>${esc(who)}</strong> added ${addedCount} line${addedCount === 1 ? '' : 's'} to an order this floor has already pulled. ` +
+            `Treat ${addedCount === 1 ? 'it' : 'them'} as a new pull — the rest of the order is out.`
+        : `<strong>${esc(who)}</strong> sent this pull order to the warehouse${resent ? ' again — it has changed since the last sheet, so pull from THIS one' : ''}.`,
     ) +
+    (addedCount > 0
+      ? calloutBox(
+          `<strong>Still to pull:</strong> ${esc(addedList)}.<br/>` +
+            `The first attachment is a sheet for just ${addedCount === 1 ? 'this line' : 'these lines'}` +
+            ` — <a href="${HQ_APP_URL}${preview.pullSheetHref}?added=1">print it here</a>.`,
+        )
+      : '') +
     detailTable([
       { label: 'Order', value: preview.orderNumber },
       { label: 'Client', value: preview.companyName },
@@ -489,6 +522,13 @@ export async function sendPullOrderToWarehouse(args: {
     `Pick up: ${window}`,
     `Out: ${preview.deliveryRequested ? 'Delivery' : 'Will call'}`,
     `Lines: ${preview.pickableCount} to pull`,
+    ...(addedCount > 0
+      ? [
+          '',
+          `ADDED SINCE THIS ORDER WAS PULLED — still to pull: ${addedList}`,
+          `Sheet for just those lines: ${HQ_APP_URL}${preview.pullSheetHref}?added=1`,
+        ]
+      : []),
     ...(note ? ['', `From ${who}: ${note}`] : []),
     '',
     attachments ? 'The pull sheet is attached as a PDF — print it and pull from it.' : '',
@@ -501,11 +541,15 @@ export async function sendPullOrderToWarehouse(args: {
 
   const sent = await sendAgreementEmail({
     to,
-    subject: `${resent ? 'Updated pull order' : 'Pull order'}: ${preview.orderNumber} — ${preview.companyName} · out ${dayLabel(preview.startDate)}`,
+    subject: addedCount > 0
+      ? `Added gear to pull: ${preview.orderNumber} — ${preview.companyName} · ${addedCount} new line${addedCount === 1 ? '' : 's'}`
+      : `${resent ? 'Updated pull order' : 'Pull order'}: ${preview.orderNumber} — ${preview.companyName} · out ${dayLabel(preview.startDate)}`,
     html: renderEmailShell({
       heading,
       eyebrow: 'Warehouse',
-      preheader: `${preview.pickableCount} lines · out ${dayLabel(preview.startDate)}${preview.blockers.length ? ` · ${preview.blockers.join(', ')} outstanding` : ''}`,
+      preheader: addedCount > 0
+        ? `${addedCount} line${addedCount === 1 ? '' : 's'} added after this order was pulled · ${addedList}`
+        : `${preview.pickableCount} lines · out ${dayLabel(preview.startDate)}${preview.blockers.length ? ` · ${preview.blockers.join(', ')} outstanding` : ''}`,
       bodyHtml,
       footNote:
         'Sent from the order in HQ. The attached sheet is a snapshot — the link above is always current. ' +

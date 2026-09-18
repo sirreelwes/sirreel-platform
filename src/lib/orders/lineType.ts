@@ -48,3 +48,16 @@ export function resolveLineType(
   if (department === 'EXPENDABLES') return 'EXPENDABLE'
   return 'EQUIPMENT'
 }
+
+/**
+ * Physical goods — the lines somebody has to walk out and pull. Fees,
+ * discounts and labor have nothing on a shelf.
+ *
+ * Lived in lib/warehouse/sendPullOrder.ts until 2026-09-18, when the
+ * added-after-the-pull derivation needed the same filter and could not
+ * import that module without a cycle (sendPullOrder now reads it). Here
+ * it stays pure — no prisma, no mail — so any surface can ask.
+ */
+export function isPickableLine(li: { type: string }): boolean {
+  return li.type !== 'FEE' && li.type !== 'DISCOUNT' && li.type !== 'LABOR'
+}

@@ -456,8 +456,75 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - `COI_INBOX` ('rentals@') moved into `requirements.ts` — the portal's broker
   email and this page name one mailbox. `npm run test:coi-broker`.
 - NOT done: nothing yet nudges when a broker has had the link for days with
-  no new certificate, and the broker is not offered anywhere outside the
-  review desk (no chip on the job page, no company-level broker on file).
+  no new certificate, and the broker is not offered on the job page. **The
+  "no company-level broker on file" half is now done** — see "A list of
+  brokers" above.
+
+## A list of brokers, not just a name on a certificate (2026-09-17 — Wes)
+- Wes: "Please start keeping a list of brokers — for example on the Mega COI
+  review we sent to the broker, whose name is Barbara Wagner and her email is
+  barbara@worthingtoninsur.com." `readCoiBroker()` reads ONE certificate's
+  producer box; that is the right home for a fact about a document and the
+  wrong home for a LIST. Nothing could answer "who is this client's broker"
+  when the producer box did not read — which is exactly the certificate most
+  likely to need correcting.
+- **Two tables, additive SQL, NEVER `db push`:** `sr_brokers` (one row per
+  broker, keyed by EMAIL) and `sr_broker_clients` (which of our clients each
+  acts for, and how we learned it: CERTIFICATE / CONTACTED / MANUAL). From a
+  phone: /admin/maintenance → **"Create the broker directory tables"**; on a
+  laptop `npx tsx scripts/add-broker-tables.ts`. Models `Broker` /
+  `BrokerClient` carry **no relations** and the DDL no foreign keys — the
+  job-Conversation shape, for the same reason (a live DB with known drift,
+  and a constraint that can fail a COI review is worse than a dead link row
+  the reader skips). **Until it has run everything behaves exactly as
+  before**: every read returns empty and every write is a no-op on P2021/P2022.
+- **Two rules carry the weight** (`src/lib/coi/brokerDirectory.ts`, pure half
+  in `normalizeBrokerFacts` / `mergeBrokerFacts`, `npm run
+  test:broker-directory`):
+  1. **The email is the identity.** No readable email, no row — a directory
+     keyed on a name a model read off a scan is a list of misspellings that
+     looks like a directory.
+  2. **A typed fact outranks a read one, and a blank never wins.** MANUAL
+     (a person editing /admin/brokers) may REPLACE a field; CERTIFICATE and
+     CONTACTED only FILL a blank. Otherwise the next certificate whose
+     producer box says "Certificates Dept" silently reverts a name someone
+     corrected — wrong in the way nobody notices, because the row still looks
+     filled in.
+- **It fills itself.** `recordBroker()` runs on the client COI drop
+  (`/api/coi/[token]` — the arrival path for most certificates, called AFTER
+  the job resolves so a job-only token still files under that job's client),
+  on the desk's AI re-run (the path that back-fills older certificates), and
+  on `EMAIL_BROKER` with `contacted: true` (the address a PERSON chose, which
+  outranks whatever the producer box read — the certificate's name/agency
+  ride along only when they belong to that same address). Every call is
+  best-effort: a stored COI or a sent email must never be lost to a list.
+- **The payoff is on the review desk.** `serialize()` is async now and
+  carries `knownBrokers` — the directory's answer for THIS client. The
+  compose panel offers them as chips, seeds the To box from the directory
+  when the certificate named nobody, and the broker card reads "Not read off
+  this certificate — but Barbara Wagner is on file for this client."
+- **/admin/brokers** (nav: Admin → Brokers, under COIs) lists them with their
+  clients, last seen, and how often we have written. Add and edit by hand;
+  removal is `isActive false`, never a delete. Staff-gated, not ADMIN-only —
+  the people who chase certificates are sales and billing.
+- **Barbara Wagner is seeded, not hardcoded into a code path.**
+  `src/lib/coi/knownBrokers.ts` is the registry (the partnerProspects shape);
+  /admin/maintenance → **"File the brokers we already know"** or `npx tsx
+  scripts/seed-known-brokers.ts --write` files her, matched on email so a
+  second run never duplicates. Her client is found by the name hint "mega"
+  and linked ONLY on exactly one match — an ambiguous or missing match is
+  reported, because a broker filed under the wrong client is how one
+  production's insurance question reaches another's agent.
+- **Her agency is deliberately BLANK.** `barbara@worthingtoninsur.com`
+  obviously suggests "Worthington Insurance", and `COI_PROMPT` tells the model
+  in as many words never to infer an agency from an email domain. The same
+  guess typed by hand, into the row a rep reads before emailing a stranger, is
+  the same mistake with a person's hand on it. It fills itself from the
+  producer box of the next certificate she issues.
+- NOT done: a broker is never tied to a client from the page (links form
+  themselves from certificates and sends, or from the seed's hint); nothing
+  merges two rows for one person at two addresses; and the directory is not
+  offered anywhere outside the COI review desk and its own page.
 
 ## After-hours VEHICLE pickup email (2026-09-10)
 - Wes: "an easy button for sales to send this summary" — Jose's hand-typed
@@ -755,6 +822,55 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - `promoteHoldsOnApproval` in holdOnQuoteSend.ts is dead (no callers) and
   must STAY dead — it updateMany's every rank-2 REQUESTED item to rank 1,
   which would silently promote every LiteHold.
+
+## Action items are labelled by the PICKUP, not the record (2026-09-17 — Wes)
+- Wes, with 41 COI rows and 71 replacement-cost rows on his phone: "a ton
+  of action items that are persistent on the screen even if their time of
+  action has passed … after [a day or two] we need to have them drop off."
+  Nothing on the list was old — every provider re-derives its rows on each
+  load, so a row exists only while its condition is still true — but the
+  row's timestamp was `occurredAt`, the date the RECORD was created (a
+  booking made yesterday for a pickup six weeks out read "17h ago").
+- **Age-based expiry was considered and rejected**: dropping a live "COI
+  missing" at 48h hides the row exactly when the pickup it warns about gets
+  close. **The window is measured from the PICKUP.** `ActionItem.dueAt` is
+  the pickup; the panel labels the row "pickup in 4d" / "pickup today" and
+  the group header "next pickup …"; the registry sorts soonest pickup first
+  inside a priority. Items with no pickup (a quiet quote, an untouched
+  inquiry) keep the "N ago" label. Rules in `src/lib/actionItems/rules.ts`
+  (pure, `npm run test:action-window`).
+- **`PICKUP_WINDOW_DAYS = 14`**: COI and card-required show only for
+  bookings starting today through +14 days (the SQL says
+  `start_date <= CURRENT_DATE + 14`). A COI for a pickup six weeks out is
+  not this week's chase and was the bulk of the 41. The day-of-pickup row
+  still shows (2026-08-31 ruling); the day after, it is gone.
+  Kit-incomplete keeps its 7-day lookahead and now carries `dueAt`.
+- **COI is ONE ROW PER JOB** (`groupCoiByJob`): the certificate lives on
+  `sr_coi_checks.job_id`, so a job with two bookings was the same ask twice
+  (Digital Paradigm, in the screenshot). The item is keyed on the LEAD
+  booking — the soonest pickup, ties by id — so a `coi:<bookingId>`
+  dismissal recorded before the merge still matches for the usual
+  one-booking job. A `coi_received` on ANY of the job's paperwork rows now
+  settles the whole job (it used to settle only its own booking).
+- **Replacement cost is three shapes, not 71 rows**
+  (`splitReplacementGroups`): a VEHICLE row going out inside 7 days is its
+  own HIGH item (same `replacement-cost:item:<id>` key as before); every
+  other catalog row folds into ONE item `replacement-cost:backlog`
+  (low, medium while something in it goes out inside the window — it never
+  lights the red badge) linking to
+  `/inventory/wizard?view=value&upcoming=1`; free-typed lines fold into ONE
+  agent item `replacement-cost:free-typed` linking to the soonest order.
+  The wizard's new "On upcoming orders" chip / `?upcoming=1` on
+  `/api/inventory/items` is the same predicate (no catalog cost, no priced
+  RentalWorks unit, a line on a live not-yet-returned order), soonest
+  pickup first — so the queue IS the backlog the panel counted. The
+  backlog's dismissal key is fixed: "Mark handled" hides the chore for
+  that user until they clear the dismissal; a changing count does not
+  bring it back, the urgent rows still surface on their own.
+- NOT done (Wes chose 1, 3, 4 of the four): a 30-day backstop on the
+  past-event providers (quote-aging, inquiry-untouched, payment-info,
+  annual-requested, duplicate-job, driver-hours, partner-photos) — a quote
+  quiet for 90 days still sits there until the job is marked lost.
 
 ## Sign-in is gated on the DOMAIN, not on having an account (2026-09-11)
 - Hugo: warehouse@ "is presenting as a sales view". It was: the NextAuth
@@ -1387,6 +1503,62 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## A declined card has a button now (2026-09-18 — Wes/Jose)
+- Wes: "Jose inputted a card for a client, which was declined, but it says
+  that there's no way for him to ask for a new card. We need a button for
+  that." Two dead ends, in two places, for the same reason: the card ASK is
+  job-scoped and both screens a decline lands on are not.
+  - **The keyed path** (/crm/[id]#cards → "Key in a card the client
+    authorized"). A card that fails the $0 check is deliberately NOT stored,
+    so the 402 was a red sentence with nothing after it — and the ask lives
+    on the job page, which the wallet never named.
+  - **The portal path.** There the unapproved authorization IS stored (the
+    client is mid-form; the rest of their paperwork must not be lost), so
+    the job's Card Authorization tile read "On file · ····4242" over the line
+    "The $0 check was not approved — ask for another card" and offered no
+    control: "Send CC request" renders only in the no-card branch, which is
+    the one branch a declined card is never in.
+- **`cardAskState()` in `src/lib/payments/cardAsk.ts` is the one rule** (pure;
+  `npm run test:card-ask`). MISSING (no card) → "Send CC request"; DECLINED
+  (`validated === false`) and EXPIRED → "Ask for another card", flagged
+  `replacement`. **DECLINED outranks EXPIRED** when a card is both, which it
+  usually is — an expired card also fails the $0 check — and that matches
+  what the tile has said since 2026-09-01. Only an explicit `false` is a
+  decline; the rule keeps "never checked" separate even though today's two
+  readers collapse a null `authRespStat` to false, exactly as the existing
+  "Unvalidated" chip already does.
+- **Nothing sends from the wallet.** `CardAskButton` in CompanyCardsPanel
+  resolves a job and hands the staffer to `/jobs/<id>?card=ask#card-auth`,
+  which opens the SAME review modal every client email goes through — one
+  composer, so the preview, the recipient picker and the confirm cannot
+  drift into a second copy on the CRM page. Job resolution:
+  `?job=` when they walked here from a job tile, else
+  `GET /api/crm/companies/[id]/card-ask-jobs` (`cardAskJobsForCompany` in
+  jobCardOnFile.ts, soonest pickup first, archived/LOST/HOLD out, WRAPPED
+  in because a wrapped job still gets invoiced). **A LIST, never a pick** —
+  with two shows for one production, choosing for the rep is how a card
+  request lands on the wrong job's thread, and the job is what the client
+  reads in the subject. One candidate is a button, several are a choice,
+  none says so plainly rather than dead-ending again.
+- **The email says the right thing.** "Before we can send X out the door, we
+  need a credit card on file" is wrong to the client who typed one in last
+  week — it reads as our mistake and leaves them not knowing theirs was
+  refused. `cardAskClientSentence()` swaps that first sentence;
+  `composeCardAuthEmail` derives the reason SERVER-side off the job's card
+  (booking paperwork first, then the company wallet — the same precedence as
+  `/api/jobs/[id]`), never from a flag the browser passes, so a client can't
+  be told their good card failed. Everything else — the security paragraph,
+  the button, the closer — is unchanged, and MISSING/NONE leave the standard
+  ask byte-for-byte. Deliberately vague about WHY the bank refused it: we
+  don't know and their bank won't tell us. The review modal carries an amber
+  strip saying a card is on file and this asks for a second one.
+- The card already on file **stays** — the client adds another in the portal
+  (Wes 2026-09-03: "we don't wanna remove the first card"), which is what
+  `CcAuthCard`'s "Add another card" has always done.
+- NOT done: nothing chases a replacement that never arrives (no action item
+  for "asked for another card N days ago, still declined"), and a declined
+  charge at the collections desk still has no ask of its own.
+
 ## Ana can correct an invoice from her own desk (2026-09-17 — Ana)
 - Ana: "how do I update an invoice from my side?" She could not. Both ways of
   correcting an invoice existed — **regenerate** (rewrite the figures from
@@ -1442,6 +1614,47 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - Unchanged and still the answer for money: the order is the book. Reopen a
   CLOSED/INVOICED order (`POST /api/orders/[id]/reopen`, billing-gated) to
   edit lines or discounts, then pull the figures through.
+
+## Orders by the day they were created — checking the EOD report (2026-09-17 — Ana)
+- Ana: "Is there a way I can check the drop down list of orders and quotes and
+  specify a certain date? … there is no filter for finding orders grouped
+  together by date. And a way to calculate the total value while I'm
+  searching would be great, too. That way I know if the EOD report that gets
+  generated is accurate or not."
+- **The value total already existed** (the `{total} orders · $X total` line in
+  the /orders header, `valueTotal` off the whole filtered set, not the page)
+  and follows every filter including the new dates. What was missing was the
+  date filter and, more importantly, a count Ana could hold against the report.
+- **`tallyOrderDay()` in `src/lib/orders/dayTally.ts` is the ONE definition,
+  and both surfaces read it** — the EOD report renders it into the evening
+  email, /orders renders it above the table. A date filter that counted rows
+  its own way would not CHECK the report; it would be a second number to argue
+  with. Pure, `npm run test:order-day-tally`.
+  - A quote is `quoteStatus` DRAFT or SENT — never `status`; an order can be
+    BOOKED while quoteStatus lags, and the question is whether the client said
+    yes. Orders are worth `bookedTotal ?? total` (`total` keeps moving with
+    post-booking edits), quotes are worth `total`.
+  - CANCELLED is out. DRAFT, LOST and ARCHIVED are IN — a quote written and
+    lost the same afternoon was still written.
+- **The card is deliberately NOT a description of the table under it.** The
+  /orders list hides drafts, lost and archived by default and still shows
+  cancelled rows, so the row count differs BOTH ways. `reconciliationNote()`
+  names it in one sentence ("Counts 1 draft, 1 lost … Leaves out 1 cancelled
+  order the list still shows") and says nothing on a day where they agree. A
+  card that quietly counted only the visible rows would be worse than no card:
+  a confirmation that agrees with nothing. The tally query therefore ignores
+  `where` and is built from the window + scope alone — a status filter must
+  not move the figures being checked.
+- **Pacific days, not UTC** (`createdFrom` / `createdTo`, `YYYY-MM-DD`, both
+  ends inclusive, either one alone means that single day). A UTC cut would put
+  every order written after 4pm into tomorrow's count and the two screens would
+  disagree every evening. The day helpers moved out of eodReport.ts (which
+  imports prisma) to `src/lib/time/pacificDay.ts` so the tally and its tests
+  stay pure; eodReport re-exports them, so its dozen importers are unchanged.
+- The EOD panel now prints the COUNT beside each of those two figures — it only
+  ever showed dollars — and links to `/orders?createdFrom=<date>&createdTo=<date>`.
+  The orders page reads that deep link off `window.location` in an effect, NOT
+  `useSearchParams` (a client page with no Suspense boundary fails `next build`).
 
 ## "Approved — book it" names the order and takes you to it (2026-09-17 — Wes)
 - Wes, on SR-JOB-0312: "It says that the production supply order is booked

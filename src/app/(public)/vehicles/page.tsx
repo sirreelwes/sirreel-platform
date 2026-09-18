@@ -4,6 +4,8 @@ import type { Metadata } from 'next'
 import { getPublicVehicles, groupPartnerUnits, type PublicVehicle } from '@/lib/site/vehicleCatalog'
 import { getPageTitles } from '@/lib/site/siteSettings'
 import { SWatermark } from '@/components/site/SWatermark'
+import { JsonLd } from '@/components/site/JsonLd'
+import { breadcrumbJsonLd, itemListJsonLd } from '@/lib/site/structuredData'
 
 /**
  * Public /vehicles landing — the "Vehicles" nav destination. Lists every
@@ -124,8 +126,25 @@ export default async function VehiclesIndexPage() {
   const alsoList = partnerGroups.map((g) => g.meta.title.toLowerCase())
   const also = alsoList.length === 0 ? '' : alsoList.length === 1 ? `, plus ${alsoList[0]}` : `, plus ${alsoList.slice(0, -1).join(', ')} and ${alsoList[alsoList.length - 1]}`
 
+  // A catalog of the detail pages, in the order they render. Summary form
+  // (url + name only) — each detail page carries its own Product node, so
+  // restating specs and rates here would be two sources of truth per van.
+  // Empty catalog → JsonLd renders nothing.
+  const listNode = itemListJsonLd(
+    [...fleet, ...partnerGroups.flatMap((g) => g.items)].map((v) => ({
+      name: v.name,
+      path: `/vehicles/${v.slug}`,
+    })),
+    'SirReel production vehicles and partner equipment',
+  )
+  const crumbs = breadcrumbJsonLd([
+    { name: 'SirReel', path: '/' },
+    { name: 'Vehicles', path: '/vehicles' },
+  ])
+
   return (
     <>
+      <JsonLd nodes={[listNode, crumbs]} />
       {/* Hero band — matches the order form's dark editorial band. */}
       <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
         <SWatermark />

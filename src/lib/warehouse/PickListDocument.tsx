@@ -84,6 +84,12 @@ export interface PickListLine {
    *  nobody was billed for, which is precisely the gear that used to
    *  disappear without anyone noticing. */
   includedAccessory?: boolean
+  /** Added to the order AFTER the warehouse pulled it (Wes 2026-09-18).
+   *  The floor is holding a sheet for an order it has already worked, so
+   *  the new gear has to be the thing that stands out on it — otherwise
+   *  it reads as a reprint of a job that is done. See
+   *  lib/orders/addedAfterPull.ts. */
+  addedAfterPull?: boolean
   /** Parts attached to each unit that never get their own line — the
    *  antenna and battery on a radio, the remote and case on a DF-50
    *  (InventoryItem.unitChecks). Printed as a tick per part so the
@@ -173,6 +179,10 @@ export interface PickListDocumentProps {
    * swap, a shortfall or a line that never went.
    */
   receipt?: PickListReceipt | null
+  /** This sheet IS the added gear and nothing else — the "as if it were
+   *  a new order" pull. Retitles the document so nobody reads it as a
+   *  short version of the original. */
+  addedOnly?: boolean
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -525,9 +535,12 @@ export function PickListDocument(props: PickListDocumentProps) {
   const receipt = props.receipt ?? null
   const grandTotal = props.lines.reduce((s, l) => s + (receipt ? l.out : l.ordered), 0)
   const addedTotal = receipt ? receipt.addedLines.reduce((s, l) => s + l.quantity, 0) : 0
+  const addedOnly = !receipt && !!props.addedOnly
   const docTitle = receipt
     ? (props.omittedLineCount ? 'PARTIAL GEAR RECEIPT' : 'GEAR RECEIPT')
-    : (props.omittedLineCount ? 'PARTIAL PICK LIST' : 'PICK LIST')
+    : addedOnly
+      ? 'ADDED GEAR'
+      : (props.omittedLineCount ? 'PARTIAL PICK LIST' : 'PICK LIST')
 
   return (
     <Document
@@ -563,7 +576,12 @@ export function PickListDocument(props: PickListDocumentProps) {
           <View style={styles.titleCol}>
             <Text style={styles.docTitle}>{docTitle}</Text>
             <Text style={styles.titleSub}>No: {props.orderNumber}</Text>
-            {!!props.omittedLineCount && (
+            {addedOnly ? (
+              <Text style={styles.partialNote}>
+                {props.lines.length} line{props.lines.length === 1 ? '' : 's'} added after this order
+                was pulled · pull {props.lines.length === 1 ? 'it' : 'them'} like a new order
+              </Text>
+            ) : !!props.omittedLineCount && (
               <Text style={styles.partialNote}>
                 {props.lines.length} of {props.lines.length + props.omittedLineCount} lines ·{' '}
                 {props.omittedLineCount} not on this {receipt ? 'load' : 'pull'}
@@ -687,6 +705,7 @@ export function PickListDocument(props: PickListDocumentProps) {
                   <Text style={receipt ? styles.receiptColDesc : styles.colDesc}>
                     {line.includedAccessory ? '\u2514 ' : ''}{line.description}
                     {line.includedAccessory ? ' (incl.)' : ''}
+                    {line.addedAfterPull && !addedOnly ? ' \u2014 ADDED, NOT YET PULLED' : ''}
                   </Text>
                   <Text style={receipt ? styles.receiptColType : styles.colType}>{line.type}</Text>
                   <Text style={receipt ? styles.receiptColOrdered : styles.colOrdered}>{line.ordered}</Text>

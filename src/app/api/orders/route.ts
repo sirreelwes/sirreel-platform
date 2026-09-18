@@ -6,6 +6,8 @@ import { nextOrderNumber, recalcOrderTotals } from "@/lib/orders";
 import { applyStandingDiscounts } from "@/lib/orders/applyStandingDiscounts";
 import { getServerSession } from "next-auth";
 import { resolveDataScope, orderScopeWhere } from "@/lib/auth/scope";
+import { isYmd, pacificRange } from "@/lib/time/pacificDay";
+import { tallyOrderDay } from "@/lib/orders/dayTally";
 
 /**
  * Sort options for the /orders list. `startDate` uses Prisma's explicit
@@ -87,6 +89,22 @@ export async function GET(req: NextRequest) {
       ];
     }
   }
+  // Created-on filter (Ana, 2026-09-17: "specify a certain date … confirm how
+  // many orders and quotes were created each day"). Pacific days, both ends
+  // inclusive; one of the two is enough, and a single day is from === to.
+  //
+  // PACIFIC, not UTC, because the day this has to agree with is the EOD
+  // report's day — a UTC cut would move every order written after 4pm into
+  // tomorrow's count and the two screens would disagree every evening.
+  const createdFrom = searchParams.get("createdFrom");
+  const createdTo = searchParams.get("createdTo");
+  const dayFrom = isYmd(createdFrom) ? createdFrom : isYmd(createdTo) ? createdTo : null;
+  const dayTo = isYmd(createdTo) ? createdTo : isYmd(createdFrom) ? createdFrom : null;
+  // Named dayWindow, not window — this is a server module, but shadowing a
+  // global that means something else everywhere reads as a mistake.
+  const dayWindow = dayFrom && dayTo ? pacificRange(dayFrom, dayTo) : null;
+  if (dayWindow) where.createdAt = { gte: dayWindow.start, lt: dayWindow.end };
+
   // Client-opted agentId filter — only honored when it matches the
   // user's scope. For OWN users we already constrained to their id;
   // an explicit agentId param against a different user is ignored to
@@ -106,7 +124,23 @@ export async function GET(req: NextRequest) {
     ];
   }
 
-  const [orders, total, valueAgg] = await Promise.all([
+  // The day's figures on the EOD report's own basis — every order created in
+  // the window, whatever the rep has filtered the table to. Deliberately NOT
+  // derived from `where`: the point of the card is to check the report, so a
+  // status filter or the hidden-drafts rule must not move its numbers. Scope
+  // is the one thing it does inherit, because showing a rep somebody else's
+  // orders in a total is a different leak.
+  const dayRowsPromise = dayWindow
+    ? prisma.order.findMany({
+        where: {
+          ...orderScopeWhere(scope),
+          createdAt: { gte: dayWindow.start, lt: dayWindow.end },
+        },
+        select: { total: true, bookedTotal: true, quoteStatus: true, status: true, archivedAt: true },
+      })
+    : Promise.resolve(null);
+
+  const [orders, total, valueAgg, dayRows] = await Promise.all([
     prisma.order.findMany({
       where,
       include: {
@@ -125,6 +159,7 @@ export async function GET(req: NextRequest) {
     // on this list worth" is the question the header was silently failing to
     // answer, and page-1-only would have answered it wrong.
     prisma.order.aggregate({ where, _sum: { total: true } }),
+    dayRowsPromise,
   ]);
 
   return NextResponse.json({
@@ -133,6 +168,7 @@ export async function GET(req: NextRequest) {
     page,
     limit,
     valueTotal: valueAgg._sum.total ?? 0,
+    dayTally: dayRows ? { from: dayFrom, to: dayTo, ...tallyOrderDay(dayRows) } : null,
   });
 }
 
