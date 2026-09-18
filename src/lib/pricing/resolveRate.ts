@@ -29,7 +29,7 @@ import { Prisma } from '@prisma/client'
 import type { RateType } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { normalizeCatalogRef } from '@/lib/catalog/resolve'
-import { applyStandingDiscount, bestStandingDiscount, overlayCompanyRate, type RatePair } from '@/lib/pricing/companyRate'
+import { bestStandingDiscount, clientPrice, type RatePair, type StandingDiscountRef } from '@/lib/pricing/companyRate'
 
 /** Works with the singleton client or a transaction client. */
 export type Db = Prisma.TransactionClient
@@ -96,20 +96,47 @@ export async function findItemStandingDiscount(
   inventoryItemId: string,
   db: Db = prisma,
 ): Promise<{ id: string; label: string; percentOff: number } | null> {
+  const byItem = await itemStandingDiscounts(companyId, [inventoryItemId], db)
+  return byItem.get(inventoryItemId) ?? null
+}
+
+/**
+ * The same read for a SCREENFUL of items, one query.
+ *
+ * The staff typeahead prices ten rows at a time and the kit-piece rule
+ * prices every piece on an order, so the per-item version would be ten
+ * round trips to answer one keystroke. `hasSome` narrows to the rows that
+ * touch any of these items; the per-item pick still runs through
+ * bestStandingDiscount, so a batch answer and a single answer cannot
+ * disagree.
+ */
+export async function itemStandingDiscounts(
+  companyId: string,
+  inventoryItemIds: string[],
+  db: Db = prisma,
+): Promise<Map<string, { id: string; label: string; percentOff: number }>> {
+  const out = new Map<string, { id: string; label: string; percentOff: number }>()
+  const ids = [...new Set(inventoryItemIds.filter(Boolean))]
+  if (!companyId || ids.length === 0) return out
   const now = new Date()
   const rows = await db.companyDiscount.findMany({
     where: {
       companyId,
       isActive: true,
-      inventoryItemIds: { has: inventoryItemId },
+      inventoryItemIds: { hasSome: ids },
       AND: [
         { OR: [{ effectiveDate: null }, { effectiveDate: { lte: now } }] },
         { OR: [{ expiryDate: null }, { expiryDate: { gte: now } }] },
       ],
     },
-    select: { id: true, label: true, percentOff: true },
+    select: { id: true, label: true, percentOff: true, inventoryItemIds: true },
   })
-  return bestStandingDiscount(rows)
+  if (rows.length === 0) return out
+  for (const id of ids) {
+    const best = bestStandingDiscount(rows.filter((r) => r.inventoryItemIds.includes(id)))
+    if (best) out.set(id, best)
+  }
+  return out
 }
 
 export async function resolveRate(
@@ -134,26 +161,23 @@ export async function resolveRate(
       where: { companyId_inventoryItemId: { companyId: input.companyId, inventoryItemId: itemId } },
       select: { dailyRate: true, weeklyRate: true },
     })
-    const merged = overlayCompanyRate(catalog, negotiatedRate)
-    const fromCard = merged.dailyFromCompany || merged.weeklyFromCompany
-
-    // A negotiated rate is ALREADY the deal. Taking a standing percentage
-    // off it as well hands the client the same concession twice, and the
-    // rep who typed the negotiated number would never see where the extra
-    // came from. The rate card wins; the standing discount stands down.
-    if (fromCard) {
-      return { dailyRate: merged.dailyRate, weeklyRate: merged.weeklyRate, source: 'COMPANY_RATE' }
+    // The rate card wins over a standing discount and the two never
+    // stack — decided once in clientPrice(), which the catalog typeahead
+    // and the kit-piece rule call too, so what a rep is SHOWN and what
+    // the line resolves against are the same number. Whether the card
+    // priced this is asked of the rule rather than re-tested here: a zero
+    // in a rate-card column means "not negotiated", and a second copy of
+    // that test is how the two halves drift apart.
+    const cardWins = clientPrice(catalog, negotiatedRate, null).source === 'COMPANY_RATE'
+    const standing: StandingDiscountRef | null = cardWins
+      ? null
+      : await findItemStandingDiscount(input.companyId, itemId, db)
+    const priced = clientPrice(catalog, negotiatedRate, standing)
+    return {
+      dailyRate: priced.dailyRate,
+      weeklyRate: priced.weeklyRate,
+      source: priced.source === 'LIST' ? fallbackSource : priced.source,
     }
-
-    const standing = await findItemStandingDiscount(input.companyId, itemId, db)
-    if (!standing) {
-      return { dailyRate: merged.dailyRate, weeklyRate: merged.weeklyRate, source: fallbackSource }
-    }
-    const cut = applyStandingDiscount(
-      { dailyRate: merged.dailyRate, weeklyRate: merged.weeklyRate },
-      standing.percentOff,
-    )
-    return { dailyRate: cut.dailyRate, weeklyRate: cut.weeklyRate, source: 'COMPANY_DISCOUNT' }
   }
 
   // One lookup for both shapes — a legacy assetCategoryId resolves to the

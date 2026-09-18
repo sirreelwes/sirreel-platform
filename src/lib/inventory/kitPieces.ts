@@ -13,7 +13,8 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { negotiated } from '@/lib/pricing/companyRate'
+import { clientPrice } from '@/lib/pricing/companyRate'
+import { itemStandingDiscounts } from '@/lib/pricing/resolveRate'
 import type {
   KitPieceBilling,
   LineItemDepartment,
@@ -141,16 +142,30 @@ export async function deriveKitPieceLines(
   })
   if (kits.length === 0) return []
 
-  // Client rate card, keyed by piece. Only CHARGED pieces consult it.
+  // What this client pays for each piece — rate card first, then an
+  // item-scoped standing discount, through the same clientPrice() the
+  // typeahead and resolveRate use. Only CHARGED pieces consult it: a FREE
+  // kit piece is $0 by policy and no deal makes it less than free.
   const negotiatedByPiece = new Map<string, number>()
   if (companyId) {
-    const rates = await db.companyRate.findMany({
-      where: { companyId, inventoryItemId: { in: kits.map((k) => k.pieceItemId) } },
-      select: { inventoryItemId: true, dailyRate: true },
-    })
-    for (const r of rates) {
-      const d = negotiated(r.dailyRate)
-      if (d) negotiatedByPiece.set(r.inventoryItemId, Number(d))
+    const pieceIds = kits.map((k) => k.pieceItemId)
+    const [rates, standingByPiece] = await Promise.all([
+      db.companyRate.findMany({
+        where: { companyId, inventoryItemId: { in: pieceIds } },
+        select: { inventoryItemId: true, dailyRate: true, weeklyRate: true },
+      }),
+      itemStandingDiscounts(companyId, pieceIds, db),
+    ])
+    const cardByPiece = new Map(rates.map((r) => [r.inventoryItemId, r]))
+    for (const kit of kits) {
+      const priced = clientPrice(
+        { dailyRate: kit.piece.dailyRate, weeklyRate: null },
+        cardByPiece.get(kit.pieceItemId) ?? null,
+        standingByPiece.get(kit.pieceItemId) ?? null,
+      )
+      if (priced.negotiated && priced.dailyRate != null) {
+        negotiatedByPiece.set(kit.pieceItemId, Number(priced.dailyRate))
+      }
     }
   }
 

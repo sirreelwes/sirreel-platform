@@ -38,7 +38,8 @@ export interface TentSandbagOfferProps {
   tentName: string
   /** The tent line's quantity: three 10x20s need 24 bags, not 8. */
   tentQuantity: number
-  /** Prices the offered row off this client's rate card. */
+  /** Prices the offered row off this client's deal — their rate card,
+   *  or an item-scoped standing discount that covers sandbags. */
   companyId: string | null
   /** The order already has a sandbag line — don't nag. */
   alreadyOnOrder: boolean

@@ -68,8 +68,12 @@ export interface CatalogHit {
    *  Only differs from dailyRate when `negotiated` is true. */
   listDailyRate?: number
   listWeeklyRate?: number
-  /** True when this client's rate card priced the row. */
+  /** True when this client pays something other than list — either their
+   *  rate card or an item-scoped standing discount priced the row. */
   negotiated?: boolean
+  /** The standing discount's client-facing label, when one priced the row.
+   *  Null for a rate card, whose number speaks for itself. */
+  dealLabel?: string | null
   /** True when the damage waiver may be offered on this item. Computed
    *  server-side from the rental agreement's exclusions so the picker
    *  and the order page cannot disagree about what is coverable. */
@@ -514,9 +518,17 @@ function LineItemDescriptionComboboxInner(
                   {FORMAT_USD(r.dailyRate)}/d
                 </span>
                 {/* Their price replaced ours — show what it replaced so
-                    the rep can see the deal, not just the number. */}
+                    the rep can see the deal, not just the number. A
+                    standing discount also names itself: the rep is about
+                    to quote a term somebody agreed to, and "20% off cube
+                    trucks" is the difference between a price and a typo. */}
                 {r.negotiated && r.listDailyRate != null && (
                   <div className="text-[10px] text-lt-fg3 line-through">{FORMAT_USD(r.listDailyRate)}</div>
+                )}
+                {r.negotiated && r.dealLabel && (
+                  <div className="text-[10px] text-amber-700 max-w-[10rem] truncate" title={r.dealLabel}>
+                    {r.dealLabel}
+                  </div>
                 )}
               </div>
             </li>

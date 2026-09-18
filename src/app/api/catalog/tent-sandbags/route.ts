@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { TENT_CATEGORY_SLUG } from '@/lib/sales/tentFirst'
 import { isSandbagItem } from '@/lib/sales/tentSandbags'
-import { negotiated } from '@/lib/pricing/companyRate'
+import { clientPrice } from '@/lib/pricing/companyRate'
+import { itemStandingDiscounts } from '@/lib/pricing/resolveRate'
 import { prisma } from '@/lib/prisma'
 
 export const dynamic = 'force-dynamic'
@@ -64,17 +65,23 @@ export async function GET(req: NextRequest) {
     return (a.description || a.code).localeCompare(b.description || b.code)
   })[0]
 
-  let deal: { daily: number | null; weekly: number | null } | null = null
+  // Both kinds of deal, same rule as the typeahead: the rate card prices
+  // it if there is one, otherwise an item-scoped standing discount does.
+  let deal = null
   if (companyId) {
-    const rate = await prisma.companyRate.findFirst({
-      where: { companyId, inventoryItemId: pick.id },
-      select: { dailyRate: true, weeklyRate: true },
-    })
-    if (rate) {
-      const d = negotiated(rate.dailyRate)
-      const w = negotiated(rate.weeklyRate)
-      if (d || w) deal = { daily: d ? Number(d) : null, weekly: w ? Number(w) : null }
-    }
+    const [rate, standingByItem] = await Promise.all([
+      prisma.companyRate.findFirst({
+        where: { companyId, inventoryItemId: pick.id },
+        select: { dailyRate: true, weeklyRate: true },
+      }),
+      itemStandingDiscounts(companyId, [pick.id]),
+    ])
+    const priced = clientPrice(
+      { dailyRate: pick.dailyRate, weeklyRate: pick.weeklyRate },
+      rate,
+      standingByItem.get(pick.id) ?? null,
+    )
+    if (priced.negotiated) deal = priced
   }
 
   const listDaily = Number(pick.dailyRate)
@@ -84,11 +91,12 @@ export async function GET(req: NextRequest) {
       id: pick.id,
       name: pick.description || pick.code,
       department: pick.department,
-      dailyRate: deal?.daily ?? listDaily,
-      weeklyRate: deal?.weekly ?? listWeekly,
+      dailyRate: deal?.dailyRate != null ? Number(deal.dailyRate) : listDaily,
+      weeklyRate: deal?.weeklyRate != null ? Number(deal.weeklyRate) : listWeekly,
       listDailyRate: listDaily,
       listWeeklyRate: listWeekly,
       negotiated: !!deal,
+      dealLabel: deal?.dealLabel ?? null,
     },
   })
 }

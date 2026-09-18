@@ -10,7 +10,8 @@ import {
 } from '@/lib/sales/tentFirst'
 import { prisma } from '@/lib/prisma'
 import { tokenVariants, mergeMeasureTokens } from '@/lib/sales/catalogMatcher'
-import { negotiated } from '@/lib/pricing/companyRate'
+import { clientPrice, type ClientPriceResult } from '@/lib/pricing/companyRate'
+import { itemStandingDiscounts } from '@/lib/pricing/resolveRate'
 import { STOCK_ONLY_CODES } from '@/lib/catalog/walkies'
 
 export const dynamic = 'force-dynamic'
@@ -328,22 +329,37 @@ export async function GET(req: NextRequest) {
     minAccessories: TENT_ACCESSORY_SLOTS,
   })
 
-  // Client rate card, one query for every hit on screen. Packages are
-  // priced by their own `pricePerDay` row and have no catalog item to
-  // hang a negotiated rate off, so they stay at list — a negotiated
-  // package price would be its own kind of row.
-  const negotiatedById = new Map<string, { daily: number | null; weekly: number | null }>()
+  // What this client pays, for every hit on screen — BOTH kinds of deal.
+  //
+  // The rate card was the only one consulted here until 2026-09-18, so an
+  // item-scoped standing discount ("20% off cube trucks and cargo vans")
+  // pre-filled LIST: the rep accepted it, the client was quoted list, and
+  // the server — which has always resolved that deal in resolveRate —
+  // stored the line as a rate override nobody made. Two queries, one
+  // rule, because the number shown here has to be the number the line
+  // resolves against.
+  //
+  // Packages are priced by their own `pricePerDay` row and have no
+  // catalog item to hang either deal off, so they stay at list — a
+  // negotiated package price would be its own kind of row.
+  const priceById = new Map<string, ClientPriceResult>()
   if (companyId && ordered.length) {
-    const rows = await prisma.companyRate.findMany({
-      where: { companyId, inventoryItemId: { in: ordered.map((i) => i.id) } },
-      select: { inventoryItemId: true, dailyRate: true, weeklyRate: true },
-    })
-    for (const r of rows) {
-      const d = negotiated(r.dailyRate)
-      const w = negotiated(r.weeklyRate)
-      if (d || w) {
-        negotiatedById.set(r.inventoryItemId, { daily: d ? Number(d) : null, weekly: w ? Number(w) : null })
-      }
+    const itemIds = ordered.map((i) => i.id)
+    const [rows, standingByItem] = await Promise.all([
+      prisma.companyRate.findMany({
+        where: { companyId, inventoryItemId: { in: itemIds } },
+        select: { inventoryItemId: true, dailyRate: true, weeklyRate: true },
+      }),
+      itemStandingDiscounts(companyId, itemIds),
+    ])
+    const cardByItem = new Map(rows.map((r) => [r.inventoryItemId, r]))
+    for (const i of ordered) {
+      const priced = clientPrice(
+        { dailyRate: i.dailyRate, weeklyRate: i.weeklyRate },
+        cardByItem.get(i.id) ?? null,
+        standingByItem.get(i.id) ?? null,
+      )
+      if (priced.negotiated) priceById.set(i.id, priced)
     }
   }
 
@@ -372,7 +388,7 @@ export async function GET(req: NextRequest) {
     // Every catalog hit is an InventoryItem now, so callers bind
     // inventoryItemId and never assetCategoryId.
     ...ordered.map((i) => {
-      const deal = negotiatedById.get(i.id)
+      const deal = priceById.get(i.id)
       // Whether the damage waiver may be offered alongside this item —
       // computed here so the agent builder and the client-facing one
       // cannot drift on the rule. See src/lib/pricing/lcdwEligibility.
@@ -386,12 +402,16 @@ export async function GET(req: NextRequest) {
         name: i.description || i.code,
         department: i.department,
         // What the line should bill at for this client.
-        dailyRate: deal?.daily ?? listDaily,
-        weeklyRate: deal?.weekly ?? listWeekly,
+        dailyRate: deal?.dailyRate != null ? Number(deal.dailyRate) : listDaily,
+        weeklyRate: deal?.weeklyRate != null ? Number(deal.weeklyRate) : listWeekly,
         lcdwEligible,
         listDailyRate: listDaily,
         listWeeklyRate: listWeekly,
         negotiated: !!deal,
+        // Which deal made this price — a rate card is the client's own
+        // number and speaks for itself; a standing discount is a term
+        // somebody agreed to, so the rep gets to see WHICH one.
+        dealLabel: deal?.dealLabel ?? null,
       }
     }),
     // Partner units last: they are a real answer but never the obvious one,

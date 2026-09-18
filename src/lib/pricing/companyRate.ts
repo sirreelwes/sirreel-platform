@@ -101,3 +101,70 @@ export function bestStandingDiscount(
   }
   return best
 }
+
+export interface StandingDiscountRef {
+  label: string
+  percentOff: number
+}
+
+export interface ClientPriceResult extends RatePair {
+  /** Where the number came from. LIST means neither deal reached it. */
+  source: 'COMPANY_RATE' | 'COMPANY_DISCOUNT' | 'LIST'
+  /**
+   * True when this client pays something other than list — what the
+   * picker reads to strike the list rate through. Both kinds of deal set
+   * it: to a rep, "their price" is one idea, not two.
+   */
+  negotiated: boolean
+  /** The standing discount's client-facing label, when one priced this. */
+  dealLabel: string | null
+}
+
+/**
+ * What this client pays for one catalog item — the WHOLE deal in one
+ * place.
+ *
+ * Two different things can price a line for a client and they resolve in
+ * a fixed order:
+ *
+ *   1. CompanyRate (the rate card) overlays the catalog per field.
+ *   2. An item-scoped CompanyDiscount takes a percentage off.
+ *
+ * A rate card row WINS and the standing discount stands down — a
+ * negotiated price is already the deal, and taking another 20% off it
+ * hands the client the same concession twice with nothing on screen to
+ * say where the second one came from. This mirrors resolveRate exactly
+ * because resolveRate CALLS this: the number the picker pre-fills and the
+ * number the server resolves the line against have to be the same number,
+ * or every line for that client saves flagged as a rate override nobody
+ * made.
+ */
+export function clientPrice(
+  catalog: RatePair,
+  card: RatePair | null,
+  standing: StandingDiscountRef | null,
+): ClientPriceResult {
+  const merged = overlayCompanyRate(catalog, card)
+  if (merged.dailyFromCompany || merged.weeklyFromCompany) {
+    return {
+      dailyRate: merged.dailyRate,
+      weeklyRate: merged.weeklyRate,
+      source: 'COMPANY_RATE',
+      negotiated: true,
+      dealLabel: null,
+    }
+  }
+  const base: RatePair = { dailyRate: merged.dailyRate, weeklyRate: merged.weeklyRate }
+  if (!standing || !Number.isFinite(standing.percentOff) || standing.percentOff <= 0) {
+    return { ...base, source: 'LIST', negotiated: false, dealLabel: null }
+  }
+  const cut = applyStandingDiscount(base, standing.percentOff)
+  // A 100% row (or one that moved nothing, e.g. an unpriced item) is not
+  // a price this client "negotiated" — leave the row reading as list
+  // rather than striking a list rate through to the same number.
+  const moved =
+    (cut.dailyRate?.toString() ?? null) !== (base.dailyRate?.toString() ?? null) ||
+    (cut.weeklyRate?.toString() ?? null) !== (base.weeklyRate?.toString() ?? null)
+  if (!moved) return { ...base, source: 'LIST', negotiated: false, dealLabel: null }
+  return { ...cut, source: 'COMPANY_DISCOUNT', negotiated: true, dealLabel: standing.label }
+}
