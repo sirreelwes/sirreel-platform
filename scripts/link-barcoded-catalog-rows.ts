@@ -48,6 +48,14 @@ interface Link {
   code: string
   /** Why this pairing is not a guess. */
   why: string
+  /**
+   * The row is archived and should not be — un-archive it as part of the
+   * link. Only for a row whose product SirReel genuinely stocks: an
+   * archived row holding barcoded units is usually a curation accident,
+   * but archiving is also how a product is retired, and un-archiving one
+   * that really is gone puts it back in front of every rep.
+   */
+  unarchive?: true
 }
 
 /**
@@ -56,9 +64,6 @@ interface Link {
  * where both carry a count, the counts agree. Three cases that look the
  * same are NOT here because the right row is not derivable:
  *
- *   - 105020 "Internet - T-Mobile MiFi (5G)" (20 units) — HQ's live MiFi
- *     rows are Verizon and AT&T, and 104402 (Verizon) already holds 19
- *     units of its own. Which carrier this is belongs to whoever stocks it.
  *   - 105159 "Jumper Box" (8 units) — HQ has no catalog row at all.
  *   - 104430 "Leaf Blower - Plug In" (4 units) — HQ has a live "Leaf
  *     Blower, Electric" (qty 0), a live Milwaukee M18 row that already
@@ -81,6 +86,18 @@ const LINKS: Link[] = [
     why: '2 barcoded "ECOFLOW DELTA 3 ULTRA 3.6K" — the only EcoFlow in either system; HQ\'s row carried the catalog code ECOFLOW, not the register ICode',
   },
   {
+    // Wes, 2026-09-18: "We have MiFis that are T-Mobile and Verizon. We
+    // keep both carriers to make sure we can provide when there's an
+    // area with no coverage." So the T-Mobile row is not a duplicate of
+    // the Verizon one and never was — it is the second half of a
+    // deliberate two-carrier stock, archived with 20 barcoded units and
+    // 20 on hand still sitting on it. Its twin (104402, Verizon) is live.
+    icode: '105020',
+    code: '105020',
+    unarchive: true,
+    why: '20 barcoded T-Mobile MiFis on a row that was archived; SirReel stocks both carriers on purpose, and the Verizon row beside it is live',
+  },
+  {
     icode: '104593',
     code: 'DOL-DOLLY-MAGLINER-SR-W-SHELF',
     why: '3 barcoded "Dolly - Magliner Sr with Shelf" against the identically named live row; the ICode sat on an archived twin',
@@ -98,7 +115,10 @@ async function main() {
       select: { id: true, code: true, description: true, rwICode: true, archivedAt: true, qtyOwned: true },
     })
     if (!live) { console.log(`SKIP ${link.icode} — no catalog row with code ${link.code}`); continue }
-    if (live.archivedAt) { console.log(`SKIP ${link.icode} — ${link.code} is archived; un-archive it first`); continue }
+    if (live.archivedAt && !link.unarchive) {
+      console.log(`SKIP ${link.icode} — ${link.code} is archived; add \`unarchive: true\` only if SirReel really stocks it`)
+      continue
+    }
 
     const others = await prisma.inventoryItem.findMany({
       where: { rwICode: link.icode, id: { not: live.id } },
@@ -111,12 +131,13 @@ async function main() {
       `\n${link.icode} → ${live.code}  "${live.description}"\n` +
       `  ${units} units (${active} active) · ${link.why}\n` +
       `  rwICode ${live.rwICode ?? '—'} → ${link.icode}` +
+      (link.unarchive && live.archivedAt ? `\n  UN-ARCHIVING (archived ${live.archivedAt.toISOString().slice(0, 10)}) — it becomes bookable again` : '') +
       (others.length ? `\n  clearing rwICode on: ${others.map((o) => `${o.code}${o.archivedAt ? '[archived]' : ' [LIVE]'}`).join(', ')}` : ''),
     )
 
     journal.push({
       icode: link.icode,
-      live: { id: live.id, code: live.code, rwICodeBefore: live.rwICode },
+      live: { id: live.id, code: live.code, rwICodeBefore: live.rwICode, archivedAtBefore: live.archivedAt },
       cleared: others.map((o) => ({ id: o.id, code: o.code, rwICodeBefore: o.rwICode, archived: !!o.archivedAt })),
       unitCount: units,
     })
@@ -126,7 +147,10 @@ async function main() {
       for (const o of others) {
         await tx.inventoryItem.update({ where: { id: o.id }, data: { rwICode: null } })
       }
-      await tx.inventoryItem.update({ where: { id: live.id }, data: { rwICode: link.icode } })
+      await tx.inventoryItem.update({
+        where: { id: live.id },
+        data: { rwICode: link.icode, ...(link.unarchive ? { archivedAt: null } : {}) },
+      })
       const moved = await tx.inventoryUnit.updateMany({
         where: { rwICode: link.icode },
         data: { inventoryItemId: live.id },
@@ -137,8 +161,17 @@ async function main() {
           action: 'inventory_item.link_barcoded_units',
           entityType: 'InventoryItem',
           entityId: live.id,
-          oldValues: { rwICode: live.rwICode, clearedFrom: others.map((o) => ({ id: o.id, code: o.code })) },
-          newValues: { rwICode: link.icode, unitsRepointed: moved.count, why: link.why },
+          oldValues: {
+            rwICode: live.rwICode,
+            archivedAt: live.archivedAt,
+            clearedFrom: others.map((o) => ({ id: o.id, code: o.code })),
+          },
+          newValues: {
+            rwICode: link.icode,
+            ...(link.unarchive ? { archivedAt: null } : {}),
+            unitsRepointed: moved.count,
+            why: link.why,
+          },
         },
       })
     })
