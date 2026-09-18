@@ -203,6 +203,13 @@ function FleetPageInner() {
           </div>
         </div>
         <div className="flex gap-2">
+          {/* The bulk door. The per-unit panel takes one PDF at a time, which
+              for a folder of registrations and BIT scans is a morning of
+              clicking — and therefore a job that does not get done. */}
+          <a href="/fleet/paperwork"
+            className="border border-gray-200 bg-white hover:border-gray-400 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-gray-700 whitespace-nowrap">
+            Upload paperwork
+          </a>
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search units..."
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-[11px] w-44 focus:outline-none focus:border-gray-400" />
