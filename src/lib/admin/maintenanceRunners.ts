@@ -16,6 +16,7 @@ import { seedDf50FluidKit } from '@/lib/inventory/seedDf50FluidKit'
 import { moveDf50Cord } from '@/lib/inventory/moveDf50Cord'
 import { seedKnownBrokers } from '@/lib/coi/seedKnownBrokers'
 import { fileNegotiatedAgreement, parseAliasEntries } from '@/lib/contracts/fileNegotiatedAgreement'
+import { offerAnnualToSigner } from '@/lib/portal/offerAnnualToSigner'
 import { TaskRefused } from '@/lib/admin/taskRefused'
 import { runAdditiveDdl } from '@/lib/admin/runAdditiveDdl'
 
@@ -124,6 +125,38 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
     return { log, createdIds: [], touchedIds: r.touchedIds, headline }
   },
 
+  'offer-annual-for-signature': async ({ dryRun, params, actorUserId }) => {
+    const key = clean(params.key)
+    if (!key) {
+      throw new TaskRefused('No agreement chosen.', 'Pick which negotiated agreement to offer.')
+    }
+    const r = await offerAnnualToSigner({
+      key,
+      dryRun,
+      aliases: parseAliasEntries(params.alias),
+      signerEmail: clean(params.signerEmail),
+      signerName: clean(params.signerName),
+      signerTitle: clean(params.signerTitle),
+      sendInvite: clean(params.sendInvite) !== 'no',
+      actorUserId: actorUserId ?? null,
+    })
+    const n = r.offered.length
+    const who = r.offered.map((o) => o.companyName).join(' and ')
+    const invited = r.offered.filter((o) => o.invited).length
+    const headline =
+      n === 0
+        ? `Nothing offered — ${r.skipped.length} compan${r.skipped.length === 1 ? 'y was' : 'ies were'} skipped. Read the log.`
+        : dryRun
+          ? `Dry run — would offer ${r.title} to ${who} for signature.`
+          : `${r.title} is waiting for a signature at ${who}` +
+            (invited ? ` — ${invited} invite${invited === 1 ? '' : 's'} sent.` : '.')
+    // A skip is the half a person must read: a company that quietly did not
+    // get the offer is a signature nobody is waiting for.
+    const log = r.skipped.length
+      ? [...r.log, '', 'Look at:', ...r.skipped.map((sk) => `  ! ${sk.registryName}: ${sk.reason} (${sk.detail})`)]
+      : r.log
+    return { log, createdIds: r.createdIds, touchedIds: r.touchedIds, headline }
+  },
   'file-negotiated-agreement': async ({ dryRun, params, actorUserId }) => {
     const key = clean(params.key)
     if (!key) {

@@ -22,6 +22,7 @@ scripts/*
 # blanket scripts/ ignore.
 !scripts/generate-canonical-agreement-pdf.ts
 !scripts/file-negotiated-agreement.ts
+!scripts/offer-annual-for-signature.ts
 !scripts/promote-soft-holds-to-first.ts
 !scripts/onboard-power-trip.ts
 !scripts/onboard-battery-partners.ts

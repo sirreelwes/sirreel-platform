@@ -350,6 +350,44 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   confident screen — and it leaves the terms in force with no signature
   behind them.
 
+### Offer it and invite the signer from a phone (2026-09-18 — Wes)
+- Wes: "I am not on my laptop. Is there a way to do this so that I can make
+  this happen from my phone?" Every piece was already a web control, but it
+  was THREE acts on a wide, dense page — Offer annual agreement · Add
+  people · Review & send invite — repeated per company, with 14px inputs iOS
+  Safari zooms into on focus.
+- **`offer-annual-for-signature` on /admin/maintenance does all three**,
+  per company, idempotently: offers the agreement in each company's portal,
+  grants the signer access as an EXECUTIVE, and emails them the invite.
+  `src/lib/portal/offerAnnualToSigner.ts` is the work; the CLI
+  `scripts/offer-annual-for-signature.ts` is argv + journal + exit code and
+  needs `vercel env run` (the blob token and the mailer live in the deployed
+  runtime — which is exactly why the phone path is the primary one here).
+- **NOT a second implementation.** It calls `offerAnnualForSignature`,
+  `grantCompanyPortalAccess` and `sendCompanyPortalInvite` — the same three
+  functions the panel's buttons call. The invite send was INLINE in
+  `PATCH …/portal-access/[accessId]` and unreachable from anywhere else;
+  it is now `src/lib/portal/sendCompanyInvite.ts`, one sender, because what
+  the invite carries (the annual callout and the sign link, appended by the
+  TEMPLATE and never by the editable prose) is the thing a second copy would
+  lose. `invitedAt` is still stamped only after Resend accepts.
+- **A blank signer email files the offers and mails nobody**, and
+  `sendInvite: no` grants access without mailing — offering and inviting are
+  separate states on purpose (set the paper up today, mail the executive
+  when the deal closes).
+- **What it refuses rather than guesses:** a company name matching 0 or 2+
+  rows (near-misses printed as pasteable aliases); a company with NOTHING
+  filed yet (run the filing task — that is what sets the agreed window); one
+  already SIGNED with no offer waiting; and — the one worth knowing —
+  **a company whose CRM name the registry does not map to this agreement.**
+  `offerAnnualForSignature` picks the document by that name, so a params-only
+  alias would pass the match and then render our BASELINE clauses under the
+  client's name. The fix it names is `companyAliases` in
+  negotiatedAgreement.ts, not the params box.
+- The CRM panel's own inputs are `text-base sm:text-sm` now (16px on a
+  phone, the /admin/maintenance rule), including the invite's edit box — the
+  one place a preview can still be edited before it goes.
+
 ## Their counsel reviews the agreement in HQ (2026-09-18 — Wes)
 - Wes: "Marell will probably want to see the entire agreement again. I'll
   need to send my finished one to him. Ideally, I can just send it in HQ to
