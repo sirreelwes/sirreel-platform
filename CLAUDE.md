@@ -1559,6 +1559,49 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   for "asked for another card N days ago, still declined"), and a declined
   charge at the collections desk still has no ask of its own.
 
+### The client is told too (2026-09-18 — Wes: "I don't understand how they were able to submit a card that was declined")
+- They were, on ONE of the three entry paths, and the split is deliberate:
+  **staff keying** (/crm/[id]#cards) and the **company account portal**
+  (`addClientCompanyCard`) both REFUSE a decline and store nothing; the
+  **client's job portal** (`/api/portal/[token]/sign` step `cc`) stores it.
+  That last one is right and stays: the same statement writes their
+  signature, payment preference and cardholder details, so refusing the card
+  would throw all of it away with the client standing there mid-form. **A
+  declined card on file can only have come through the portal** — the keyed
+  path cannot produce one.
+- **What was wrong is that the route answered a bare 200.** `r.ok` was true,
+  `onAuthorized()` fired, and the step collapsed to the green "Credit Card
+  Authorized" panel. The client saw success and walked away; the desk got a
+  `recordCardTrouble` AUTH_DECLINED email about a card only the client could
+  replace. The one person who could fix it in ten seconds, wallet still
+  open, was the one person nobody told.
+- **The storage stays; the success CLAIM goes.** The cc step now carries
+  `cardApproved` (three-state: approved / refused / **never answered** — a
+  gateway that THREW is not a decline, the card may be fine, so the client
+  hears nothing), and the response adds `cardDeclined` + `cardMessage` only
+  on a real refusal. `ok: true` still means "your submission was recorded",
+  which is true either way.
+- **Both halves, or the fix lasts until they refresh.** At SUBMIT the card
+  shows the notice and re-opens capture with the card cleared and the
+  signature/name/ZIP kept. On a RETURN visit `CardsOnFilePanel` replaces the
+  green banner with the red one — computed over the LIST (`usable`), so a
+  production that added a good second card is not nagged.
+- **`authChecked` on `CardOnFileSummary` is the whole safety of this.**
+  `validated` is `authRespStat === 'A'`, false for a refused card AND for
+  every card stored before the $0 check shipped (2026-09-01). On a staff chip
+  that conflation is a shrug; telling a CLIENT their working card was refused
+  by their bank is a false alarm worse than the silence it replaces. Read the
+  pair through `clientCardWasDeclined()` — never `validated` alone — on any
+  client-facing surface. A declined card also stops being selectable as the
+  charge card in `ClientCardRows`.
+- Neither notice guesses WHY (same rule as `cardAskClientSentence`), and both
+  say nothing was charged + what survived. `npm run test:card-ask` pins all
+  of it, including the never-checked false-alarm direction.
+- Known gap: `CardShell`'s `statusLabel` still reads "Authorized" from the
+  paperwork step's own `done`, so the header chip can disagree with a red
+  body. Fixing it means lifting `useClientCards` into `CcAuthCard`, which
+  would fetch on every portal open — deliberately not done.
+
 ## Ana can correct an invoice from her own desk (2026-09-17 — Ana)
 - Ana: "how do I update an invoice from my side?" She could not. Both ways of
   correcting an invoice existed — **regenerate** (rewrite the figures from
