@@ -25,10 +25,17 @@ import type { LineItemDepartment } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { requireCompanyTermsEditor } from '@/lib/portal/companyTermsEditors'
+import { isDiscountableDepartment } from '@/lib/orders/discountedTotals'
 
 export const dynamic = 'force-dynamic'
 
-const DEPARTMENTS: LineItemDepartment[] = [
+/**
+ * Departments a standing deal may cover. EXPENDABLES is deliberately
+ * absent — see NON_DISCOUNTABLE_DEPARTMENTS. It was on this list until
+ * 2026-09-18, which is how a deal the totals could never honour got
+ * entered on an account and printed on the client's portal.
+ */
+const DEPARTMENTS: LineItemDepartment[] = ([
   'VEHICLES',
   'COMMUNICATIONS',
   'STAGES',
@@ -38,7 +45,7 @@ const DEPARTMENTS: LineItemDepartment[] = [
   'ART',
   'WARDROBE_MAKEUP',
   'PHOTO_SHOOT',
-]
+] as LineItemDepartment[]).filter(isDiscountableDepartment)
 
 async function requireUser() {
   const session = await getServerSession(authOptions)
@@ -134,6 +141,23 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   const inventoryItemIds = Array.isArray(b.inventoryItemIds)
     ? [...new Set(b.inventoryItemIds.filter((x): x is string => typeof x === 'string' && !!x))]
     : []
+
+  // Named explicitly: without this, picking Expendables falls through the
+  // DEPARTMENTS test to null and the rep is told to "pick a department",
+  // having just picked one.
+  if (
+    typeof b.departmentKey === 'string' &&
+    b.departmentKey &&
+    !isDiscountableDepartment(b.departmentKey)
+  ) {
+    return NextResponse.json(
+      {
+        error:
+          'Expendables are a sale, not a rental — passed through at cost, so they carry no discount at any scope.',
+      },
+      { status: 400 },
+    )
+  }
 
   if (!departmentKey && inventoryItemIds.length === 0) {
     return NextResponse.json(

@@ -29,9 +29,11 @@ import type {
   InvoiceStatus,
   JobRole,
   JobStatus,
+  LineItemDepartment,
   OrderStatus,
 } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
+import { NON_DISCOUNTABLE_DEPARTMENTS } from "@/lib/orders/discountedTotals";
 import { weeklyRateCap } from "@/lib/orders/billing";
 import { loadRwPortalInvoices } from "@/lib/portal/rwPortalInvoices";
 import { deriveJobDateRange } from "@/lib/jobs/dateRange";
@@ -338,6 +340,14 @@ export async function buildCompanyTerms(
       where: {
         companyId,
         isActive: true,
+        // A deal on a department that carries no discount is not shown to
+        // the client. The portal is a PROMISE — "50% off supply orders" is
+        // read by an executive as a term of their account — and the totals
+        // zero an expendables discount, so advertising one is telling them
+        // they get something they will never be billed. Legacy rows are
+        // withheld here and reported to STAFF on the order page instead,
+        // where somebody can retire them.
+        NOT: { departmentKey: { in: NON_DISCOUNTABLE_DEPARTMENTS as LineItemDepartment[] } },
         // In-window on both ends. A discount whose term has run out must
         // stop being advertised the day it lapses, not the day someone
         // remembers to untick it.

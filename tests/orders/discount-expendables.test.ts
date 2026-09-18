@@ -19,7 +19,11 @@
  * invoice generator, the persisted Order row, and the order detail API.
  */
 
-import { computeOrderTotals } from '../../src/lib/orders/discountedTotals'
+import {
+  computeOrderTotals,
+  isDiscountableDepartment,
+  NON_DISCOUNTABLE_DEPARTMENTS,
+} from '../../src/lib/orders/discountedTotals'
 import type { LineForTotals, DiscountForTotals } from '../../src/lib/orders/discountedTotals'
 
 const failures: string[] = []
@@ -108,6 +112,29 @@ const noExp = computeOrderTotals({ lines: [gear('VEHICLES', 200)], discounts: or
 eq(noExp.discountableSubtotal, 200, 'discountable base equals the subtotal')
 eq(noExp.orderDiscount, 20, '10% of 200')
 eq(noExp.total, 180, 'unchanged from the pre-rule math')
+
+// ── The rule the rest of the app reads ───────────────────────────────
+//
+// Wes 2026-09-18: "We are not going to give discounts at all on
+// EXPENDABLES because we do not profit on those." Before this, the math
+// above was the ONLY place that knew — the CRM happily accepted "15% off
+// Expendables" on an account, applyStandingDiscounts seeded a row for it,
+// and the client's portal advertised it. Every one of those now tests
+// isDiscountableDepartment, so the list and the behaviour cannot drift.
+console.log('\nThe shared rule every surface reads\n')
+
+eq(isDiscountableDepartment('EXPENDABLES'), false, 'expendables are not discountable')
+eq(NON_DISCOUNTABLE_DEPARTMENTS.includes('EXPENDABLES'), true, 'and they are on the list')
+
+for (const dept of ['VEHICLES', 'COMMUNICATIONS', 'STAGES', 'PRO_SUPPLIES', 'GE', 'ART', 'WARDROBE_MAKEUP', 'PHOTO_SHOOT']) {
+  eq(isDiscountableDepartment(dept), true, `${dept} still discounts`)
+}
+
+// A null department is the ORDER scope, which has its own carve-out (the
+// expendables subtotal is excluded from the base) — it must not read as
+// "discountable" and go looking for a department that isn't there.
+eq(isDiscountableDepartment(null), false, 'a null department is not a discountable department')
+eq(isDiscountableDepartment(''), false, 'nor is an empty one')
 
 console.log('')
 if (failures.length) {

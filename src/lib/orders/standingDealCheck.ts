@@ -34,17 +34,21 @@
 const CENT = 0.005
 
 /**
- * Expendables are a SALE, not a rental — passed through at cost, no
- * day-rate margin to give back (Wes 2026-08-29). computeOrderTotals skips
- * the department outright and the discounts route refuses one out loud.
+ * A department that carries no discount at any scope — expendables are a
+ * sale, not a rental (Wes 2026-09-18: "we do not profit on those").
+ * computeOrderTotals zeroes one, so reporting such a deal as 'applied'
+ * would be the panel telling a rep a discount is live that the totals
+ * throw away.
  *
- * The CRM's department list still offers it, though, so "20% off
- * Expendables" can be sitting on an account — and applyStandingDiscounts
- * has no such filter, so it may even have seeded a row. Reporting that as
- * 'applied' would be the panel telling a rep a discount is live when the
- * totals zero it. It gets its own verdict instead, whatever else is true.
+ * As of 2026-09-18 none can be ENTERED (the CRM refuses it) and none is
+ * seeded or advertised to the client. The 'not-applicable' verdict is
+ * what surfaces the ones already on an account, to staff, where someone
+ * can retire them — no code path deletes one.
+ *
+ * discountedTotals.ts is itself pure, so importing the rule here keeps
+ * this file testable without a database.
  */
-const NEVER_DISCOUNTED = 'EXPENDABLES'
+import { isDiscountableDepartment } from './discountedTotals'
 
 export interface StandingDealInput {
   id: string
@@ -162,7 +166,7 @@ export function reconcileStandingDeals(input: {
       canApply: false,
     }
 
-    if (deal.departmentKey === NEVER_DISCOUNTED) {
+    if (deal.departmentKey && !isDiscountableDepartment(deal.departmentKey)) {
       return {
         ...base,
         scope: 'DEPARTMENT',

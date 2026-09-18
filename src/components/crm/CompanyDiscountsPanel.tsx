@@ -22,12 +22,14 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Loader2, Plus, Trash2, X } from 'lucide-react'
 
+// Expendables are absent on purpose — a sale, not a rental, so they carry
+// no discount at any scope (NON_DISCOUNTABLE_DEPARTMENTS). The API refuses
+// one too; this just keeps it off the menu.
 const DEPARTMENTS: { value: string; label: string }[] = [
   { value: 'VEHICLES', label: 'Vehicles' },
   { value: 'COMMUNICATIONS', label: 'Communications' },
   { value: 'STAGES', label: 'Stages' },
   { value: 'PRO_SUPPLIES', label: 'Production supplies' },
-  { value: 'EXPENDABLES', label: 'Expendables' },
   { value: 'GE', label: 'Grip & electric' },
   { value: 'ART', label: 'Art department' },
   { value: 'WARDROBE_MAKEUP', label: 'Wardrobe & makeup' },

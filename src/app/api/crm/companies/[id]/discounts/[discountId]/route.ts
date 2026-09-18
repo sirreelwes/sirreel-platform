@@ -17,11 +17,12 @@ import { getServerSession } from 'next-auth'
 import type { LineItemDepartment } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { isDiscountableDepartment } from '@/lib/orders/discountedTotals'
 import { requireCompanyTermsEditor } from '@/lib/portal/companyTermsEditors'
 
 export const dynamic = 'force-dynamic'
 
-const DEPARTMENTS: LineItemDepartment[] = [
+const DEPARTMENTS: LineItemDepartment[] = ([
   'VEHICLES',
   'COMMUNICATIONS',
   'STAGES',
@@ -31,7 +32,7 @@ const DEPARTMENTS: LineItemDepartment[] = [
   'ART',
   'WARDROBE_MAKEUP',
   'PHOTO_SHOOT',
-]
+] as LineItemDepartment[]).filter(isDiscountableDepartment)
 
 async function requireUser() {
   const session = await getServerSession(authOptions)

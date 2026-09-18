@@ -38,6 +38,7 @@
 
 import type { LineItemDepartment, Prisma, PrismaClient } from '@prisma/client'
 import { prisma as defaultPrisma } from '@/lib/prisma'
+import { isDiscountableDepartment } from './discountedTotals'
 
 type Db = PrismaClient | Prisma.TransactionClient
 
@@ -107,6 +108,11 @@ export async function applyStandingDiscounts(
   for (const d of standing) {
     const dept = d.departmentKey
     if (!dept || taken.has(dept) || seenHere.has(dept)) continue
+    // A department that carries no discount at any scope. Seeding one made
+    // a row computeOrderTotals zeroes — a discount printed on the quote
+    // and worth nothing. Legacy rows still exist; the order page's
+    // standing-deal reminder reports them rather than hiding them.
+    if (!isDiscountableDepartment(dept)) continue
     if (!Number.isFinite(d.percentOff) || d.percentOff <= 0 || d.percentOff > 100) continue
     seenHere.add(dept)
 

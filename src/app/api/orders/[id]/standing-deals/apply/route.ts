@@ -31,6 +31,7 @@ import { getServerSession } from 'next-auth'
 import { prisma } from '@/lib/prisma'
 import { recalcOrderTotals } from '@/lib/orders'
 import { isMoneyEditable } from '@/lib/orders/editability'
+import { isDiscountableDepartment } from '@/lib/orders/discountedTotals'
 import { auditLineItemEdit, extractIp } from '@/lib/orders/auditLineItemEdit'
 import { partnerFloorGate } from '@/lib/sub-rentals/partnerMargins'
 
@@ -98,7 +99,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   // Same refusal the discounts route makes out loud — computeOrderTotals
   // skips the department, so the row would be a discount the client is
   // shown and never gets.
-  if (deal.departmentKey === 'EXPENDABLES') {
+  if (!isDiscountableDepartment(deal.departmentKey)) {
     return NextResponse.json(
       {
         error: 'department not discountable',

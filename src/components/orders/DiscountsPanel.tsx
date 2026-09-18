@@ -27,7 +27,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { flatTotalToDepartmentDiscount } from '@/lib/orders/discountedTotals'
+import { flatTotalToDepartmentDiscount, isDiscountableDepartment } from '@/lib/orders/discountedTotals'
 import { SIRREEL_FLOOR_PERCENT, type PartnerLineMargin } from '@/lib/sub-rentals/discountWaterfall'
 import { needsAttention, type StandingDealReport } from '@/lib/orders/standingDealCheck'
 
@@ -219,7 +219,7 @@ export function DiscountsPanel({
           // Expendables still LIST — they're part of the subtotal a rep is
           // reconciling, and a silently missing row reads as a bug. They
           // just can't be given a discount.
-          const discountable = dept.department !== 'EXPENDABLES'
+          const discountable = isDiscountableDepartment(dept.department)
           if (!discountable) {
             return (
               <div key={dept.department} className="text-sm">

@@ -25,7 +25,7 @@ import { getServerSession } from 'next-auth'
 import type { DiscountScope, DiscountType, LineItemDepartment } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { recalcOrderTotals } from '@/lib/orders'
-import { computeOrderTotals } from '@/lib/orders/discountedTotals'
+import { computeOrderTotals, isDiscountableDepartment } from '@/lib/orders/discountedTotals'
 import { auditLineItemEdit, extractIp, resolveOperatorId } from '@/lib/orders/auditLineItemEdit'
 import { isMoneyEditable } from '@/lib/orders/editability'
 import { gateFurtherDiscount } from '@/lib/orders/standingDealGate'
@@ -157,7 +157,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     // Expendables are a sale, not a rental — no day-rate margin to give
     // back, so they carry no discount at either scope. computeOrderTotals
     // zeroes any that slips through; this is where it's refused out loud.
-    if (departmentKey === 'EXPENDABLES') {
+    if (!isDiscountableDepartment(departmentKey)) {
       return NextResponse.json(
         {
           error: 'department not discountable',

@@ -46,6 +46,30 @@ import type { DiscountScope, DiscountType, LineItemDepartment, LineItemType } fr
 const round2 = (n: number): number => Math.round(n * 100) / 100
 const clampNonNeg = (n: number, max: number): number => Math.max(0, Math.min(n, max))
 
+/**
+ * Departments that carry NO discount, at any scope, ever.
+ *
+ * Wes 2026-09-18: "We are not going to give discounts at all on
+ * EXPENDABLES because we do not profit on those." Consumables are a SALE
+ * — bought in for the job and passed through at cost-plus. There is no
+ * day-rate margin in them to give back, so a percentage off them comes
+ * straight out of SirReel with nothing behind it.
+ *
+ * This is the ONE statement of that rule. It was prose in five places
+ * before (the totals math below, the discounts route, the apply route,
+ * the order panel's per-department affordance, and nowhere at all in the
+ * CRM, which is how "15% off Expendables" could be entered on an account
+ * and advertised on the client's portal while the math zeroed it). Every
+ * one of those now reads this, so the department list and the behaviour
+ * cannot drift apart again.
+ */
+export const NON_DISCOUNTABLE_DEPARTMENTS: readonly string[] = ['EXPENDABLES']
+
+/** False for a department that may never carry a discount. */
+export function isDiscountableDepartment(dept: string | null | undefined): boolean {
+  return !!dept && !NON_DISCOUNTABLE_DEPARTMENTS.includes(dept)
+}
+
 export interface LineForTotals {
   department: LineItemDepartment
   type: LineItemType
@@ -166,7 +190,7 @@ export function computeOrderTotals(args: {
     const lineSubtotal = round2(deptMap.get(dept) ?? 0)
     const d = deptDiscounts.get(dept) ?? null
     let discount = 0
-    if (d && dept !== 'EXPENDABLES') {
+    if (d && isDiscountableDepartment(dept)) {
       const v = numberOf(d.value)
       discount = d.type === 'PERCENT' ? lineSubtotal * (v / 100) : v
       discount = round2(clampNonNeg(discount, lineSubtotal))
