@@ -90,3 +90,40 @@ export function orderContentSummary(
   if (parts.length === 0) return sawFee ? 'Fees' : null
   return parts.join(' · ')
 }
+
+/** How many reserved units get named before the line says "+N more". */
+const DEFAULT_MAX_UNITS = 4
+
+/**
+ * The same line, with the UNITS actually reserved for this order named.
+ *
+ * "SuperCube Truck ×2 · Pro Supplies" answers what was sold; the yard
+ * reading a morning brief wants to know which trucks leave (Wes
+ * 2026-09-18, on the Going out list: "let's name the vehicles and or
+ * order type"). A class name cannot answer that and a unit name cannot
+ * answer the first, so the line carries both.
+ *
+ * The caller must pass units taken from `BookingAssignment.orderId` —
+ * bookings are JOB-level and shared by sibling orders, so reading units
+ * off the order's booking would name a truck going out on a different
+ * order. An order whose assignments carry no order id (legacy rows,
+ * holds placed before the order existed) names no unit rather than
+ * guessing.
+ */
+export function orderContentsLine(
+  lines: SummarizableLine[],
+  unitNames: readonly string[] = [],
+  opts: { maxNamed?: number; maxUnits?: number } = {},
+): string | null {
+  const summary = orderContentSummary(lines, opts)
+  const maxUnits = opts.maxUnits ?? DEFAULT_MAX_UNITS
+  const units = [...new Set(unitNames.map((u) => (u || '').trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, undefined, { numeric: true }),
+  )
+  if (units.length === 0) return summary
+
+  const shown = units.slice(0, maxUnits)
+  const overflow = units.length - shown.length
+  const named = shown.join(', ') + (overflow > 0 ? ` +${overflow} more` : '')
+  return summary ? `${summary} — ${named}` : named
+}

@@ -9,7 +9,11 @@
  * kit piece, and a summary that says "Vehicles" when it could say which
  * vehicle.
  */
-import { orderContentSummary, type SummarizableLine } from '../../src/lib/orders/contentSummary'
+import {
+  orderContentSummary,
+  orderContentsLine,
+  type SummarizableLine,
+} from '../../src/lib/orders/contentSummary'
 
 const failures: string[] = []
 function eq(got: unknown, want: unknown, why: string): void {
@@ -69,6 +73,38 @@ eq(orderContentSummary([
   line({ description: 'Lankershim Studios', department: 'STAGES' }),
   line({ description: 'Whatever', department: 'FUTURE_DEPT' }),
 ]), 'Lankershim Studios · FUTURE_DEPT', 'a stage is named; an unknown department still shows up')
+
+console.log('\nthe units reserved for the order (the brief\'s contents line)')
+const truck = line({ description: 'SuperCube Truck', department: 'VEHICLES', type: 'VEHICLE' })
+const supplies = line({ description: 'Chairs, Folding', quantity: 40 })
+
+eq(orderContentsLine([truck, supplies], ['Cube 27']),
+  'SuperCube Truck · Pro Supplies — Cube 27',
+  'the class says what was sold, the unit says which truck leaves')
+
+eq(orderContentsLine([truck, supplies], []),
+  'SuperCube Truck · Pro Supplies',
+  'no unit reserved yet — the line is the summary, with nothing invented')
+
+eq(orderContentsLine([truck], ['Cube 31', 'Cube 27', 'Cube 27']),
+  'SuperCube Truck — Cube 27, Cube 31',
+  'units dedupe and sort naturally, so the line reads the same every send')
+
+eq(orderContentsLine([truck], ['Cube 9', 'Cube 10']),
+  'SuperCube Truck — Cube 9, Cube 10',
+  'numeric sort — Cube 9 before Cube 10, not after')
+
+eq(orderContentsLine([truck], ['A 1', 'A 2', 'A 3', 'A 4', 'A 5', 'A 6']),
+  'SuperCube Truck — A 1, A 2, A 3, A 4 +2 more',
+  'a long fleet is capped, never truncated silently')
+
+eq(orderContentsLine([], ['Cube 27']), 'Cube 27',
+  'an order with no lines but a truck on it still names the truck')
+
+eq(orderContentsLine([], []), null, 'nothing to say stays nothing')
+
+eq(orderContentsLine([truck], ['', '  ']), 'SuperCube Truck',
+  'blank unit names are not a unit')
 
 console.log(failures.length === 0 ? '\nAll passed.\n' : `\n${failures.length} FAILED\n`)
 process.exit(failures.length === 0 ? 0 : 1)
