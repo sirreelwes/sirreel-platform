@@ -43,6 +43,7 @@ import { recordEmailDelivery } from '@/lib/email/recordEmailDelivery'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
 import { sendPortalInvite } from '@/lib/portal/sendPortalInvite'
 import { partnerFloorGate } from '@/lib/sub-rentals/partnerMargins'
+import { partnerPaperGate } from '@/lib/sub-rentals/partnerPaperGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,6 +56,9 @@ const MAX_PORTAL_GRANTS = 5
 export const maxDuration = 30
 
 interface SendQuoteBody {
+  /** Second pass after the unsigned-partner 409: the rep pressed "Send
+   *  anyway", so the paper warning is not re-raised for this send. */
+  confirmUnsignedPartner?: boolean
   /** Optional plain-text message inserted into the email body above the
    *  standard quote-attached line. */
   message?: unknown
@@ -106,6 +110,27 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     typeof body.message === 'string' && body.message.trim().length > 0
       ? body.message.trim().slice(0, 5000)
       : null
+  // An UNSIGNED partner on this order (Wes 2026-09-18). Sending a quote
+  // commits nothing and nobody's gear is on the road yet, so this does NOT
+  // stop the send — it is acknowledged once and then goes, the same shape as
+  // the already-replied guard below. The point is that it is seen while
+  // there is still time to get the agreement signed, rather than discovered
+  // at the point somebody is counting on a partner's indemnity.
+  if (!body.confirmUnsignedPartner) {
+    const paper = await partnerPaperGate(params.id)
+    if (!paper.ok) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'unsigned-partner',
+          reason: paper.message,
+          partners: paper.unsigned.map((p) => ({ name: p.vendorName, units: p.unitNames, status: p.status })),
+        },
+        { status: 409 },
+      )
+    }
+  }
+
   const manualCc = parseCcList(body.ccAdd)
   const ccOverride = Array.isArray(body.cc)
     ? (body.cc.filter((v) => typeof v === 'string') as string[])

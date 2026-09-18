@@ -290,6 +290,59 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   and the alternative puts their coordinators back to signing our baseline
   per job — strictly worse paper than their negotiated document.
 
+## No partner's gear on a job without their signature (2026-09-18 — Wes)
+- Wes, reading his counsel's §32 redline: "go ahead with the unsigned-partner
+  gate." §32 supplies a partner's unit to the client **on SirReel's own
+  terms**, and Graduation Day's negotiated version pushes further — we answer
+  for a failure (theirs or ours) to meet §4 and for "the acts and omissions of
+  such third parties". All of that is survivable ONLY because the partner
+  carries it back to back: partner agreement **§6** (condition, maintenance,
+  load-testing, certifications, repair-or-replace at their cost) and **§11**
+  (they indemnify "SirReel, its officers, employees, agents AND CLIENTS" for a
+  Unit's condition, their breach, and their personnel's acts in delivery,
+  setup and collection — expressly carved OUT of their own consequential
+  exclusion). No signature, nothing behind the promise.
+- **The hole:** the signature gate existed — `PARTNER_APPROVED_VENDOR_WHERE`
+  in site/vehicleCatalog.ts — and guards the PUBLIC LISTING only.
+  `/api/catalog/search` matches a partner unit on `isActive` +
+  `offeredToSirReel` + `vendor.isActive`, so a rep could quote AND book an
+  unsigned partner's unit. VSM Planet is the live example: quotable today,
+  agreement unsigned.
+- **`src/lib/sub-rentals/partnerPaperGate.ts`** is the rule.
+  `partnerPaperStatus()` is pure: none / unsigned / signed / expired /
+  not-yet-effective, best row wins (a lapsed copy or an unsigned re-file
+  beside a signed one is still covered), both date ends inclusive of the
+  calendar day like `isCoverageCurrent`. **Only "nothing signed" blocks** —
+  a lapsed agreement is named loudly and lets the booking through.
+- **Scope is a live SubRental with a ROSTER unit**, and deliberately NOT
+  `PARTNER_SUB_RENTAL_WHERE` from orders/partnerLines.ts: that predicate
+  excludes DELIVER_TO_SIRREEL because it answers "does this come through our
+  warehouse". This one answers "whose gear is it", and a partner's generator
+  dropped at Sun Valley is still theirs. **Ad-hoc sub-leases are out of
+  scope** — §32 covers them, but the backstop there is that house's own
+  rental terms under which we are the renter. There is paper; it isn't ours.
+- **THREE doors reach BOOKED and two of them needed it.** `/mark-booked`
+  (the job page + the order page's "Record client approval") and **`/book`**
+  (the order page's APPROVED action, which had no floor gate either — still
+  doesn't, flagged not fixed). A gate on one is bypassed by the other button.
+- **Confirmable, not a wall** — unlike `partnerFloorGate`, which refuses
+  outright. A rep cannot produce a partner's countersignature, and a client
+  waiting on a Friday is not a reason to leave a booking unrecorded. So the
+  server refuses ONCE with the partner and units NAMED, and
+  `confirmUnsignedPartner: true` pushes it through, recorded on the audit row
+  as `unsignedPartnerOverride`.
+- **send-quote warns, it does not stop.** A quote commits nothing and no
+  gear is on the road, so the 409 (`error: 'unsigned-partner'`) is
+  acknowledged once and the button re-arms as **Send anyway** — the same
+  shape as `EmailReviewModal`'s existing already-replied guard, reusing that
+  machinery rather than adding a second pattern.
+- NOT done: the client's own portal approval (`/api/portal/job/approve-quote`)
+  is deliberately NOT gated — you cannot refuse a client's yes because our
+  partner has not countersigned. That one wants an action item, which is the
+  obvious next step and is not built. Nor is an action item / job-page prompt
+  for the unsigned partner generally.
+- `npm run test:partner-paper`.
+
 ## The broker gets the review, not a forwarded paragraph (2026-09-17 — Wes)
 - Wes: "Is there a way to extract the broker from a COI and add an option to
   send a link to them when we need an updated COI or something isn't passing
