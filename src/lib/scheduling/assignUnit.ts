@@ -22,7 +22,7 @@ import {
   type ServiceableAsset,
 } from '@/lib/scheduling/availability'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
-import { blockCapacity, quotedBlocks, resolveAssignWindow, type ResolvedWindow } from '@/lib/scheduling/assignWindow'
+import { blockCapacity, quotedBlocks, resolveAssignWindow, soleOrderCoveringHold, type ResolvedWindow } from '@/lib/scheduling/assignWindow'
 import { quotedLinesForHold } from '@/lib/scheduling/quotedLines'
 import { formatCalendarDate, formatCalendarRange } from '@/lib/dates/calendarDate'
 
@@ -188,7 +188,13 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
   // rather than asked.
   const candidateOrders = await prisma.order.findMany({
     where: { jobId: bookingItem.booking.jobId ?? undefined, status: { notIn: ['CANCELLED'] }, archivedAt: null },
-    select: { id: true },
+    select: {
+      id: true,
+      startDate: true,
+      endDate: true,
+      lineItems: { select: { pickupDate: true, returnDate: true } },
+      booking: { select: { startDate: true, endDate: true, status: true } },
+    },
   })
   const candidateIds = new Set(candidateOrders.map((o) => o.id))
   const requestedOrderId = typeof args.orderId === 'string' ? args.orderId : null
@@ -199,8 +205,22 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
   // is on which order" marker should survive a change of truck without
   // being re-picked.
   const inheritedOrderId = outgoing?.orderId && candidateIds.has(outgoing.orderId) ? outgoing.orderId : null
-  const attachOrderId =
-    requestedOrderId ?? inheritedOrderId ?? (candidateOrders.length === 1 ? candidateOrders[0].id : null)
+  // The lone-order shortcut has to be an order about THESE DAYS. A job
+  // runs for months and its earlier order is just as alone on it: on
+  // KPDH Multi Block 2 the only other order was S260914-021, out on
+  // 9/15 and already on the job, and a 9/18 reservation stamped the van
+  // "goes out on S260914-021" — paperwork the yard had closed three
+  // days earlier (Oliver, 2026-09-18). With nothing overlapping, no
+  // order is named and the agent picks one when there is one to pick.
+  // It cuts the other way too: a job carrying a September order and an
+  // October one used to name neither, and now names the one whose days
+  // these are.
+  const holdWindow = { start: bookingItem.booking.startDate, end: bookingItem.booking.endDate }
+  const coveringOrderId = soleOrderCoveringHold(
+    candidateOrders.map((o) => ({ id: o.id, ...deriveOrderWindow({ ...o, job: { bookings: [] } }) })),
+    holdWindow,
+  )
+  const attachOrderId = requestedOrderId ?? inheritedOrderId ?? coveringOrderId
 
   // ── Which LINE of that order? ─────────────────────────────────────
   // Named by the caller, or inherited on a swap (the replacement truck is
@@ -226,17 +246,7 @@ export async function assignUnitToBookingItem(args: AssignUnitArgs): Promise<Ass
   // `resolveAssignWindow` is the one place that decides it, shared with
   // the picker so the list and the button cannot disagree. See
   // assignWindow.ts for what each wider window cost.
-  const orderForWindow = attachOrderId
-    ? await prisma.order.findUnique({
-        where: { id: attachOrderId },
-        select: {
-          startDate: true,
-          endDate: true,
-          lineItems: { select: { pickupDate: true, returnDate: true } },
-          booking: { select: { startDate: true, endDate: true, status: true } },
-        },
-      })
-    : null
+  const orderForWindow = attachOrderId ? candidateOrders.find((o) => o.id === attachOrderId) ?? null : null
   const orderWindow = orderForWindow ? deriveOrderWindow({ ...orderForWindow, job: { bookings: [] } }) : null
   const blocks = quotedBlocks(
     await quotedLinesForHold({

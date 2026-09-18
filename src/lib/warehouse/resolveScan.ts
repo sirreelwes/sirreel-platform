@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
-import { isStockOnlyCode, WALKIE_ORDER_CODE } from '@/lib/catalog/walkies'
+import { orderCodeForStockCode } from '@/lib/catalog/stockFills'
+import { nonRentalStockFor } from '@/lib/catalog/nonRentalStock'
 
 /**
  * Turn whatever a scanner (or a picker's keyboard) put in the box into a
@@ -135,20 +136,24 @@ export async function resolveScan(raw: string): Promise<ScanResolution> {
 /**
  * A stock-only row answers as the row its orders are written against.
  *
- * Walkies (lib/catalog/walkies.ts): every walkie line binds to the
- * "Motorola CP200" row, but the shelf holds analog radios under their own
- * RentalWorks I-code. Without this, a picker grabbing an analog radio for
- * a walkie line would be told "this line expects 104387" — the floor
- * decides which CP200 goes out, not the order. The unit itself (id,
- * barcode) is untouched, so the scan still records exactly which radio
- * left.
+ * Walkies: every walkie line binds to the "Motorola CP200" row, but the
+ * shelf holds analog radios under their own RentalWorks I-code. MiFis:
+ * every line binds to "Mobile Internet MiFi" while the shelf holds
+ * T-Mobile and Verizon hotspots. Without this, a picker grabbing an
+ * analog radio — or whichever carrier has coverage at that location —
+ * would be told "this line expects something else"; the floor decides
+ * which one goes out, not the order. The unit itself (id, barcode) is
+ * untouched, so the scan still records exactly which one left.
+ *
+ * The pairs live in lib/catalog/stockFills.ts.
  */
 async function orderableRow<T extends { id: string; code: string | null }>(
   row: T,
 ): Promise<{ id: string; code: string | null }> {
-  if (!isStockOnlyCode(row.code)) return row
+  const orderCode = orderCodeForStockCode(row.code)
+  if (!orderCode) return row
   const target = await prisma.inventoryItem.findFirst({
-    where: { code: WALKIE_ORDER_CODE, isActive: true },
+    where: { code: orderCode, isActive: true },
     select: { id: true, code: true },
   })
   return target ?? row
@@ -169,6 +174,15 @@ export function describeUnlanded(
     return `${res.scanned} isn't a code or a barcode we know. Check the label, or use the manual tick.`
   }
   if (res.kind === 'unlinked-unit') {
+    // Some unlinked gear is unlinked on purpose — the jump starters that
+    // live on the trucks are ours and barcoded and have no catalog row
+    // because they never go on an order (lib/catalog/nonRentalStock).
+    // Telling the floor to "flag it" sends them after a row nobody is
+    // going to create.
+    const shopKit = nonRentalStockFor(res.unit.rwICode)
+    if (shopKit) {
+      return `${res.scanned} is ${shopKit.what.toLowerCase()} — ours, but not rental stock, so it doesn't go on an order.`
+    }
     return `${res.scanned} is ${res.unit.description ?? 'a known unit'} (RW item ${res.unit.rwICode}), but it isn't matched to anything in the HQ catalog yet — pick it manually and flag it.`
   }
   const what = res.kind === 'unit'

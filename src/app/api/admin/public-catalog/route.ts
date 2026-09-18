@@ -20,7 +20,7 @@ import {
   publicBlockReason,
   publishingIsEnough,
 } from '@/lib/catalog/publicVisibility'
-import { STOCK_ONLY_CODES } from '@/lib/catalog/walkies'
+import { STOCK_ONLY_CODES } from '@/lib/catalog/stockFills'
 
 export const dynamic = 'force-dynamic'
 

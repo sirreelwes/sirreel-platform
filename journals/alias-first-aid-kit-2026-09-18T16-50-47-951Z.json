@@ -1,0 +1,21 @@
+{
+  "ranAt": "2026-09-18T16:50:47.952Z",
+  "entries": [
+    {
+      "id": "22de4d9f-cd3c-41e0-bd1f-ecb52a7cc21c",
+      "code": "SAF-1ST-AID-KIT-50-PERSON",
+      "description": "1st Aid Kit, 50 person",
+      "aliasesBefore": [],
+      "aliasesAfter": [
+        "first aid kit",
+        "first-aid kit",
+        "first aid",
+        "first-aid",
+        "1st aid kit",
+        "1st aid",
+        "aid kit"
+      ],
+      "why": "the live, orderable first-aid row (rwICode 104427, 12 barcoded units); its two twins — code \"104427\" and code 'First Aid Kit \"50 Person\"' — are archived with 0 units and 0 barcoded units"
+    }
+  ]
+}

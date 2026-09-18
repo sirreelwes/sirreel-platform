@@ -89,8 +89,16 @@ const CASES: Array<[description: string, expected: string | RegExp | null]> = [
 
   // …but a row that explains most of the description wins on a narrow lead.
   ['large trash cans + liners', 'Trash Cans, Large'],
-  ['first aid kit', 'First Aid Kit "50 Person"'],
-  ['First-aid kit', 'First Aid Kit "50 Person"'],
+  // The live, orderable row. It used to be named `First Aid Kit "50
+  // Person"`; that row is archived with 0 units since the 2026-09-13
+  // duplicate-rwICode cleanup, and this one — "1st Aid Kit" where clients
+  // write "first aid kit" — is what the yard actually stocks. Curated
+  // aliases (seeded, `codeContains: '1ST-AID-KIT'`) are what bridge the
+  // two spellings; the hyphenated form matched NOTHING without them.
+  // If a later catalog merge moves the answer again, switch these to the
+  // RegExp form above rather than chasing the name a third time.
+  ['first aid kit', '1st Aid Kit, 50 person'],
+  ['First-aid kit', '1st Aid Kit, 50 person'],
 
   // Name tokens are deduped — 'Fan, "RE Fan" w/stand' outscored the plain
   // utility fan on "fans" purely by saying "fan" twice.

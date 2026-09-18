@@ -13,6 +13,7 @@ import { MAINTENANCE_TASKS, type MaintenanceTaskMeta } from '@/lib/admin/mainten
 import { seedVsmPlanet, RECEIVE_METHODS, type ReceiveMethodKey } from '@/lib/sub-rentals/seedVsmPlanet'
 import { moveCargoOffLiftGate } from '@/lib/fleet/moveCargoOffLiftGate'
 import { seedDf50FluidKit } from '@/lib/inventory/seedDf50FluidKit'
+import { moveDf50Cord } from '@/lib/inventory/moveDf50Cord'
 import { seedKnownBrokers } from '@/lib/coi/seedKnownBrokers'
 import { fileNegotiatedAgreement, parseAliasEntries } from '@/lib/contracts/fileNegotiatedAgreement'
 import { TaskRefused } from '@/lib/admin/taskRefused'
@@ -59,6 +60,17 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
       : dryRun
         ? `Dry run — ${n} DF-50 row${n === 1 ? '' : 's'} would get the fluid as a kit piece.`
         : `${n} DF-50 row${n === 1 ? '' : 's'} now bring the fluid with them.`
+    const log = r.warnings.length ? [...r.log, '', 'Look at:', ...r.warnings.map((w) => `  ! ${w}`)] : r.log
+    return { log, createdIds: r.createdIds, touchedIds: r.touchedIds, headline }
+  },
+  'df50-cord-to-machine': async ({ dryRun }) => {
+    const r = await moveDf50Cord({ dryRun })
+    const nothing = r.linked === 0 && r.movedOff === 0
+    const headline = nothing
+      ? 'Already filed this way — the cord is on the machine.'
+      : dryRun
+        ? `Dry run — the cord would move off ${r.movedOff} row(s) and onto ${r.linked} DF-50 machine row(s).`
+        : `The cord is on ${r.linked} DF-50 machine row(s); taken off ${r.movedOff}.`
     const log = r.warnings.length ? [...r.log, '', 'Look at:', ...r.warnings.map((w) => `  ! ${w}`)] : r.log
     return { log, createdIds: r.createdIds, touchedIds: r.touchedIds, headline }
   },

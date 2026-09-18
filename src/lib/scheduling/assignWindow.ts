@@ -8,7 +8,15 @@
  *   · the BOOKING ENVELOPE spans every order on the job (fixed in
  *     b5799955 — a truck was held Sep 22 → Oct 10 to cover three days);
  *   · the ORDER SPAN covers every line on that order, and one order
- *     routinely carries two date blocks of the same class.
+ *     routinely carries two date blocks of the same class;
+ *   · ANOTHER WEEK ENTIRELY — the days the job's previous order was
+ *     quoted for. Oliver, 2026-09-18, put Cargo 22 on a fresh 9/18
+ *     reservation for KPDH Multi Block 2 (SR-2026-0449) and the van
+ *     came out on 9/18 in the job's reservation window but nowhere on
+ *     the board: the only other order on that job was S260914-021,
+ *     already out on 9/15, and with no cargo line to read the resolver
+ *     handed back THAT order's span. The van was bound to three days
+ *     earlier — a bar in the past on a reservation for today.
  *
  * Oliver, 2026-09-14, on ADV Carrera (SR-2026-0387): "HQ won't let me
  * assign pass 2 on 9/29 - 9/30 because pass 2 returns on 9/28. Client
@@ -29,6 +37,16 @@
  * This module resolves that block and nothing else does; both the picker
  * (what states it shows) and the write (what it checks and what it
  * stamps) call it, so they cannot drift apart again.
+ *
+ * And narrower in one more way: the ORDER has to be about the hold. An
+ * order that covers the hold's days speaks for it, second and third date
+ * blocks included — NECTARHOUSE S3 quotes a cube 9/18 → 9/19 and another
+ * 9/24 → 9/25 on one order, and Cube 32 is rightly on both even though
+ * the booking envelope stops at the 19th. An order that does NOT reach
+ * the hold is a different rental of the same job, and its blocks are not
+ * this hold's to fill; with nothing quoted for these days the hold's own
+ * window is the answer. An agent may still NAME any block the order
+ * covers (`requested`) — this is only about what gets picked FOR them.
  */
 import { toCalendarDateString } from '@/lib/dates/calendarDate'
 
@@ -53,7 +71,7 @@ export type WindowSource =
   | 'block-open'
   /** No lines to read — the order's span, clamped to the hold. */
   | 'overlap'
-  | 'order'
+  /** Nothing quoted for these days — the hold's own window. */
   | 'hold'
 
 export interface ResolvedWindow extends DateWindow {
@@ -154,6 +172,29 @@ export function blockCapacity(args: {
   return { quantity, assignedCount, remaining: Math.max(0, quantity - assignedCount), block }
 }
 
+/**
+ * WHICH ORDER a hold's unit goes out on, when nobody named one.
+ *
+ * "The job has exactly one order, so that's the one" is only true of a
+ * job that runs for a week. A job that runs for months carries an order
+ * per block, and its earlier one is just as alone on the job while being
+ * finished, invoiced and gone. The order that speaks for a hold is one
+ * whose days TOUCH it; several that do is an ambiguity the agent
+ * resolves, not the server (Oliver, 2026-09-18 — see the header).
+ *
+ * Windows come from `deriveOrderWindow`; an order with no dates at all
+ * says nothing about any hold and is skipped.
+ */
+export function soleOrderCoveringHold(
+  candidates: { id: string; start: Date | null; end: Date | null }[],
+  hold: DateWindow,
+): string | null {
+  const covering = candidates.filter(
+    (c) => c.start && c.end && windowsOverlap({ start: c.start, end: c.end }, hold),
+  )
+  return covering.length === 1 ? covering[0].id : null
+}
+
 export interface ResolveArgs {
   /** The hold's own window — the booking envelope. Always present. */
   hold: DateWindow
@@ -189,20 +230,29 @@ export function resolveAssignWindow(args: ResolveArgs): ResolvedWindow {
     }
   }
 
-  if (blocks.length === 1) {
-    return { start: blocks[0].start, end: blocks[0].end, source: 'block' }
+  // Blocks the resolver may pick on its own. All of them when the order
+  // they were read off reaches the hold — a second block on that order
+  // is the same reservation's next leg. Otherwise only blocks that touch
+  // the hold themselves, which is none of them when the lines belong to
+  // another week's order: that is how Cargo 22 landed on 9/15 for a 9/18
+  // hold.
+  const orderReachesHold = !!orderStart && !!orderEnd && windowsOverlap({ start: orderStart, end: orderEnd }, hold)
+  const onHold = orderReachesHold ? blocks : blocks.filter((b) => windowsOverlap(b, hold))
+
+  if (onHold.length === 1) {
+    return { start: onHold[0].start, end: onHold[0].end, source: 'block' }
   }
 
-  if (blocks.length > 1) {
+  if (onHold.length > 1) {
     // The earliest block that still wants a unit. Ties and legacy rows
     // (stamped with an order span that matches no block) leave the
     // earliest block looking short, which is the conservative guess.
-    const open = blocks.find((b) => coverageOfBlock(b, assignments) < b.quantity)
+    const open = onHold.find((b) => coverageOfBlock(b, assignments) < b.quantity)
     if (open) return { start: open.start, end: open.end, source: 'block-open' }
   }
 
-  // No lines to read: the order's span clamped to the hold, so a shared
-  // booking's other orders can't drag this one wide.
+  // No lines to read for these days: the order's span clamped to the
+  // hold, so a shared booking's other orders can't drag this one wide.
   if (orderStart && orderEnd) {
     const orderWindow = { start: orderStart, end: orderEnd }
     if (windowsOverlap(orderWindow, hold)) {
@@ -212,8 +262,9 @@ export function resolveAssignWindow(args: ResolveArgs): ResolvedWindow {
         source: 'overlap',
       }
     }
-    return { start: orderStart, end: orderEnd, source: 'order' }
   }
 
+  // The order says nothing about these days — an order for another week,
+  // or no order at all. The hold is then the only thing that does.
   return { start: hold.start, end: hold.end, source: 'hold' }
 }

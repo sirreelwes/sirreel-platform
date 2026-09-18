@@ -31,6 +31,14 @@
  *     booking and no card arrived in either store. The yard's check-out
  *     refuses the same rows (lib/payments/cardGate.ts); this is the
  *     agent hearing about it first.
+ *   - card-declined (DERIVED) — a card DID arrive and it will not charge:
+ *     the bank refused the $0 check, or it has expired. Strictly the case
+ *     card-required cannot see — that provider's condition is NOT EXISTS,
+ *     and a dead card satisfies it, so the bad card silences the good
+ *     warning. `cardGateForJob` has the same blind spot and will let the
+ *     yard release it, which is why this row says so. Clears the moment any
+ *     usable card exists on the job or the company. Never fires on a card
+ *     HQ never validated (most Planyo-era rows) — see cardAsk.isCardUsable.
  *   - driver-hours-untrued (DERIVED) — a partner's driver logged their
  *     hours and the order still bills the quoted estimate. Clears when
  *     the desk applies them (lib/orders/driverTrueUp.ts).
@@ -111,6 +119,7 @@ import { partnerCoiMissingProvider } from '@/lib/actionItems/providers/partnerCo
 import { partnerIntroUnansweredProvider } from '@/lib/actionItems/providers/partnerIntroUnanswered'
 import { partnerPhotosAddedProvider } from '@/lib/actionItems/providers/partnerPhotosAdded'
 import { cardRequiredProvider } from '@/lib/actionItems/providers/cardRequired'
+import { cardDeclinedProvider } from '@/lib/actionItems/providers/cardDeclined'
 import { driverHoursUntruedProvider } from '@/lib/actionItems/providers/driverHoursUntrued'
 import { clientCreatedUnquotedProvider } from '@/lib/actionItems/providers/clientCreatedUnquoted'
 import { possibleDuplicateJobProvider } from '@/lib/actionItems/providers/possibleDuplicateJob'
@@ -135,6 +144,11 @@ const PROVIDERS: ActionItemProvider[] = [
   // HQ sent the card link, nothing came back, and the yard will refuse
   // to release the vehicle until the agent keys a signed authorization.
   cardRequiredProvider,
+  // The client DID give us a card and it will not charge — refused, or
+  // expired. The one above cannot see it: its condition is NOT EXISTS, and
+  // a dead card satisfies every existence check in HQ, the yard's gate
+  // included. Nothing chased these before (Wes 2026-09-18).
+  cardDeclinedProvider,
   // A driver logged their hours and the order still bills the estimate —
   // catch it before the invoice goes out.
   driverHoursUntruedProvider,

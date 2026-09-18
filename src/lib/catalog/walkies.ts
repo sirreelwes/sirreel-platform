@@ -33,6 +33,8 @@
  * Codes, not ids or names — names drift, and ids differ per environment.
  */
 
+import { familyCodes } from '@/lib/catalog/stockFills'
+
 /** What every client, quote and order form calls a walkie. */
 export const WALKIE_NAME = 'Motorola CP200'
 
@@ -40,13 +42,22 @@ export const WALKIE_NAME = 'Motorola CP200'
 export const WALKIE_ORDER_CODE = '104387'
 
 /**
- * Stock rows that fill walkie orders but are never offered themselves.
- * The analog radios.
+ * The stock-only mechanism is no longer walkie-shaped: MiFis use it too
+ * (Wes 2026-09-18 — T-Mobile and Verizon fill one "Mobile Internet
+ * MiFi"), so the registry moved to lib/catalog/stockFills.ts. Re-exported
+ * here because the walkie surfaces already import it from this module.
+ *
+ * `WALKIE_FAMILY_CODES` now asks the registry for THIS product's family
+ * rather than appending every stock-only code in the system. Spreading
+ * the global list was correct while walkies were the only entry and
+ * became a counting bug the moment they were not: walkiePool sums
+ * qtyOwned across the family, so the MiFis would have been counted as
+ * radios (25 of them) the day the second entry landed.
  */
-export const STOCK_ONLY_CODES: readonly string[] = ['103733']
+export { STOCK_ONLY_CODES, isStockOnlyCode, NOT_STOCK_ONLY_WHERE } from '@/lib/catalog/stockFills'
 
 /** Every row whose units count toward the walkie pool. */
-export const WALKIE_FAMILY_CODES: readonly string[] = [WALKIE_ORDER_CODE, ...STOCK_ONLY_CODES]
+export const WALKIE_FAMILY_CODES: readonly string[] = familyCodes(WALKIE_ORDER_CODE)
 
 /** Retired 2026-09-15 — the "(Sub)" row. Subbing is HQ's call now. */
 export const RETIRED_WALKIE_CODES: readonly string[] = ['CP200S']
@@ -54,19 +65,6 @@ export const RETIRED_WALKIE_CODES: readonly string[] = ['CP200S']
 export function isWalkieFamilyCode(code: string | null | undefined): boolean {
   return !!code && WALKIE_FAMILY_CODES.includes(code)
 }
-
-export function isStockOnlyCode(code: string | null | undefined): boolean {
-  return !!code && STOCK_ONLY_CODES.includes(code)
-}
-
-/**
- * Prisma filter fragment: leave the stock-only rows out. Spread into any
- * `inventoryItem` where clause that feeds an ordering or client surface.
- * Uses `NOT`, so a caller that already sets `NOT` must merge by hand.
- */
-export const NOT_STOCK_ONLY_WHERE = {
-  NOT: { code: { in: [...STOCK_ONLY_CODES] } },
-} as const
 
 /**
  * "Motorola CP200  UHF Radio (Analog)" → "Motorola CP200", anywhere in a

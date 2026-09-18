@@ -20,7 +20,7 @@
  */
 
 import type { Prisma } from '@prisma/client'
-import { STOCK_ONLY_CODES } from '@/lib/catalog/walkies'
+import { STOCK_ONLY_CODES } from '@/lib/catalog/stockFills'
 
 /** Rules 1, 2 and 4 as a Prisma filter. Rule 3 needs a row, see below. */
 export const PUBLIC_CATALOG_VISIBLE_WHERE = {
@@ -28,7 +28,9 @@ export const PUBLIC_CATALOG_VISIBLE_WHERE = {
   isActive: true,
   categoryId: { not: null },
   // Stock-only rows never face a client, published or not: the analog
-  // walkies are sold as the one "Motorola CP200" row (lib/catalog/walkies).
+  // walkies are sold as the one "Motorola CP200" row, and the T-Mobile
+  // and Verizon hotspots as the one "Mobile Internet MiFi"
+  // (lib/catalog/stockFills.ts).
   NOT: { code: { in: [...STOCK_ONLY_CODES] } },
 } satisfies Prisma.InventoryItemWhereInput
 

@@ -20,6 +20,15 @@
  *  - Reply-To is the SENDER, exact, so the markup comes back to a person and
  *    not to notifications@.
  *  - Audited with WHO it went to, never the body.
+ *  - **A GET is the REVIEW** (Wes 2026-09-18: "Where is the review of the
+ *    email to Marell?"). The first cut composed the body inside the POST, so
+ *    the only thing on screen before sending was the note box — for the one
+ *    message in HQ most worth reading twice, going to the client's lawyer.
+ *    Preview and send both call `renderCounselReviewEmail`, so the preview
+ *    IS the mail (the partner-welcome rule). The GET mints its own display
+ *    token; the POST mints the one that is sent. Both are valid for the same
+ *    agreement, so the preview is honest about what the link does even
+ *    though the string differs.
  */
 import { NextRequest, NextResponse } from 'next/server'
 import { getServerSession } from 'next-auth'
@@ -27,10 +36,80 @@ import { prisma } from '@/lib/prisma'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { signCounselReviewToken, counselReviewUrl } from '@/lib/contracts/counselReviewToken'
 import { buildCounselReviewPacket } from '@/lib/contracts/counselReviewPacket'
+import {
+  renderCounselReviewEmail,
+  defaultCounselReviewBody,
+} from '@/lib/contracts/counselReviewEmail'
 
 export const dynamic = 'force-dynamic'
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
+
+/**
+ * GET — the REVIEW. Renders exactly what the POST will send, for the same
+ * inputs, through the same renderer. Sends nothing, stamps nothing, and
+ * audits nothing: reading a draft is not an act.
+ */
+export async function GET(
+  req: NextRequest,
+  { params }: { params: { id: string; agreementId: string } },
+) {
+  const session = await getServerSession()
+  if (!session?.user?.email) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+
+  const packet = await buildCounselReviewPacket(params.agreementId)
+  if (!packet) {
+    return NextResponse.json(
+      {
+        error: 'That agreement has no negotiated document on file.',
+        fix: 'This link only works for an agreement whose clauses are in the registry.',
+      },
+      { status: 409 },
+    )
+  }
+  const agreementRow = await prisma.companyAgreement.findFirst({
+    where: { id: params.agreementId, companyId: params.id, deletedAt: null },
+    select: { id: true },
+  })
+  if (!agreementRow) return NextResponse.json({ error: 'not found' }, { status: 404 })
+
+  const sender = await prisma.user.findUnique({
+    where: { email: session.user.email },
+    select: { name: true, email: true },
+  })
+  const sp = req.nextUrl.searchParams
+  const name = sp.get('name')?.trim() || null
+  const message = sp.get('message')?.trim() || null
+
+  const url = counselReviewUrl(signCounselReviewToken({ companyAgreementId: packet.companyAgreementId }))
+  const mail = renderCounselReviewEmail({
+    packet,
+    url,
+    senderName: sender?.name || 'Wes Bailey',
+    recipientName: name,
+    message,
+  })
+
+  return NextResponse.json({
+    ok: true,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
+    // What the send will put in the headers, so the review shows the whole
+    // envelope and not just the body. No Cc, by design.
+    from: 'SirReel HQ',
+    replyTo: sender?.email || 'wes@sirreel.com',
+    cc: [],
+    reviewUrl: url,
+    // The standard wording, so the panel can show what a blank note sends.
+    defaultBody: defaultCounselReviewBody(packet),
+    document: {
+      title: packet.title,
+      companyName: packet.companyName,
+      isCurrentDraft: packet.isCurrentDraft,
+    },
+  })
+}
 
 export async function POST(
   req: NextRequest,
@@ -75,28 +154,21 @@ export async function POST(
   })
 
   const url = counselReviewUrl(signCounselReviewToken({ companyAgreementId: packet.companyAgreementId }))
-  const greeting = name ? `${name.split(/\s+/)[0]},` : 'Hello,'
-  const body_ = message
-    ? message.split(/\n{2,}/).map((p) => `<p>${p.replace(/\n/g, '<br/>')}</p>`).join('')
-    : `<p>Here is the clean copy of the ${packet.title} for ${packet.companyName}, with your changes in place.</p>` +
-      `<p>The page below has the whole agreement, and a button to download it as a Word file if you want to mark it up further. The Word copy is generated from the agreement text itself rather than converted from the PDF, so it should be clean to work in.</p>`
+  const mail = renderCounselReviewEmail({
+    packet,
+    url,
+    senderName: sender?.name || 'Wes Bailey',
+    recipientName: name,
+    message,
+  })
 
   const sent = await sendAgreementEmail({
     to: [email],
     replyTo: sender?.email || 'wes@sirreel.com',
     replyToExact: true,
-    subject: `${packet.title} — ${packet.companyName}`,
-    html:
-      `<p>${greeting}</p>${body_}` +
-      // Appended HERE, not in the draft above.
-      `<p><a href="${url}">Read the agreement and download a copy</a></p>` +
-      `<p style="color:#666;font-size:12px">This link opens the current copy — if anything changes, the same link shows the corrected one.</p>` +
-      `<p>${sender?.name || 'Wes Bailey'}<br/>SirReel Studio Services</p>`,
-    text:
-      `${greeting}\n\n` +
-      (message ||
-        `Here is the clean copy of the ${packet.title} for ${packet.companyName}, with your changes in place. The page below has the whole agreement and a button to download it as a Word file.`) +
-      `\n\n${url}\n\nThis link opens the current copy — if anything changes, the same link shows the corrected one.\n\n${sender?.name || 'Wes Bailey'}\nSirReel Studio Services`,
+    subject: mail.subject,
+    html: mail.html,
+    text: mail.text,
     label: 'counsel-agreement-review',
   }).catch((e) => {
     console.error('[counsel-review] send failed:', e)

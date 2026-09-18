@@ -29,6 +29,7 @@ scripts/*
 !scripts/cargo-vans-no-lift-gate.ts
 !scripts/add-partner-prospect-columns.ts
 !scripts/link-barcoded-catalog-rows.ts
+!scripts/alias-first-aid-kit.ts
 !scripts/add-assignment-blind-columns.ts
 !scripts/add-partner-photo-columns.ts
 !scripts/add-cars-suvs-section.ts
@@ -114,3 +115,7 @@ scripts/*
 !scripts/planyo-unit-alignment.ts
 !scripts/make-og-card.py
 !scripts/brief-email-crosscheck.ts
+!scripts/move-df50-cord.ts
+
+# Claude Code worktrees — nested checkouts, never part of a commit
+.claude/worktrees/

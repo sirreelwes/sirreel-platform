@@ -24,7 +24,7 @@ import { getCategoryAvailability } from '@/lib/scheduling/availability'
 import type { AssetTier } from '@prisma/client'
 import { requireReadSession } from '@/lib/scheduling/requireReadSession'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
-import { blockCapacity, coverageOfBlock, quotedBlocks, resolveAssignWindow } from '@/lib/scheduling/assignWindow'
+import { blockCapacity, coverageOfBlock, quotedBlocks, resolveAssignWindow, soleOrderCoveringHold } from '@/lib/scheduling/assignWindow'
 import { quotedLinesForHold } from '@/lib/scheduling/quotedLines'
 
 export const dynamic = 'force-dynamic'
@@ -66,27 +66,30 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
   // ── The days being filled ─────────────────────────────────────────
   const liveOrders = await prisma.order.findMany({
     where: { jobId: bookingItem.booking.jobId ?? undefined, status: { notIn: ['CANCELLED'] }, archivedAt: null },
-    select: { id: true, orderNumber: true, status: true },
+    select: {
+      id: true,
+      orderNumber: true,
+      status: true,
+      startDate: true,
+      endDate: true,
+      lineItems: { select: { pickupDate: true, returnDate: true } },
+      booking: { select: { startDate: true, endDate: true, status: true } },
+    },
     orderBy: { createdAt: 'asc' },
   })
+  const holdWindow = { start: bookingItem.booking.startDate, end: bookingItem.booking.endDate }
+  // Unnamed, the order is the one whose days these are — the SAME rule
+  // the write uses (soleOrderCoveringHold), or the picker would read the
+  // blocks of one order while the button stamped another's.
   const askedOrderId = url.searchParams.get('orderId')
   const activeOrderId =
     askedOrderId && liveOrders.some((o) => o.id === askedOrderId)
       ? askedOrderId
-      : liveOrders.length === 1
-        ? liveOrders[0].id
-        : null
-  const orderForWindow = activeOrderId
-    ? await prisma.order.findUnique({
-        where: { id: activeOrderId },
-        select: {
-          startDate: true,
-          endDate: true,
-          lineItems: { select: { pickupDate: true, returnDate: true } },
-          booking: { select: { startDate: true, endDate: true, status: true } },
-        },
-      })
-    : null
+      : soleOrderCoveringHold(
+          liveOrders.map((o) => ({ id: o.id, ...deriveOrderWindow({ ...o, job: { bookings: [] } }) })),
+          holdWindow,
+        )
+  const orderForWindow = activeOrderId ? liveOrders.find((o) => o.id === activeOrderId) ?? null : null
   const orderWindow = orderForWindow ? deriveOrderWindow({ ...orderForWindow, job: { bookings: [] } }) : null
   const liveAssignments = bookingItem.assignments.filter((a) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT')
   const blocks = quotedBlocks(
@@ -97,7 +100,7 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     }),
   )
   const window = resolveAssignWindow({
-    hold: { start: bookingItem.booking.startDate, end: bookingItem.booking.endDate },
+    hold: holdWindow,
     orderWindow,
     blocks,
     assignments: liveAssignments,
@@ -231,9 +234,12 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     category: { id: bookingItem.categoryId, ...bookingItem.category },
     // Orders sales may attach a unit to — every live order on this
     // booking's job. Offered as a choice only when there is more than
-    // one; with a single candidate the assign route stamps it silently
-    // rather than asking a question with one answer.
-    candidateOrders: liveOrders,
+    // one; where exactly one of them covers the hold's days the assign
+    // route stamps it silently rather than asking a question with one
+    // answer. Projected, not passed through: the rows carry their lines
+    // and their booking's dates now, and only these three fields are
+    // anybody's business on the client.
+    candidateOrders: liveOrders.map((o) => ({ id: o.id, orderNumber: o.orderNumber, status: o.status })),
     // WHICH DAYS these states were computed for, and the date blocks the
     // agent can switch between. An order routinely quotes the same class
     // twice — a van from the 28th and two more from the 29th — and the

@@ -56,6 +56,15 @@ interface Link {
    * that really is gone puts it back in front of every rep.
    */
   unarchive?: true
+  /**
+   * Carry `qtyOwned` across from the row losing the ICode. The 2026-09-13
+   * dedupe's whole point: a hand-curated row reading 0 on hand while the
+   * archived twin it replaced holds the count. Only applied when the live
+   * row really is 0 and the twin really is greater — anything else is a
+   * shelf count, and a script must not invent one (see
+   * project_rw_icode_duplicate_rows).
+   */
+  carryQty?: true
 }
 
 /**
@@ -64,10 +73,9 @@ interface Link {
  * where both carry a count, the counts agree. Three cases that look the
  * same are NOT here because the right row is not derivable:
  *
- *   - 105159 "Jumper Box" (8 units) — HQ has no catalog row at all.
- *   - 104430 "Leaf Blower - Plug In" (4 units) — HQ has a live "Leaf
- *     Blower, Electric" (qty 0), a live Milwaukee M18 row that already
- *     has its own units, and two archived plug-in rows.
+ *   - nothing, as of 2026-09-18. 105159 "Jumper Box" turned out not to be
+ *     rental stock at all (truck jump starters — lib/catalog/nonRentalStock),
+ *     and Wes named the plug-in leaf blowers' row the same day.
  */
 const LINKS: Link[] = [
   {
@@ -98,6 +106,16 @@ const LINKS: Link[] = [
     why: '20 barcoded T-Mobile MiFis on a row that was archived; SirReel stocks both carriers on purpose, and the Verizon row beside it is live',
   },
   {
+    // Wes, 2026-09-18: "those are the plug in leaf blowers we rent out."
+    // Not the Milwaukee M18 row (battery, its own units) and not the gas
+    // one — the live electric row, which was reading 0 on hand while the
+    // retired twin held both the count and the barcodes.
+    icode: '104430',
+    code: 'TOO-LEAF-BLOWER-ELECTRIC',
+    carryQty: true,
+    why: '4 barcoded "Leaf Blower - Plug In" against HQ\'s live "Leaf Blower, Electric" — same $15/day, and the retired twin holding the ICode is the row it replaced',
+  },
+  {
     icode: '104593',
     code: 'DOL-DOLLY-MAGLINER-SR-W-SHELF',
     why: '3 barcoded "Dolly - Magliner Sr with Shelf" against the identically named live row; the ICode sat on an archived twin',
@@ -112,17 +130,18 @@ async function main() {
   for (const link of LINKS) {
     const live = await prisma.inventoryItem.findFirst({
       where: { code: link.code },
-      select: { id: true, code: true, description: true, rwICode: true, archivedAt: true, qtyOwned: true },
+      select: { id: true, code: true, description: true, rwICode: true, archivedAt: true, isActive: true, qtyOwned: true },
     })
     if (!live) { console.log(`SKIP ${link.icode} — no catalog row with code ${link.code}`); continue }
-    if (live.archivedAt && !link.unarchive) {
+    const retired = !!live.archivedAt || !live.isActive
+    if (retired && !link.unarchive) {
       console.log(`SKIP ${link.icode} — ${link.code} is archived; add \`unarchive: true\` only if SirReel really stocks it`)
       continue
     }
 
     const others = await prisma.inventoryItem.findMany({
       where: { rwICode: link.icode, id: { not: live.id } },
-      select: { id: true, code: true, description: true, archivedAt: true, rwICode: true },
+      select: { id: true, code: true, description: true, archivedAt: true, rwICode: true, qtyOwned: true },
     })
     const units = await prisma.inventoryUnit.count({ where: { rwICode: link.icode } })
     const active = await prisma.inventoryUnit.count({ where: { rwICode: link.icode, inactive: false } })
@@ -131,13 +150,18 @@ async function main() {
       `\n${link.icode} → ${live.code}  "${live.description}"\n` +
       `  ${units} units (${active} active) · ${link.why}\n` +
       `  rwICode ${live.rwICode ?? '—'} → ${link.icode}` +
-      (link.unarchive && live.archivedAt ? `\n  UN-ARCHIVING (archived ${live.archivedAt.toISOString().slice(0, 10)}) — it becomes bookable again` : '') +
+      (link.unarchive && retired
+        ? `\n  UN-RETIRING (archivedAt ${live.archivedAt ? live.archivedAt.toISOString().slice(0, 10) : 'null'}, isActive ${live.isActive}) — both fields, or the row is live in the list and refused by every isActive query`
+        : '') +
       (others.length ? `\n  clearing rwICode on: ${others.map((o) => `${o.code}${o.archivedAt ? '[archived]' : ' [LIVE]'}`).join(', ')}` : ''),
     )
 
     journal.push({
       icode: link.icode,
-      live: { id: live.id, code: live.code, rwICodeBefore: live.rwICode, archivedAtBefore: live.archivedAt },
+      live: {
+        id: live.id, code: live.code, rwICodeBefore: live.rwICode,
+        archivedAtBefore: live.archivedAt, isActiveBefore: live.isActive,
+      },
       cleared: others.map((o) => ({ id: o.id, code: o.code, rwICodeBefore: o.rwICode, archived: !!o.archivedAt })),
       unitCount: units,
     })
@@ -147,10 +171,48 @@ async function main() {
       for (const o of others) {
         await tx.inventoryItem.update({ where: { id: o.id }, data: { rwICode: null } })
       }
+      // A count MOVES, it does not multiply: the donor goes to zero in the
+      // same transaction, or the two rows both claim the same four leaf
+      // blowers and anything summing the catalog counts them twice. This
+      // is what the 2026-09-13 dedupe left behind on the pairs it fixed
+      // (archived 104427 reads 0, live SAF-1ST-AID-KIT-50-PERSON reads 12).
+      //
+      // Runs only when the live row has no count of its own, or already
+      // holds exactly the donor's (a re-run finishing a half-done move).
+      // NOTE the move must happen in the SAME run as the rwICode clear:
+      // once the donor no longer carries the code there is nothing left
+      // tying the two rows together, and a later run cannot find it. That
+      // gap was closed by hand for 104430 on 2026-09-18 (AuditLog
+      // inventory_item.qty_moved_to_live_row).
+      // Counts that genuinely DISAGREE are a shelf count, never a script.
+      const donor = others.find((o) => (o.qtyOwned ?? 0) > 0)
+      const carryable =
+        !!link.carryQty && !!donor && (live.qtyOwned === 0 || live.qtyOwned === donor.qtyOwned)
+      if (link.carryQty && donor && !carryable) {
+        console.log(
+          `  ⚠ qtyOwned NOT carried: ${live.code} says ${live.qtyOwned}, ${donor.code} says ${donor.qtyOwned} — that is a shelf count, not a script's call`,
+        )
+      }
+      const carry = carryable ? donor!.qtyOwned : null
       await tx.inventoryItem.update({
         where: { id: live.id },
-        data: { rwICode: link.icode, ...(link.unarchive ? { archivedAt: null } : {}) },
+        // Retirement is TWO fields, and clearing only `archivedAt` leaves
+        // a row that reads live in the catalog list and is refused by
+        // every `isActive: true` query — including the scan resolver's
+        // look-up of an order row (2026-09-18: 105020 spent an hour in
+        // exactly that state).
+        data: {
+          rwICode: link.icode,
+          ...(link.unarchive ? { archivedAt: null, isActive: true } : {}),
+          ...(carry != null ? { qtyOwned: carry } : {}),
+        },
       })
+      if (carry != null && donor) {
+        await tx.inventoryItem.update({ where: { id: donor.id }, data: { qtyOwned: 0 } })
+        console.log(
+          `  qtyOwned ${live.qtyOwned} → ${carry}, moved off ${donor.code} (now 0)`,
+        )
+      }
       const moved = await tx.inventoryUnit.updateMany({
         where: { rwICode: link.icode },
         data: { inventoryItemId: live.id },
@@ -164,11 +226,14 @@ async function main() {
           oldValues: {
             rwICode: live.rwICode,
             archivedAt: live.archivedAt,
+            isActive: live.isActive,
+            qtyOwned: live.qtyOwned,
             clearedFrom: others.map((o) => ({ id: o.id, code: o.code })),
           },
           newValues: {
             rwICode: link.icode,
-            ...(link.unarchive ? { archivedAt: null } : {}),
+            ...(link.unarchive ? { archivedAt: null, isActive: true } : {}),
+            ...(carry != null ? { qtyOwned: carry, qtyMovedFrom: donor!.code, donorQtyNow: 0 } : {}),
             unitsRepointed: moved.count,
             why: link.why,
           },
