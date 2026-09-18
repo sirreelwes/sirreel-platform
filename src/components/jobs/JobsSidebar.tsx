@@ -37,6 +37,7 @@ import Link from 'next/link'
 import { useEffect, useRef, useState, type MouseEvent } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import { useJobsList } from './JobsListProvider'
+import { useJobChat } from './JobChatDock'
 import {
   BOARD_PHASES,
   PHASE_META,
@@ -62,6 +63,11 @@ import { AlertTriangle, Check, EyeOff, Mail, Truck, User, UserCircle } from 'luc
 
 export function JobsSidebar() {
   const { rows, loading, error, status } = useJobsList()
+  // The Conversation window reserves a real column at 1280px+, and the
+  // three of us have to fit. When it is open the rail gives up the room
+  // (Wes 2026-09-18: the middle was down to ~440px on a 1568px screen).
+  const chat = useJobChat()
+  const chatColumn = !!chat.target && !chat.minimized
 
   const pathname = usePathname()
   const searchParams = useSearchParams()
@@ -126,11 +132,19 @@ export function JobsSidebar() {
         // moment something is OPEN in the right pane, so it gets the room
         // back without a click. The tiles wrap rather than truncate at
         // this width, and the ‹ collapse above still takes the rail to a
-        // sliver. `selected`, not selectedId: clicking Incoming is a
+        // sliver. Narrower again while the Conversation column is open:
+        // three columns out of one screen, and the job being read is the
+        // one that must not be squeezed (the md step is untouched —
+        // below `xl` the chat is a full-screen window, not a column).
+        // `selected`, not selectedId: clicking Incoming is a
         // request to WORK in that panel — keeping the rail at half the
         // viewport there squeezed the incoming workspace's two columns
         // until quote names and amounts truncated (2026-09-09).
-        selected ? 'md:w-[24rem] xl:w-[27rem]' : 'md:w-1/2 2xl:w-[50rem]'
+        selected
+          ? chatColumn
+            ? 'md:w-[24rem] xl:w-[20rem] 2xl:w-[22rem]'
+            : 'md:w-[24rem] xl:w-[27rem]'
+          : 'md:w-1/2 2xl:w-[50rem]'
       } flex-shrink-0 bg-white text-zinc-700 flex-col border-r border-zinc-200 transition-[width] duration-200`}
     >
       {/* Slim strip: just the count and the collapse affordance — every

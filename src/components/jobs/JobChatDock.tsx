@@ -15,10 +15,13 @@
  * into it outlive the navigation.
  *
  * Three states, one mount:
- *   open  — a reserved 400px column at 1280px+, a full-screen window below
- *           that. Reserved, not floating, so it never covers the job you
- *           are reading; the phone width is a window because there is no
- *           room to reserve.
+ *   open  — a reserved column at 1280px+ (22rem, 25rem once there is a
+ *           1536px screen to spend), a full-screen window below that.
+ *           Reserved, not floating, so it never covers the job you are
+ *           reading; the phone width is a window because there is no
+ *           room to reserve. The rail narrows to match while it is open
+ *           (JobsSidebar) — the job in the middle is the one column that
+ *           must not be squeezed.
  *   min   — a pill at the bottom right, over everything, naming the job it
  *           is holding. This is the state Wes asked for: the conversation
  *           stays with you while you look at other jobs.
@@ -177,7 +180,7 @@ export function JobChatPane() {
         className={
           minimized
             ? 'hidden'
-            : 'fixed inset-0 z-40 flex flex-col bg-lt-page p-0 xl:static xl:z-auto xl:w-[400px] xl:shrink-0 xl:border-l xl:border-lt-hairline xl:p-3'
+            : 'fixed inset-0 z-40 flex flex-col bg-lt-page p-0 xl:static xl:z-auto xl:w-[22rem] 2xl:w-[25rem] xl:shrink-0 xl:border-l xl:border-lt-hairline xl:p-3'
         }
       >
         {elsewhere && (
