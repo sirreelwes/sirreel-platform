@@ -60,6 +60,10 @@ const FIELDS: { key: FieldKey; label: string }[] = [
   { key: 'quotesCreated', label: 'Value of quotes created' },
 ]
 
+/** The two figures that are a COUNT of rows as much as a sum of money — the
+ *  ones Ana checks against the /orders list. */
+const COUNTED_FIELDS = new Set<FieldKey>(['ordersCreated', 'quotesCreated'])
+
 const usd = (n: number) =>
   `$${n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
@@ -211,6 +215,24 @@ export function EodReportPanel() {
                         />
                       </span>
                       <span className="mt-1 block text-[11px] leading-snug text-zinc-500">{fig.source}</span>
+                      {/* Ana, 2026-09-17: "confirm how many orders and quotes
+                          were created each day … know if the EOD report is
+                          accurate or not." The count was never on screen — only
+                          the dollar figure — and there was no way to see the
+                          rows behind it. /orders reads the same tallyOrderDay,
+                          so the two cannot disagree. */}
+                      {COUNTED_FIELDS.has(f.key) && (
+                        <span className="mt-0.5 block text-[11px] text-zinc-500">
+                          {fig.count} {f.key === 'ordersCreated' ? 'order' : 'quote'}
+                          {fig.count === 1 ? '' : 's'} ·{' '}
+                          <a
+                            href={`/orders?createdFrom=${data.figures.date}&createdTo=${data.figures.date}`}
+                            className="underline hover:text-zinc-900"
+                          >
+                            see them
+                          </a>
+                        </span>
+                      )}
                     </label>
                   )
                 })}

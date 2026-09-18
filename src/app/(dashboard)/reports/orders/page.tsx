@@ -105,8 +105,8 @@ export default async function OrderReportsPage() {
           and on Check in a barcode bar that opens the order a unit is on. */}
       <OrderReportSearch />
       <CheckEdgeTabs
-        outDue={out.filter((r) => !r.filed || r.filed.partial).length}
-        backDue={back.filter((r) => !r.filed || r.filed.partial).length}
+        outDue={out.filter((r) => !r.filed || r.filed.partial || r.filed.addedSince > 0).length}
+        backDue={back.filter((r) => !r.filed || r.filed.partial || r.filed.addedSince > 0).length}
         out={
           <Lane
             title="Check out — going out"
@@ -215,6 +215,14 @@ function Lane({
                     r.filed.partial ? (
                       <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-pill-quoted-fg border border-pill-quoted-fg/25 bg-pill-quoted-bg rounded-md px-2 py-1">
                         Partial · {r.filed.offSheet} left
+                      </span>
+                    ) : /* Gear added to the order after the sheet was filed is
+                          work nobody has done — the row cannot read Filed
+                          (Wes, 2026-09-18). See lib/orders/addedAfterPull.ts. */
+                    r.filed.addedSince > 0 ? (
+                      <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-md px-2 py-1">
+                        <AlertTriangle size={12} aria-hidden />
+                        {r.filed.addedSince} added since · still to {edge === 'OUT' ? 'pull' : 'count'}
                       </span>
                     ) : r.filed.changedOrder ? (
                       <span className="inline-flex items-center gap-1 text-[12px] font-semibold text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-md px-2 py-1">

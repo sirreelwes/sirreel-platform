@@ -18,13 +18,30 @@ import { ArrowLeft, Check, Loader2 } from 'lucide-react'
 import { SignaturePad } from '@/components/portal/SignaturePad'
 import { PORTAL } from '@/lib/brand/portalTokens'
 
-const ACKNOWLEDGEMENT_TEXT =
-  'I have read and agree to the Annual Rental Agreement above on behalf of my company, for all rentals during its term. By typing my name and clicking Sign, I am providing my electronic signature, which has the same legal effect as a handwritten signature under the U.S. ESIGN Act and California UETA.'
+/**
+ * The affirmation, naming the document by its own title.
+ *
+ * It used to say "the Annual Rental Agreement above" for every master. A
+ * negotiated agreement is titled "2026 Negotiated Rental Agreement", so the
+ * signature evidence on the countersigned PDF named a document that was not
+ * the one on screen — the one sentence in the whole flow that has to match
+ * what they read.
+ */
+function acknowledgementFor(title: string): string {
+  return `I have read and agree to the ${title} above on behalf of my company, for all rentals during its term. By typing my name and clicking Sign, I am providing my electronic signature, which has the same legal effect as a handwritten signature under the U.S. ESIGN Act and California UETA.`
+}
 
 interface AnnualInfo {
   companyName: string
   signer: { name: string; email: string; title: string | null }
-  pending: { id: string; title: string; effectiveDate: string | null; expiryDate: string | null } | null
+  pending: {
+    id: string
+    title: string
+    effectiveDate: string | null
+    expiryDate: string | null
+    /** Set when this is the client's OWN negotiated document. */
+    negotiatedKey?: string | null
+  } | null
   current: { id: string; title: string | null; expiryDate: string | null; signerName: string | null; signedAt: string | null } | null
 }
 
@@ -80,7 +97,7 @@ export default function SignAnnualPage() {
           signerTitle: signerTitle.trim() || null,
           lcdw,
           signatureImageData: signature,
-          acknowledgmentText: ACKNOWLEDGEMENT_TEXT,
+          acknowledgmentText: acknowledgementFor(info.pending.title),
         }),
       })
       const json = await res.json().catch(() => ({}))
@@ -134,6 +151,12 @@ export default function SignAnnualPage() {
               <p className="text-sm text-zinc-600 mt-1">
                 {fmt(info.pending.effectiveDate)} → {fmt(info.pending.expiryDate)} · Read it in full below, then sign at the bottom.
               </p>
+              {info.pending.negotiatedKey ? (
+                <p className="text-sm text-zinc-600 mt-1">
+                  These are the terms your counsel negotiated with us, on our paper. The sections we
+                  added — the ones your document didn&apos;t carry — are marked as additions inside.
+                </p>
+              ) : null}
             </div>
 
             {/* The document, read in place. */}
@@ -188,7 +211,7 @@ export default function SignAnnualPage() {
               <SignaturePad onChange={setSignature} />
               <label className="flex items-start gap-2.5 text-xs text-zinc-700 leading-relaxed cursor-pointer">
                 <input type="checkbox" className="mt-0.5 w-4 h-4 accent-zinc-900 shrink-0" checked={acknowledged} onChange={(e) => setAcknowledged(e.target.checked)} />
-                <span>{ACKNOWLEDGEMENT_TEXT}</span>
+                <span>{acknowledgementFor(info.pending.title)}</span>
               </label>
               {error && <p className="text-sm text-red-700">{error}</p>}
               <div className="flex items-center justify-between gap-3">

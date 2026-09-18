@@ -14,6 +14,10 @@ export const maxDuration = 15
 // this route and the send-to-warehouse email produce the SAME sheet.
 // `?lines=<id,id,…>` renders a partial pull; `?download=1` attaches.
 //
+// `?added=1` prints ONLY the gear added since the check-out sheet was
+// filed (Wes, 2026-09-18) — a mid-job add is a new pull for the floor,
+// not a reprint of an order they have already worked.
+//
 // `?receipt=1` prints the DRIVER'S COPY instead (Oliver, 2026-09-13) —
 // the same document with the counts filled in from the filed check-out
 // sheet and a line for the driver to sign, which is what a driver
@@ -31,6 +35,7 @@ export async function GET(
   const rendered = await renderPickListPdf(params.id, {
     lineIds: (req.nextUrl.searchParams.get('lines') ?? '').split(','),
     receipt: req.nextUrl.searchParams.get('receipt') === '1',
+    addedOnly: req.nextUrl.searchParams.get('added') === '1',
   })
   if (!rendered.ok) {
     return NextResponse.json({ error: rendered.error }, { status: rendered.status })

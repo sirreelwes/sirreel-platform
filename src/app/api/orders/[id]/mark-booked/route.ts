@@ -44,6 +44,9 @@
  *   401 { error: 'unauthorized' }
  *   404 { error: 'order not found' }
  *   409 { error, currentStatus }  — not a bookable source state
+ *   409 { error: 'unsigned partner', requiresConfirmation, partners[] }
+ *        — a partner on the order has nothing signed; re-POST with
+ *          confirmUnsignedPartner: true to book anyway (audited)
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -54,6 +57,7 @@ import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
 import { reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
 import { findPendingDayClaims } from '@/lib/orders/dayClaimGate'
 import { partnerFloorGate } from '@/lib/sub-rentals/partnerMargins'
+import { partnerPaperGate } from '@/lib/sub-rentals/partnerPaperGate'
 
 export const dynamic = 'force-dynamic'
 
@@ -121,6 +125,29 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     return NextResponse.json({ ok: false, error: 'below partner floor', reason: floor.message, currentStatus: order.status }, { status: 409 })
   }
 
+  // An UNSIGNED partner on the order (Wes 2026-09-18). Booking is where the
+  // exposure attaches: the client's yes is on file and we are committing to
+  // supply somebody else's gear on our own terms. Unlike the floor gate this
+  // is CONFIRMABLE — the signature is not something the rep can produce, and
+  // a client waiting on a Friday is not a reason to leave a booking
+  // unrecorded. So it names the partner, and a human pushes it through
+  // deliberately. `confirm` is what the panel's second press supplies, and
+  // the override lands in the audit row below.
+  const paper = !body?.confirmUnsignedPartner ? await partnerPaperGate(order.id) : null
+  if (paper && !paper.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: 'unsigned partner',
+        reason: paper.message,
+        requiresConfirmation: 'confirmUnsignedPartner',
+        partners: paper.unsigned.map((p) => ({ name: p.vendorName, units: p.unitNames, status: p.status })),
+        currentStatus: order.status,
+      },
+      { status: 409 },
+    )
+  }
+
   let userId: string | null = null
   try {
     const user = await prisma.user.findUnique({ where: { email: session.user.email }, select: { id: true } })
@@ -166,7 +193,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       entityId: order.id,
       userId,
       ipAddress,
-      newValues: { from: order.status, to: 'BOOKED', note, quoteSkipped, bookingWelcomeSuppressed: quoteSkipped } as never,
+      newValues: {
+        from: order.status,
+        to: 'BOOKED',
+        note,
+        quoteSkipped,
+        bookingWelcomeSuppressed: quoteSkipped,
+        ...(body?.confirmUnsignedPartner ? { unsignedPartnerOverride: true } : {}),
+      } as never,
     },
   }).catch(() => { /* audit is best-effort; the booking already committed */ })
 

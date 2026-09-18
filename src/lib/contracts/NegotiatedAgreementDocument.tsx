@@ -19,9 +19,16 @@
  * a settled document as an open one.
  */
 import React from 'react'
-import { Document, Page, Text, View, Image, StyleSheet } from '@react-pdf/renderer'
+import { Document, Page, Text, View, Image, StyleSheet, Font } from '@react-pdf/renderer'
 import { WORDMARK_BLACK_DATA_URI } from './brandAssets'
+import { GREAT_VIBES_TTF_BASE64 } from './fonts/greatVibes'
 import { APPENDED_SECTIONS, type NegotiatedAgreement } from './negotiatedAgreement'
+
+// Same bundled OFL handwriting face the per-order signed copy uses, so a
+// countersigned negotiated agreement and a countersigned baseline look like
+// documents from one company. Inlined as a data-URI: a lambda has no
+// filesystem to read a font off.
+Font.register({ family: 'GreatVibes', src: `data:font/truetype;base64,${GREAT_VIBES_TTF_BASE64}` })
 
 const C = {
   ink: '#111111',
@@ -101,6 +108,22 @@ const styles = StyleSheet.create({
   sigRuleThin: { borderBottomWidth: 1, borderBottomColor: C.rule, height: 24, marginBottom: 4, marginTop: 10 },
   sigLabel: { fontSize: 7, color: C.muted, textTransform: 'uppercase' },
 
+  // ── The executed block (only when a signature is supplied) ────────────
+  execRow: { flexDirection: 'row', marginTop: 3 },
+  execLabel: { width: 96, fontSize: 8.5, color: C.muted },
+  execValue: { flex: 1, fontSize: 8.5 },
+  execFrame: { marginTop: 8, borderWidth: 0.6, borderColor: C.rule, padding: 8 },
+  execImage: { width: 220, height: 70, objectFit: 'contain' },
+  execTyped: { fontFamily: 'GreatVibes', fontSize: 26, color: C.ink, marginBottom: 2 },
+  execUnderline: { borderBottomWidth: 0.8, borderBottomColor: '#9ca3af', width: 240, marginTop: 4 },
+  execSmall: { fontSize: 7.5, color: C.muted, marginTop: 3 },
+  execAck: { fontSize: 8.5, marginTop: 8 },
+  auditTable: { marginTop: 8, borderWidth: 0.6, borderColor: C.rule },
+  auditRow: { flexDirection: 'row', borderBottomWidth: 0.6, borderBottomColor: C.rule, paddingVertical: 3, paddingHorizontal: 6 },
+  auditRowLast: { flexDirection: 'row', paddingVertical: 3, paddingHorizontal: 6 },
+  auditLabel: { width: 84, fontSize: 7.5, color: C.muted },
+  auditValue: { flex: 1, fontSize: 7.5 },
+
   footer: {
     position: 'absolute',
     bottom: 26,
@@ -120,12 +143,106 @@ function fmtDate(d: Date): string {
   return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })
 }
 
+/**
+ * The signature evidence, when this copy is the EXECUTED one.
+ *
+ * Same fields the per-order `SignedAgreementDocument` collects, because the
+ * evidence a signature needs does not depend on whose clauses are above it:
+ * who signed, what they affirmed, when, and from where.
+ */
+export interface NegotiatedDocSignature {
+  signerName: string
+  signerTitle: string | null
+  signerEmail: string | null
+  /** A drawn signature, when one was captured. The portal captures a typed
+   *  name, which renders in the handwriting face instead. */
+  signatureImageDataUri?: string | null
+  acknowledgmentText: string
+  signedAt: Date
+  ipAddress: string | null
+  userAgent: string | null
+}
+
 export interface NegotiatedDocProps {
   agreement: NegotiatedAgreement
   /** The company this copy is for — one filed document per company. */
   companyName: string
   generatedAt?: Date
+  /**
+   * Present = this is the countersigned copy: the blank Lessee signature
+   * column is replaced by the executed block and the E-SIGN audit trail.
+   * Absent = the document as offered, with lines to sign.
+   *
+   * ONE renderer, two states, on purpose. The alternative — countersigning
+   * through `SignedAgreementDocument` — prints CANONICAL_CLAUSES, so a
+   * client who negotiated their own terms would have signed OURS.
+   */
+  signature?: NegotiatedDocSignature | null
 }
+
+function fmtDateTime(d: Date): string {
+  return d.toLocaleString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric',
+    hour: 'numeric', minute: '2-digit', timeZoneName: 'short',
+    timeZone: 'America/Los_Angeles',
+  })
+}
+
+const ExecutedBlock: React.FC<{ sig: NegotiatedDocSignature }> = ({ sig }) => (
+  <View wrap={false}>
+    <View style={styles.execRow}>
+      <Text style={styles.execLabel}>Signed by</Text>
+      <Text style={styles.execValue}>{sig.signerName}</Text>
+    </View>
+    {sig.signerTitle ? (
+      <View style={styles.execRow}>
+        <Text style={styles.execLabel}>Title</Text>
+        <Text style={styles.execValue}>{sig.signerTitle}</Text>
+      </View>
+    ) : null}
+    {sig.signerEmail ? (
+      <View style={styles.execRow}>
+        <Text style={styles.execLabel}>Email</Text>
+        <Text style={styles.execValue}>{sig.signerEmail}</Text>
+      </View>
+    ) : null}
+    <View style={styles.execRow}>
+      <Text style={styles.execLabel}>Signed at</Text>
+      <Text style={styles.execValue}>{fmtDateTime(sig.signedAt)}</Text>
+    </View>
+
+    <View style={styles.execFrame}>
+      {sig.signatureImageDataUri ? (
+        <Image src={sig.signatureImageDataUri} style={styles.execImage} />
+      ) : (
+        <Text style={styles.execTyped}>{sig.signerName}</Text>
+      )}
+      <View style={styles.execUnderline} />
+      <Text style={styles.execSmall}>
+        {sig.signerName}
+        {sig.signerTitle ? `, ${sig.signerTitle}` : ''}
+      </Text>
+    </View>
+
+    <Text style={styles.execAck}>{sig.acknowledgmentText}</Text>
+
+    <Text style={[styles.sigLabel, { marginTop: 10 }]}>E-SIGN audit trail</Text>
+    <View style={styles.auditTable}>
+      <View style={styles.auditRow}>
+        <Text style={styles.auditLabel}>Timestamp</Text>
+        <Text style={styles.auditValue}>{fmtDateTime(sig.signedAt)}</Text>
+      </View>
+      <View style={styles.auditRow}>
+        <Text style={styles.auditLabel}>IP address</Text>
+        <Text style={styles.auditValue}>{sig.ipAddress || 'unknown'}</Text>
+      </View>
+      <View style={styles.auditRowLast}>
+        <Text style={styles.auditLabel}>User agent</Text>
+        <Text style={styles.auditValue}>{sig.userAgent || 'unknown'}</Text>
+      </View>
+    </View>
+  </View>
+)
 
 const SigCol: React.FC<{ who: string; withTitle?: boolean }> = ({ who, withTitle }) => (
   <View style={styles.sigCol}>
@@ -148,6 +265,7 @@ export const NegotiatedAgreementDocument: React.FC<NegotiatedDocProps> = ({
   agreement,
   companyName,
   generatedAt,
+  signature,
 }) => {
   const generated = generatedAt || new Date()
   const { FLEET_AGREEMENT, LCDW_ADDENDUM } = APPENDED_SECTIONS
@@ -256,10 +374,22 @@ export const NegotiatedAgreementDocument: React.FC<NegotiatedDocProps> = ({
             Representative of the Lessee and I understand and accept the terms and conditions in this
             contract.
           </Text>
-          <View style={styles.sigRow}>
-            <SigCol who="Signature of Authorized Representative" withTitle />
-            <SigCol who="SirReel Representative Signature" />
-          </View>
+          {signature ? (
+            <>
+              <ExecutedBlock sig={signature} />
+              {/* SirReel's line stays blank on the client's executed copy —
+                  it is the same two-party block, and countersigning our own
+                  side is a separate act nobody has performed here. */}
+              <View style={styles.sigRow}>
+                <SigCol who="SirReel Representative Signature" />
+              </View>
+            </>
+          ) : (
+            <View style={styles.sigRow}>
+              <SigCol who="Signature of Authorized Representative" withTitle />
+              <SigCol who="SirReel Representative Signature" />
+            </View>
+          )}
         </View>
 
         <Text style={styles.footer} fixed>

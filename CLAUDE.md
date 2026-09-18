@@ -212,9 +212,188 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   overrides it when the dry run says a name did not match — one per LINE or
   semicolon, never comma-separated, because the values carry commas.
 - Coverage is read live, so jobs already open for these companies are covered
-  on their next read; no backfill. **Not run yet** — this session had no
-  production access. `npm run test:negotiated-agreement`,
-  `npm run test:maintenance-tasks`.
+  on their next read; no backfill. **RAN 2026-09-18 (Wes, from the phone):
+  both masters filed, standing terms set on both companies.**
+  `npm run test:negotiated-agreement`, `npm run test:maintenance-tasks`.
+
+### They sign THEIR document, not ours (2026-09-18 — Wes: "build the proper door")
+- The filed masters cover with **no signature on them** — a third state the
+  two-state model in `companyAnnual.ts` did not have (covering, unsigned,
+  never offered). The door to fix that existed but pointed at the wrong
+  document: `offerAnnualForSignature` built EVERY offer from
+  `CANONICAL_CLAUSES` via `generateCounterPdf`, so offering an annual to
+  Graduation Day would have put our standard terms in front of the one
+  client whose lawyer spent five months not agreeing to them — and
+  `signAnnual` would then have countersigned OUR clauses under their
+  signature. Both paths now render the negotiated document.
+- **Which document a row IS lives in `CompanyAgreement.source`**
+  (`NEGOTIATED:<key>`, read by `negotiatedKeyFromSource`). Written at OFFER
+  time, read at SIGN time — so an offer signs as the document the client
+  actually read, even if next year's agreement lands in the registry in
+  between. No column: `source` is the existing free-text provenance field
+  and nothing else reads it (an ALTER is a laptop job).
+  `negotiatedAgreementForCompany()` is the registry lookup by the company's
+  own CRM name, aliases included, EXACT — a near-match would put one
+  client's negotiated terms in front of another.
+- **The countersigned copy is one renderer, two states.**
+  `NegotiatedAgreementDocument` takes an optional `signature` and swaps the
+  blank Lessee column for the executed block + E-SIGN audit trail (same
+  evidence and the same bundled handwriting face as the per-order signed
+  copy). SirReel's own line stays blank — countersigning our side is a
+  separate act nobody performed.
+- **Signing supersedes the unsigned master.** `signAnnual` switches
+  `autoCoverJobs` off on every OTHER covering RENTAL_AGREEMENT master for
+  that company **that nobody signed** (`signedAt: null`), appends why to its
+  note, audits `company_agreement.superseded`, and — only where the
+  company's standing terms point at the very file just superseded — moves
+  `negotiatedTermsUrl` to the executed copy. A master someone DID sign is
+  never quietly disabled by another signature. Nothing is deleted.
+- The portal's affirmation now names the document by its own title
+  (`acknowledgementFor(title)`); it used to say "the Annual Rental
+  Agreement" over a document titled "2026 Negotiated Rental Agreement" — the
+  one sentence in the flow that has to match what they read.
+- **Signing also fills the LCDW gap**: `standingLcdwDecision` is stamped from
+  the signer's election, which is what lets `fileJobAddendum` cut a job's
+  addendum from the master alone. Until then each job's addendum waits on a
+  per-job election, and its "Executed" row does not print (it renders only
+  with `masterSignerName` / `masterSignedAt`).
+
+### §32 is OPEN — do not ask them to sign yet (2026-09-17 redline)
+- Graduation Day's counsel (Nicholas Marell) redlined the filed document on
+  2026-09-17 — three edits, ALL in **§32 Third-Party Equipment**, the clause
+  SirReel appended on 9/15. Clauses 1–31, the Fleet Agreement and the whole
+  LCDW Addendum came back unmarked, and their numbering is unchanged so
+  `crossReferencesHold()` still passes. **Wes has not decided whether to
+  counter.** Two counters were raised for him: append ", subject to
+  Section 14" to their third edit ("in any event" is what someone argues
+  overrides the limitation of liability), and fix the garbled English in
+  their first ("any failure of such third party's or our failure to adhere").
+- **An agreed §32 goes in `GRADUATION_DAY_2026.appendedClauses` as a body
+  override — NEVER in `contractClauses.ts`.** `canonical('30')` is the
+  baseline Third-Party Equipment clause, and the same body is rendered by
+  `RentalAgreementBody` (the portal's readable agreement),
+  `SignedAgreementDocument` (every signed copy) and the review tooling's
+  baseline map. Editing it there renegotiates that clause for every client
+  at once, silently, on the strength of one client's counsel.
+- `APPENDED_CLAUSE_DIGEST` in the test pins the appended clauses. Nothing
+  did before 2026-09-18: a change to our baseline clause 30 altered a FILED
+  client contract with no test failure. The client-verified digest stays over
+  THEIR 31 clauses alone.
+- **Do not rebuild from the DOCX** Wes was sent (a PDF→Word conversion):
+  ten words carry literal ASCII hyphens from the conversion
+  (compen-sation, inde-pendent, cover-age, compre-hensive, insur-ance,
+  re-duced, Agree-ment, con-strued, arbitra-tion, circum-stances) while
+  "non-payment" in §21 is a REAL hyphen, and the file lost all front matter
+  (no Lessee block, no lede, no version line — the company name appears only
+  in the running header). Edit the clause text in the repo and re-render.
+- The coverage stays ON in the meantime: their redline touches one clause,
+  and the alternative puts their coordinators back to signing our baseline
+  per job — strictly worse paper than their negotiated document.
+
+## Their counsel reviews the agreement in HQ (2026-09-18 — Wes)
+- Wes: "Marell will probably want to see the entire agreement again. I'll
+  need to send my finished one to him. Ideally, I can just send it in HQ to
+  him, and he can review it there with a button that allows him to download
+  a DOCX file."
+- **The Word file is COMPOSED from the clause data, never converted.**
+  `src/lib/contracts/generateNegotiatedAgreementDocx.ts` writes
+  WordprocessingML and zips it with `pizzip` (already a dependency). Why not
+  `docxtemplater`, which is also here: it FILLS a template, and a template
+  means a binary .docx in the repo carrying clause text that has to stay in
+  lockstep with contractClauses.ts — the exact drift the digest test exists
+  to stop. Why not a conversion: the file Marell returned on 9/17 was a
+  PDF→Word conversion with ten invented hyphens and no front matter at all.
+  Composing cannot reproduce either defect, and the test asserts both
+  directions (no artifact words, "non-payment" intact).
+- Headings are LITERAL text, never Word auto-numbering — their numbering
+  carries a deliberate GAP at 15 (counsel deleted Subrogation) and Word
+  would silently close it. The test pins the gap.
+- **`/agreement/review/[token]`** is read-only in the strong sense: no form,
+  no POST, no session, two download buttons. `signCounselReviewToken`
+  (`counselReviewToken.ts`) reuses the COI HMAC envelope with a THIRD domain
+  separator (`counsel-review.v1`); `npm run test:counsel-review` asserts a
+  COI broker token does not verify as a counsel token or the reverse —
+  three schemes now sign JSON with one secret. Payload is ONE
+  `companyAgreementId`, 45-day TTL, so a forwarded link never widens.
+- **`buildCounselReviewPacket()` IS the disclosure envelope** and the page
+  renders nothing it does not return. OUT: every rate and dollar figure that
+  is not contract text, the orders and jobs the master papers, other
+  paperwork, any other client's terms, HQ's notes, who filed it, and the
+  partner arrangements behind §32.
+- **Rendered LIVE from the registry, not from the filed blob** — the same
+  "recomputed on every view" rule as the broker desk, because §32 is still
+  moving. So the page SAYS it is the current copy for review rather than the
+  executed agreement (`isCurrentDraft`), and a later correction needs no
+  re-send. Once signed it flips to "Executed — this copy is for your file".
+- **Sent from /crm/companies → Annual agreement → "Send to their counsel ↗"**
+  (`POST …/agreements/[agreementId]/counsel-review`). Posture copied from
+  the COI broker desk: the EMAIL IS THE ACT (a send failure stamps nothing),
+  the **LINK is appended by the ROUTE and never by the editable note** (the
+  partner-welcome rule), Reply-To is the sender exact, audited
+  `company_agreement.counsel_review_sent` with who it went to and never the
+  body. **NO Cc (Wes: "no cc")** — the COI rule copies the coordinator
+  because nobody's broker should be approached behind their back; counsel is
+  Wes writing to the lawyer he is negotiating with, and the box is free for
+  a human to add one.
+- Refuses (409) for a company with no registry agreement: the Word copy is
+  composed from clause text, so there has to be clause text.
+- NOT built: counsel cannot upload a redline BACK — they email it and it is
+  transcribed into `appendedClauses` by hand (`ContractReview` already has a
+  redline-upload path if that changes). Nothing nudges when a link has been
+  open for days with no reply.
+
+## No partner's gear on a job without their signature (2026-09-18 — Wes)
+- Wes, reading his counsel's §32 redline: "go ahead with the unsigned-partner
+  gate." §32 supplies a partner's unit to the client **on SirReel's own
+  terms**, and Graduation Day's negotiated version pushes further — we answer
+  for a failure (theirs or ours) to meet §4 and for "the acts and omissions of
+  such third parties". All of that is survivable ONLY because the partner
+  carries it back to back: partner agreement **§6** (condition, maintenance,
+  load-testing, certifications, repair-or-replace at their cost) and **§11**
+  (they indemnify "SirReel, its officers, employees, agents AND CLIENTS" for a
+  Unit's condition, their breach, and their personnel's acts in delivery,
+  setup and collection — expressly carved OUT of their own consequential
+  exclusion). No signature, nothing behind the promise.
+- **The hole:** the signature gate existed — `PARTNER_APPROVED_VENDOR_WHERE`
+  in site/vehicleCatalog.ts — and guards the PUBLIC LISTING only.
+  `/api/catalog/search` matches a partner unit on `isActive` +
+  `offeredToSirReel` + `vendor.isActive`, so a rep could quote AND book an
+  unsigned partner's unit. VSM Planet is the live example: quotable today,
+  agreement unsigned.
+- **`src/lib/sub-rentals/partnerPaperGate.ts`** is the rule.
+  `partnerPaperStatus()` is pure: none / unsigned / signed / expired /
+  not-yet-effective, best row wins (a lapsed copy or an unsigned re-file
+  beside a signed one is still covered), both date ends inclusive of the
+  calendar day like `isCoverageCurrent`. **Only "nothing signed" blocks** —
+  a lapsed agreement is named loudly and lets the booking through.
+- **Scope is a live SubRental with a ROSTER unit**, and deliberately NOT
+  `PARTNER_SUB_RENTAL_WHERE` from orders/partnerLines.ts: that predicate
+  excludes DELIVER_TO_SIRREEL because it answers "does this come through our
+  warehouse". This one answers "whose gear is it", and a partner's generator
+  dropped at Sun Valley is still theirs. **Ad-hoc sub-leases are out of
+  scope** — §32 covers them, but the backstop there is that house's own
+  rental terms under which we are the renter. There is paper; it isn't ours.
+- **THREE doors reach BOOKED and two of them needed it.** `/mark-booked`
+  (the job page + the order page's "Record client approval") and **`/book`**
+  (the order page's APPROVED action, which had no floor gate either — still
+  doesn't, flagged not fixed). A gate on one is bypassed by the other button.
+- **Confirmable, not a wall** — unlike `partnerFloorGate`, which refuses
+  outright. A rep cannot produce a partner's countersignature, and a client
+  waiting on a Friday is not a reason to leave a booking unrecorded. So the
+  server refuses ONCE with the partner and units NAMED, and
+  `confirmUnsignedPartner: true` pushes it through, recorded on the audit row
+  as `unsignedPartnerOverride`.
+- **send-quote warns, it does not stop.** A quote commits nothing and no
+  gear is on the road, so the 409 (`error: 'unsigned-partner'`) is
+  acknowledged once and the button re-arms as **Send anyway** — the same
+  shape as `EmailReviewModal`'s existing already-replied guard, reusing that
+  machinery rather than adding a second pattern.
+- NOT done: the client's own portal approval (`/api/portal/job/approve-quote`)
+  is deliberately NOT gated — you cannot refuse a client's yes because our
+  partner has not countersigned. That one wants an action item, which is the
+  obvious next step and is not built. Nor is an action item / job-page prompt
+  for the unsigned partner generally.
+- `npm run test:partner-paper`.
 
 ## The broker gets the review, not a forwarded paragraph (2026-09-17 — Wes)
 - Wes: "Is there a way to extract the broker from a COI and add an option to
@@ -1435,6 +1614,47 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - Unchanged and still the answer for money: the order is the book. Reopen a
   CLOSED/INVOICED order (`POST /api/orders/[id]/reopen`, billing-gated) to
   edit lines or discounts, then pull the figures through.
+
+## Orders by the day they were created — checking the EOD report (2026-09-17 — Ana)
+- Ana: "Is there a way I can check the drop down list of orders and quotes and
+  specify a certain date? … there is no filter for finding orders grouped
+  together by date. And a way to calculate the total value while I'm
+  searching would be great, too. That way I know if the EOD report that gets
+  generated is accurate or not."
+- **The value total already existed** (the `{total} orders · $X total` line in
+  the /orders header, `valueTotal` off the whole filtered set, not the page)
+  and follows every filter including the new dates. What was missing was the
+  date filter and, more importantly, a count Ana could hold against the report.
+- **`tallyOrderDay()` in `src/lib/orders/dayTally.ts` is the ONE definition,
+  and both surfaces read it** — the EOD report renders it into the evening
+  email, /orders renders it above the table. A date filter that counted rows
+  its own way would not CHECK the report; it would be a second number to argue
+  with. Pure, `npm run test:order-day-tally`.
+  - A quote is `quoteStatus` DRAFT or SENT — never `status`; an order can be
+    BOOKED while quoteStatus lags, and the question is whether the client said
+    yes. Orders are worth `bookedTotal ?? total` (`total` keeps moving with
+    post-booking edits), quotes are worth `total`.
+  - CANCELLED is out. DRAFT, LOST and ARCHIVED are IN — a quote written and
+    lost the same afternoon was still written.
+- **The card is deliberately NOT a description of the table under it.** The
+  /orders list hides drafts, lost and archived by default and still shows
+  cancelled rows, so the row count differs BOTH ways. `reconciliationNote()`
+  names it in one sentence ("Counts 1 draft, 1 lost … Leaves out 1 cancelled
+  order the list still shows") and says nothing on a day where they agree. A
+  card that quietly counted only the visible rows would be worse than no card:
+  a confirmation that agrees with nothing. The tally query therefore ignores
+  `where` and is built from the window + scope alone — a status filter must
+  not move the figures being checked.
+- **Pacific days, not UTC** (`createdFrom` / `createdTo`, `YYYY-MM-DD`, both
+  ends inclusive, either one alone means that single day). A UTC cut would put
+  every order written after 4pm into tomorrow's count and the two screens would
+  disagree every evening. The day helpers moved out of eodReport.ts (which
+  imports prisma) to `src/lib/time/pacificDay.ts` so the tally and its tests
+  stay pure; eodReport re-exports them, so its dozen importers are unchanged.
+- The EOD panel now prints the COUNT beside each of those two figures — it only
+  ever showed dollars — and links to `/orders?createdFrom=<date>&createdTo=<date>`.
+  The orders page reads that deep link off `window.location` in an effect, NOT
+  `useSearchParams` (a client page with no Suspense boundary fails `next build`).
 
 ## "Approved — book it" names the order and takes you to it (2026-09-17 — Wes)
 - Wes, on SR-JOB-0312: "It says that the production supply order is booked
