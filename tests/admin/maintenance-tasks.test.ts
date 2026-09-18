@@ -26,6 +26,7 @@
 import { MAINTENANCE_TASKS, maintenanceTask, MAINTENANCE_RUN_ACTION } from '@/lib/admin/maintenanceTasks'
 import { maintenanceRunner, runnableIds } from '@/lib/admin/maintenanceRunners'
 import { isAdditiveStatement } from '@/lib/admin/additiveDdl'
+import { NEGOTIATED_AGREEMENTS } from '@/lib/contracts/negotiatedAgreement'
 
 let fail = 0
 const eq = (label: string, got: unknown, want: unknown) => {
@@ -90,6 +91,25 @@ for (const t of MAINTENANCE_TASKS) {
   )
   yes(`${t.id}: a default matching an option list is in it`, params.every((p) => !p.options || !p.defaultValue || p.options.includes(p.defaultValue)))
 }
+
+// The "file a negotiated agreement" picker lists agreement KEYS, and the
+// registry of agreements lives somewhere else entirely. Both directions are
+// pinned: an offered key with no agreement behind it is a button that refuses
+// when pressed, and a negotiated document missing from the picker is one
+// nobody can file without a laptop — which is the whole point of the page.
+const filing = maintenanceTask('file-negotiated-agreement')
+const keyParam = (filing?.params ?? []).find((p) => p.key === 'key')
+yes('the filing task offers a key picker', (keyParam?.options?.length ?? 0) > 0)
+eq(
+  'every offered key is a known negotiated agreement',
+  (keyParam?.options ?? []).filter((k) => !NEGOTIATED_AGREEMENTS.some((a) => a.key === k)),
+  [],
+)
+eq(
+  'every negotiated agreement is offered',
+  NEGOTIATED_AGREEMENTS.map((a) => a.key).filter((k) => !(keyParam?.options ?? []).includes(k)),
+  [],
+)
 
 // The audit action is a stable string — old rows are read by it.
 eq('audit action', MAINTENANCE_RUN_ACTION, 'admin.maintenance_run')

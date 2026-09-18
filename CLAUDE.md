@@ -171,6 +171,51 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - The client COI drop link now runs the AI review on arrival (it used to store
   the PDF with no analysis at all).
 
+## A negotiated agreement becomes the client's annual (2026-09-18 — Wes)
+- Wes: "for party giraffe and graduation day, I need to make those negotiated
+  agreements standard for each job as an annual agreement." Their counsel's
+  redline was already transcribed (`negotiated/graduationDay2026.ts`, verbatim
+  — read `negotiatedAgreement.ts` before touching a word of it) and had a
+  filing script since 2026-09-15. Nothing had run it: the write needs the
+  production DB **and** `BLOB_READ_WRITE_TOKEN`, which is deliberately not in
+  `.env.local`, so the only thing in the way was a laptop.
+- **`src/lib/contracts/fileNegotiatedAgreement.ts` is the work**, with the
+  two entry points: `scripts/file-negotiated-agreement.ts` (argv + journal +
+  exit code, nothing else) and /admin/maintenance →
+  `file-negotiated-agreement`. The web path is the one place the blob token
+  simply IS — a phone run needs no `vercel env run`. Add behaviour to the
+  lib or the phone loses it.
+- **It files the document TWICE, for two different questions**, because
+  Wes's sentence names both mechanisms: `CompanyAgreement.autoCoverJobs` (the
+  ANNUAL master — every job inside the window is papered by it and the portal
+  asks only for the LCDW election, `annualCoverage.ts`) and
+  `Company.negotiatedTermsUrl` (the STANDING document — what goes out
+  whenever an agreement IS released for signature,
+  `ensureSignedAgreementForOrder`). Coverage outranks standing terms, so only
+  the first is felt while it holds; the second is what stops the day the
+  window lapses (2026-12-31 here) from handing that client our baseline
+  template after their lawyer redlined it. One PDF, both pointers.
+- `standingLcdwDecision` stays NULL on purpose — their counsel settled the
+  terms, nobody elected the damage waiver, and a null standing answer is
+  exactly what makes the portal ask per job.
+- **What it refuses, rather than guessing:** companies are matched on EXACT
+  name (0 or 2+ → skipped, near-misses printed as pasteable aliases); a
+  company already carrying a CURRENT auto-covering master is skipped for a
+  person to supersede by hand; standing terms already on file are never
+  overwritten (the annual is still filed and the log says so); no expiry date
+  is a refusal, because a master that never lapses never hands the signing
+  ask back. Dry run is the default on both paths and still renders the PDF.
+- `Party Giraffes` → **`Party Giraffes, LLC`** is a confirmed
+  `companyAliases` entry on the agreement, so nothing is typed on a phone.
+  Matching stays exact anyway: "Party Giraffes" also near-matches "Giraffe
+  Air LLC DBA Studio Sands", which is somebody else. An `alias` param
+  overrides it when the dry run says a name did not match — one per LINE or
+  semicolon, never comma-separated, because the values carry commas.
+- Coverage is read live, so jobs already open for these companies are covered
+  on their next read; no backfill. **Not run yet** — this session had no
+  production access. `npm run test:negotiated-agreement`,
+  `npm run test:maintenance-tasks`.
+
 ## The broker gets the review, not a forwarded paragraph (2026-09-17 — Wes)
 - Wes: "Is there a way to extract the broker from a COI and add an option to
   send a link to them when we need an updated COI or something isn't passing

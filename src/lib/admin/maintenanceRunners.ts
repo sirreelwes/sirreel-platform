@@ -13,6 +13,7 @@ import { MAINTENANCE_TASKS, type MaintenanceTaskMeta } from '@/lib/admin/mainten
 import { seedVsmPlanet, RECEIVE_METHODS, type ReceiveMethodKey } from '@/lib/sub-rentals/seedVsmPlanet'
 import { moveCargoOffLiftGate } from '@/lib/fleet/moveCargoOffLiftGate'
 import { seedDf50FluidKit } from '@/lib/inventory/seedDf50FluidKit'
+import { fileNegotiatedAgreement, parseAliasEntries } from '@/lib/contracts/fileNegotiatedAgreement'
 import { TaskRefused } from '@/lib/admin/taskRefused'
 import { runAdditiveDdl } from '@/lib/admin/runAdditiveDdl'
 
@@ -108,6 +109,33 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
     // the log where a phone screen lands.
     const log = r.warnings.length ? [...r.log, '', 'Look at:', ...r.warnings.map((w) => `  ! ${w}`)] : r.log
     return { log, createdIds: [], touchedIds: r.touchedIds, headline }
+  },
+
+  'file-negotiated-agreement': async ({ dryRun, params, actorUserId }) => {
+    const key = clean(params.key)
+    if (!key) {
+      throw new TaskRefused('No agreement chosen.', 'Pick which negotiated agreement to file.')
+    }
+    const r = await fileNegotiatedAgreement({
+      key,
+      dryRun,
+      aliases: parseAliasEntries(params.alias),
+      actorUserId: actorUserId ?? null,
+    })
+    const n = r.filed.length
+    const who = r.filed.map((f) => f.companyName).join(' and ')
+    const headline =
+      n === 0
+        ? `Nothing filed — ${r.skipped.length} compan${r.skipped.length === 1 ? 'y was' : 'ies were'} skipped. Read the log.`
+        : dryRun
+          ? `Dry run — would file ${r.title} for ${who}, covering through ${r.expiryDate}.`
+          : `${r.title} filed for ${who}. Their jobs are papered by it through ${r.expiryDate}.`
+    // A skip is the part a person must read — a company that quietly did
+    // not get its contract is exactly what a headline count hides.
+    const log = r.skipped.length
+      ? [...r.log, '', 'Look at:', ...r.skipped.map((sk) => `  ! ${sk.registryName}: ${sk.reason} (${sk.detail})`)]
+      : r.log
+    return { log, createdIds: r.createdIds, touchedIds: r.touchedIds, headline }
   },
 
   'job-conversation-tables': async ({ dryRun }) => {
