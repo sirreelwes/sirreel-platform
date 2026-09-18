@@ -45,6 +45,10 @@
  *   - annual-requested (DERIVED) — a client asked, from their portal, to
  *     be set up on an annual rental agreement. Clears when the annual is
  *     offered for signature (or a master is already pending/covering).
+ *   - date-change-requested (DERIVED) — a client asked, from their portal,
+ *     to move a pickup or return. Nothing moved: applying it through
+ *     "Change dates…" on the order is what clears it. HIGH inside a week
+ *     of pickup.
  *   - partner-cancelled-off-pick-list (DERIVED) — a partner's booking on a
  *     line was cancelled while the order is booked (or its pull order is out),
  *     and the line, kept off the pick list as a partner line, never went on
@@ -124,6 +128,7 @@ import { driverHoursUntruedProvider } from '@/lib/actionItems/providers/driverHo
 import { clientCreatedUnquotedProvider } from '@/lib/actionItems/providers/clientCreatedUnquoted'
 import { possibleDuplicateJobProvider } from '@/lib/actionItems/providers/possibleDuplicateJob'
 import { annualRequestedProvider } from '@/lib/actionItems/providers/annualRequested'
+import { dateChangeRequestedProvider } from '@/lib/actionItems/providers/dateChangeRequested'
 import { replacementCostMissingProvider } from '@/lib/actionItems/providers/replacementCostMissing'
 import { kitIncompleteProvider } from '@/lib/actionItems/providers/kitIncomplete'
 import { walkiesShortProvider } from '@/lib/actionItems/providers/walkiesShort'
@@ -163,6 +168,7 @@ const PROVIDERS: ActionItemProvider[] = [
   // agreement. Answering is one click on the company page; nothing else in
   // HQ fires on the ask.
   annualRequestedProvider,
+  dateChangeRequestedProvider,
   holdUnassignedProvider,
   paymentInfoProvider,
   coiMissingProvider,

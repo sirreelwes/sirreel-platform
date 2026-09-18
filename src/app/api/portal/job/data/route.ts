@@ -23,6 +23,7 @@ import {
   annualCoverageTitle,
 } from '@/lib/orders/annualCoverage'
 import { findOpenAnnualRequest } from '@/lib/portal/annualRequest'
+import { findOpenDateChangeRequest } from '@/lib/portal/dateChangeRequest'
 import { findPendingAnnual } from '@/lib/portal/companyAnnual'
 import { summarizeJobLcdwCoverage, effectiveLcdwDecision } from '@/lib/lcdw/jobElection'
 import { resolveJobCoi, coiSourceSentence } from '@/lib/coi/companyCoi'
@@ -628,6 +629,18 @@ export async function GET(req: NextRequest) {
   const annualOption = await resolveAnnualOption(
     annualCoverage ? null : (order.company?.id ?? null),
   )
+
+  // ── "Need to change these dates?" ─────────────────────────────────────
+  // Wes 2026-09-18 (L'anza): "client said they wanted to change the pickup
+  // date but couldn't figure out how to do that." The Schedule card offers
+  // it now. Null on a closed or cancelled order — there is nothing left to
+  // move — and the open ask is echoed back so the card reads "your rep has
+  // this" instead of a form they might fill in twice. Fails soft to "no
+  // open request" until the table exists (dateChangeRequest.ts).
+  const openDateChange =
+    order.status === 'CANCELLED' || order.status === 'CLOSED'
+      ? null
+      : await findOpenDateChangeRequest(order.id)
   const agreementCoverage = jobCoverage
     ? {
         orderNumber: jobCoverage.orderNumber,
@@ -794,6 +807,18 @@ export async function GET(req: NextRequest) {
       blindReturn: portalBlind.blindReturn,
       blindPickupInstructions: portalBlind.blindPickup ? order.blindPickupInstructions : null,
       blindReturnInstructions: portalBlind.blindReturn ? order.blindReturnInstructions : null,
+      /** Whether this order's dates can still be asked about, and the ask
+       *  already with their rep. `canRequest` false = closed/cancelled. */
+      canRequestDateChange: !(order.status === 'CANCELLED' || order.status === 'CLOSED'),
+      dateChangeRequest: openDateChange
+        ? {
+            requestedAt: openDateChange.createdAt.toISOString(),
+            requestedStartDate: openDateChange.requestedStart,
+            requestedEndDate: openDateChange.requestedEnd,
+            note: openDateChange.note,
+            requestedByName: openDateChange.requestedByName,
+          }
+        : null,
     },
     job: order.job,
     countdown: portalCountdownMs != null ? { msUntilPickup: portalCountdownMs } : null,

@@ -167,6 +167,20 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
     // records the run and this headline; `touchedIds` names the tables made.
     return { log: r.log, createdIds: [], touchedIds: r.created, headline }
   },
+
+  'date-change-request-table': async ({ dryRun }) => {
+    const task = MAINTENANCE_TASKS.find((t) => t.id === 'date-change-request-table')
+    if (!task?.ddl) throw new TaskRefused('This task carries no statements.', 'Add `ddl` to its registry entry.')
+    const r = await runAdditiveDdl(task.ddl, { dryRun })
+    const headline = r.missingAfter.length && !dryRun
+      ? `${r.missingAfter.join(', ')} still missing after the run — read the log.`
+      : r.created.length === 0
+        ? 'The table already exists — nothing to do.'
+        : dryRun
+          ? 'Dry run — the table would be created.'
+          : 'Table created. Clients can ask to move their dates from the portal now.'
+    return { log: r.log, createdIds: [], touchedIds: r.created, headline }
+  },
   'broker-directory-tables': async ({ dryRun }) => {
     const task = MAINTENANCE_TASKS.find((t) => t.id === 'broker-directory-tables')
     if (!task?.ddl) throw new TaskRefused('This task carries no statements.', 'Add `ddl` to its registry entry.')

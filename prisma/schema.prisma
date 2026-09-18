@@ -716,6 +716,7 @@ model Person {
   // on PersonMerge), so there's no loser-side back-relation to model.
   mergesAsSurvivor      PersonMerge[]               @relation("MergeSurvivor")
   annualRequests        CompanyAnnualRequest[]      @relation("AnnualRequestRequester")
+  dateChangeRequests    OrderDateChangeRequest[]    @relation("DateChangeRequester")
 
   @@map("people")
 }
@@ -2505,6 +2506,7 @@ model User {
   companyPortalGrants     CompanyPortalAccess[]  @relation("CompanyPortalGrantor")
   companyDiscountsCreated CompanyDiscount[]      @relation("CompanyDiscountCreator")
   annualRequestsResolved  CompanyAnnualRequest[] @relation("AnnualRequestResolver")
+  dateChangeRequestsResolved OrderDateChangeRequest[] @relation("DateChangeResolver")
 
   // Paperwork review-queue dismissals — "we looked, this one needs nothing".
   paperworkDismissals     PaperworkDismissal[]   @relation("PaperworkDismisser")
@@ -3510,6 +3512,9 @@ model Order {
   description     String?          @db.Text
   startDate       DateTime?        @map("start_date") @db.Date
   endDate         DateTime?        @map("end_date") @db.Date
+  /// Client asks, from their portal, to move these dates. A request only —
+  /// staff apply it through "Change dates…". See OrderDateChangeRequest.
+  dateChangeRequests OrderDateChangeRequest[]
   subtotal        Decimal          @default(0) @db.Decimal(12, 2)
   taxRate         Decimal          @default(0) @map("tax_rate") @db.Decimal(5, 4)
   taxAmount       Decimal          @default(0) @map("tax_amount") @db.Decimal(12, 2)
@@ -6509,6 +6514,9 @@ model Job {
   /// Client asks to be put on an annual agreement, raised from this
   /// job's paperwork page. See CompanyAnnualRequest.
   annualRequests        CompanyAnnualRequest[]
+  /// Client asks, from their portal, to move this job's pickup or return.
+  /// A request only — nothing here moves an order. See OrderDateChangeRequest.
+  dateChangeRequests    OrderDateChangeRequest[]
 
   @@index([companyId])
   @@index([status])
@@ -7632,6 +7640,71 @@ model CompanyAnnualRequest {
   @@index([companyId, resolvedAt])
   @@index([resolvedAt])
   @@map("sr_company_annual_requests")
+}
+
+// "We need to push the pickup a day" — the client's ask, captured.
+//
+// Wes 2026-09-18, on the L'anza job: "client said they wanted to change the
+// pickup date but couldn't figure out how to do that." There was no way: the
+// portal's Schedule card printed Pickup and Return and offered nothing.
+//
+// This is a REQUEST and only a request. Nothing in the write path touches
+// Order.startDate, a BookingItem, a hold or an assignment — moving an order
+// re-prices it, re-stamps every unit and can collide with another
+// production, which is exactly why "Change dates…" shows a rep the cascade
+// first. The standing rule (Wes 2026-09-11) is that a client's words never
+// change a job on their own; a person applies the change through the
+// existing control. See src/lib/portal/dateChangeRequest.ts.
+model OrderDateChangeRequest {
+  id      String @id @default(uuid())
+  orderId String @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// Denormalised from the order at write time so the action item and the
+  /// job thread can find their job without a join, and so the row still
+  /// reads right if the order is later moved between jobs.
+  jobId String? @map("job_id")
+  job   Job?    @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  /// Who asked. The Person link is the durable one; name and email are
+  /// snapshotted beside it so the desk still knows who asked if that
+  /// contact is later merged or taken off the job.
+  requestedByPersonId String? @map("requested_by_person_id")
+  requestedByPerson   Person? @relation("DateChangeRequester", fields: [requestedByPersonId], references: [id])
+  requestedByName     String? @map("requested_by_name")
+  requestedByEmail    String? @map("requested_by_email")
+
+  /// What the order said WHEN THEY ASKED. Without it a request read days
+  /// later cannot be told apart from one that has already been applied —
+  /// and a rep would have no way to see that the order moved underneath it.
+  currentStartDate DateTime? @map("current_start_date") @db.Date
+  currentEndDate   DateTime? @map("current_end_date") @db.Date
+
+  /// What they are asking for. Either may be null: a client moving only the
+  /// pickup leaves the return alone, and a client who cannot name a date
+  /// sends the note by itself.
+  requestedStartDate DateTime? @map("requested_start_date") @db.Date
+  requestedEndDate   DateTime? @map("requested_end_date") @db.Date
+
+  /// Their words. The dates say what; this says why, and is what a rep
+  /// actually reads before deciding.
+  note String? @db.Text
+
+  /// JOB_PORTAL today. A string, not an enum: it only labels the row.
+  source String @default("JOB_PORTAL")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  /// Answered — stamped when a rep applies the dates through
+  /// /dates/apply, or closes the ask by hand from the order page.
+  resolvedAt     DateTime? @map("resolved_at")
+  resolvedReason String?   @map("resolved_reason")
+  resolvedById   String?   @map("resolved_by_id")
+  resolvedBy     User?     @relation("DateChangeResolver", fields: [resolvedById], references: [id])
+
+  @@index([orderId, resolvedAt])
+  @@index([resolvedAt])
+  @@map("sr_order_date_change_requests")
 }
 
 // Attaches ONE job to a CompanyAgreement as an addendum — "add the job to

@@ -91,6 +91,9 @@ export function PushDatesModal({
   currentStartDate,
   currentEndDate,
   postBooking,
+  proposedStartDate,
+  proposedEndDate,
+  proposedBy,
   onClose,
   onChanged,
 }: {
@@ -100,11 +103,19 @@ export function PushDatesModal({
   /** True when order status is past APPROVED — preview also surfaces
    *  this from the server, but the parent can pre-color the modal. */
   postBooking: boolean
+  /** Dates a CLIENT asked for from their portal (Wes 2026-09-18, the
+   *  L'anza job). They seed the boxes so the rep lands straight on the
+   *  cascade for what was actually asked — a seed only: the rep edits
+   *  them like any other, and nothing is applied until they confirm. */
+  proposedStartDate?: string | null
+  proposedEndDate?: string | null
+  /** Who asked, for the line above the boxes. */
+  proposedBy?: string | null
   onClose: () => void
   onChanged: () => void
 }) {
-  const [newStart, setNewStart] = useState(toInputDate(currentStartDate))
-  const [newEnd, setNewEnd] = useState(toInputDate(currentEndDate))
+  const [newStart, setNewStart] = useState(toInputDate(proposedStartDate || currentStartDate))
+  const [newEnd, setNewEnd] = useState(toInputDate(proposedEndDate || currentEndDate))
   const [preview, setPreview] = useState<PreviewResponse | null>(null)
   const [previewing, setPreviewing] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -221,6 +232,16 @@ export function PushDatesModal({
         </div>
 
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+          {/* What the client asked for, when that is why this is open. The
+              boxes are already seeded with it; this says where it came
+              from, so a rep never applies a date without knowing whose it
+              is. */}
+          {(proposedStartDate || proposedEndDate) && (
+            <div className="rounded-lg bg-chip-warn-bg text-chip-warn-fg px-3 py-2 text-sm">
+              <strong>{proposedBy || 'The client'}</strong> asked for these dates from their portal.
+              Nothing has been applied — review the cascade below and confirm.
+            </div>
+          )}
           {/* Date inputs */}
           <div className="grid grid-cols-2 gap-4">
             <label className="block">

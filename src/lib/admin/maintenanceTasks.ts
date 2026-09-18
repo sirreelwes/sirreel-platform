@@ -37,6 +37,7 @@
 
 import type { AdditiveDdl } from '@/lib/admin/additiveDdl'
 import { JOB_THREAD_TABLES_DDL } from '@/lib/email/jobThreadTableSql'
+import { DATE_CHANGE_REQUEST_TABLE_DDL } from '@/lib/portal/dateChangeTableSql'
 import { BROKER_TABLES_DDL } from '@/lib/coi/brokerTableSql'
 
 export type MaintenanceCategory = 'seed' | 'backfill' | 'schema'
@@ -161,6 +162,18 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     writes: 'sr_job_threads, sr_job_thread_notes, sr_job_thread_alerts (each created only if absent, with its indexes) · sr_audit_logs',
     cliEquivalent: 'npx tsx scripts/add-job-thread-tables.ts',
     ddl: JOB_THREAD_TABLES_DDL,
+  },
+  {
+    id: 'date-change-request-table',
+    title: 'Add the client date-change request table',
+    summary:
+      'Adds the table that holds "we need to move the pickup" — the ask a client can now raise from their portal.',
+    detail:
+      'Wes 2026-09-18, on the L\'anza job: "client said they wanted to change the pickup date but couldn\'t figure out how to do that." The portal\'s Schedule card now carries "Need to change these dates?", and the ask lands in sr_order_date_change_requests — a request only, which a rep answers with the existing "Change dates…" control. Until this table exists the portal does not offer the form at all (it fails soft and shows the rep\'s number instead), the order page shows no request, and nothing else on either page is affected. This runs one CREATE TABLE … IF NOT EXISTS plus its two indexes, then lists the table\'s columns so you can see it took. No existing table is touched; running it twice changes nothing. Dry run only reads the catalog and says whether the table is missing.',
+    category: 'schema',
+    writes: 'sr_order_date_change_requests (created only if absent, with its indexes) · sr_audit_logs',
+    cliEquivalent: 'npx tsx scripts/add-date-change-request-table.ts',
+    ddl: DATE_CHANGE_REQUEST_TABLE_DDL,
   },
   {
     id: 'broker-directory-tables',

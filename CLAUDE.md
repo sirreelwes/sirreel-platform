@@ -1925,6 +1925,59 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - The header `PUT /api/orders/[id]` `startDate/endDate` is still a mirror
   with no UI and reaches nothing scheduling-side — on purpose.
 
+## The client can ask to move their dates (2026-09-18 — Wes)
+- Wes, on the L'anza job: "client said they wanted to change the pickup date
+  but couldn't figure out how to do that." They couldn't. The portal's
+  Schedule card printed Pickup and Return and offered NOTHING beside them,
+  and the one line on the page that mentions a change ("Need these dates
+  held sooner, or something changed?") lives inside the not-booked-yet
+  notice — which stops rendering the moment the order is quoted. So the
+  further along a job got, the less the portal said about how to move it.
+- **It is a REQUEST, and only a request.** No portal path writes
+  `Order.startDate`, a hold, an assignment or a price. Moving dates is the
+  most cascading edit in the system (it re-prices every line and re-stamps
+  every unit — followLineDates.ts) and it can collide with another
+  production, which is exactly why "Change dates…" shows a rep the totals
+  delta, the conflicts and the custom-dated lines FIRST. That cascade
+  cannot be put in front of a client, and a form that answered "the 16th is
+  free" would be wrong by the time they read it. Standing rule (Wes
+  2026-09-11) holds: a client's words never change a job on their own.
+- `POST /api/portal/job/dates/request` (cookie-auth'd, the ORDER comes from
+  the session) → `sr_order_date_change_requests`. **One open ask per order**:
+  a second ask SUPERSEDES the first (stamped `SUPERSEDED`, never deleted) —
+  a client who says "the 16th" then "the 17th" changed their mind, and a
+  desk reading two rows cannot tell which is current.
+- **Only dates that actually MOVE are stored** (`movedOnly`). Both boxes
+  post on every submit, so without it every request would also "ask" for
+  the return nobody touched. `currentStartDate/EndDate` snapshot what the
+  order said WHEN THEY ASKED — `drifted` then warns a rep whose order has
+  moved since, because applying "their" pickup blind would silently undo
+  whatever changed in between.
+- **The ask never outlives its answer.** `/dates/apply` closes it
+  (`resolveDateChangeRequests`), "Close this" on the order page closes it,
+  and on top of both the reader DROPS any row whose dates the order already
+  carries (`alreadySatisfied`) — however they came to move. A words-only
+  ask names no date, so nothing auto-satisfies it but a person.
+- Surfaces: the portal card (`DateChangeRequestCard`, under the two dates —
+  the place the thought occurs; it says out loud that the dates have NOT
+  changed yet), a panel on the order page above the Dates field whose button
+  opens the ORDINARY PushDatesModal **seeded** with what was asked (not
+  money-gated — anyone working the order needs to know), the action item
+  `date-change-requested` (HIGH inside 7 days of pickup), and an email to
+  the rep on the JOB THREAD (label `date-change-request`, Reply-To the
+  person who asked) so it files into the job Conversation.
+- **Schema: ONE new table, phone-runnable.** /admin/maintenance → "Add the
+  client date-change request table" (`date-change-request-table`), or
+  `npx tsx scripts/add-date-change-request-table.ts`. Until it has run
+  everything FAILS SOFT — the portal does not offer the form (it shows the
+  rep's number), the order page shows no request, a write answers 503
+  naming the task. `npm run test:date-change-request`.
+- NOT done: nothing tells the client when the request is answered — the
+  dates just update on their portal, and telling them is a conversation on
+  the job thread. Nothing nudges a request that has sat for days beyond the
+  action item, and there is no way to ask about ONE line's dates (the ask is
+  the whole order's window, which is what the client sees).
+
 ## "Booking item is fully assigned" — one capacity rule (2026-09-17 — Jose)
 - Jose, on Mad Minds (SR-JOB-0389): changing Cargo 35 for another van was
   refused "booking item is fully assigned". Not a driver, not a lock. The

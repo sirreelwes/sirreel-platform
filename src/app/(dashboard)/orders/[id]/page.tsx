@@ -22,6 +22,7 @@ import { WarehouseLineFlag, WarehouseAddedLines, UnpricedLinesBanner, type Order
 import { CheckoutAddOnsSummary } from "@/components/orders/CheckoutAddOnsSummary";
 import { DriverTrueUpPrompt } from "@/components/orders/DriverTrueUpPrompt";
 import { PartnerCancelledLinesPrompt } from "@/components/orders/PartnerCancelledLinesPrompt";
+import { ClientDateChangeRequest, type ClientDateChangeRequestData } from "@/components/orders/ClientDateChangeRequest";
 import { LdDispositionPanel } from "@/components/orders/LdDispositionPanel";
 import { InspectionsPanel } from "@/components/orders/InspectionsPanel";
 import { QuoteFollowUpPanel } from "@/components/orders/QuoteFollowUpPanel";
@@ -307,6 +308,10 @@ type Order = {
   /** The rented gear's replacement value — the client's broker's equipment
    *  limit — and the lines nothing on file could value (lib/coi/replacementValue). */
   replacementValue?: ReplacementValueData | null;
+  /** The client asked, from their portal, to move these dates and nobody
+   *  has answered yet (Wes 2026-09-18, the L'anza job). Null when there is
+   *  none — or when the order already carries what they asked for. */
+  dateChangeRequest?: ClientDateChangeRequestData | null;
   // Phase 3 lifecycle — fleet-side terminal stamp. Drives the lane
   // progress panel + "Mark Fleet Ready" / undo buttons.
   fleetReadyAt: string | null;
@@ -3565,6 +3570,20 @@ export default function OrderDetailPage() {
             />
           </div>
         )}
+        {/* The client asked to move these dates (Wes 2026-09-18, the L'anza
+            job). Directly above the Dates field, because the answer is the
+            "Change…" button two lines down. Not money-gated — anyone
+            working the order needs to know a change is pending. */}
+        {order.dateChangeRequest && (
+          <div className="mb-4">
+            <ClientDateChangeRequest
+              orderId={orderId}
+              request={order.dateChangeRequest}
+              onOpenChangeDates={() => setPushDatesOpen(true)}
+              onChanged={fetchOrder}
+            />
+          </div>
+        )}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-6 text-sm">
           <div><span className="text-lt-fg3">Company</span><p className="text-lt-fg mt-0.5">{order.company.name}</p></div>
           <div>
@@ -6362,6 +6381,11 @@ export default function OrderDetailPage() {
           currentStartDate={order.startDate}
           currentEndDate={order.endDate}
           postBooking={!["DRAFT", "QUOTE_SENT", "APPROVED"].includes(order.status)}
+          /* Seeded with what the client asked for, when there is an open
+             request — the rep still reads the cascade and confirms. */
+          proposedStartDate={order.dateChangeRequest?.requestedStart ?? null}
+          proposedEndDate={order.dateChangeRequest?.requestedEnd ?? null}
+          proposedBy={order.dateChangeRequest?.requestedByName ?? order.dateChangeRequest?.requestedByEmail ?? null}
           onClose={() => setPushDatesOpen(false)}
           onChanged={() => { fetchOrder(); }}
         />

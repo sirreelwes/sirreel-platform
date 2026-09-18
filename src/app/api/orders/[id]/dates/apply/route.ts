@@ -41,6 +41,7 @@ import { recalcOrderTotals } from '@/lib/orders'
 import { rebaselineCadenceForOrder } from '@/lib/cadence/scheduler'
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 import { syncReservationToLineDates } from '@/lib/scheduling/followLineDates'
+import { resolveDateChangeRequests } from '@/lib/portal/dateChangeRequest'
 
 export const dynamic = 'force-dynamic'
 
@@ -280,8 +281,23 @@ export async function POST(req: NextRequest, { params }: Params) {
   })
   if (followed.error) console.error('[orders/dates/apply] reservation did not follow:', followed.error)
 
+  // A client asked for this, from their portal (Wes 2026-09-18, the L'anza
+  // job)? Then it has been answered — whether or not the rep landed on the
+  // exact day they named, a person has now looked at it and moved the
+  // order. Best-effort: the date change is the durable act and must not
+  // fail because a request row could not be stamped.
+  const requestsClosed = await resolveDateChangeRequests({
+    orderId: id,
+    reason: 'DATES_APPLIED',
+    byUserId: user.id,
+  }).catch((e) => {
+    console.error('[orders/dates/apply] could not close the client request:', e)
+    return 0
+  })
+
   return NextResponse.json({
     ok: true,
+    clientRequestsClosed: requestsClosed,
     newRange: { startDate: newStart.toISOString(), endDate: newEnd.toISOString() },
     itemsUpdated: preview.projectedItems.filter((p) => p.classification !== 'custom_kept').length,
     delta: preview.delta,

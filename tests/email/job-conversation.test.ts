@@ -82,6 +82,7 @@ const WIRED_LABELS = [
   'stage-ready-to-sign', 'final-invoice-payment-options', 'payment-info-operator-send', 'payment-share',
   'job/after-hours', 'job/after-hours-share', 'job/vehicle-pickup', 'driver/request', 'coi-request-fix',
   'coi-approved', 'coi-requirements:S260912-003', 'coi-broker-review', 'sub-rental-estimate',
+  'date-change-request:S260912-003',
 ]
 check('every wired send label has its own name', WIRED_LABELS.every((l) => systemLabel(l) !== 'Sent by HQ'), WIRED_LABELS.filter((l) => systemLabel(l) === 'Sent by HQ'))
 check('after-hours share is not read as after-hours access', systemLabel('job/after-hours-share') !== systemLabel('job/after-hours'))
