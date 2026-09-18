@@ -40,6 +40,7 @@
     "test:order-back": "tsx tests/nav/order-back-target.test.ts",
     "test:dropdown-placement": "tsx tests/ui/dropdown-placement.test.ts",
     "test:df50-fluid": "tsx tests/inventory/df50-fluid.test.ts",
+    "test:df50-cord": "tsx tests/inventory/df50-cord.test.ts",
     "test:cargo-lift-gate": "tsx tests/fleet/cargo-lift-gate.test.ts",
     "test:public-listing": "tsx tests/sub-rentals/public-listing.test.ts",
     "test:photo-section": "tsx tests/sub-rentals/photo-shoot-roster.test.ts",
