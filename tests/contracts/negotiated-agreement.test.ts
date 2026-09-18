@@ -66,15 +66,21 @@ const VERIFIED_WORD_COUNT = 2776
 
 /**
  * The clauses SirReel appends, as they stand on 2026-09-18: §32 Third-Party
- * Equipment, verbatim from `canonical('30')`.
+ * Equipment, now an OVERRIDE of `canonical('30')` rather than a copy of it.
  *
- * NOT verified against the client's PDF — it cannot be, because their May
- * redline predates the clause. What this pins is that the text inside a
- * FILED contract does not move without someone saying so: either our
- * baseline clause changed under it, or an agreed override was added here.
- * Both are legitimate; both must be deliberate.
+ * Bumped 2026-09-18, and the reason is the whole point of this digest: their
+ * counsel redlined §32 on 9/17, Wes sent back three qualifiers on 9/18, and
+ * Marell accepted ("A as proposed"). The agreed body is spelled out in
+ * negotiatedAgreement.ts with each side's edits attributed in the comment
+ * above it. Verified against that exchange, not against the client's May PDF
+ * — which cannot cover this clause, because it predates it by four months.
+ *
+ * What this pins from here on is that the text inside a FILED contract does
+ * not move without someone saying so: either our baseline clause changed
+ * under it, or the override was edited. Both are legitimate; both must be
+ * deliberate. Do not bump it to make a red test green.
  */
-const APPENDED_CLAUSE_DIGEST = '7f9baeb1eb9ffeb40d78cddbd19e8339965345ae622f42926d1dd3ce47674ca0'
+const APPENDED_CLAUSE_DIGEST = '6d2aa12300c76133656f8fe979d7a30d4a6ebf3b438251a4150b36a11b68d6e6'
 
 /**
  * Layout wrapping and pdftotext-style hyphenation are extraction artifacts,
@@ -133,6 +139,33 @@ async function main() {
       `      got      ${appendedDigest}\n` +
       `      If this is a client's agreed redline, it belongs in appendedClauses as an override —\n` +
       `      NEVER in contractClauses.ts, which every other client's agreement renders from.`,
+  )
+
+  // 0c. The three qualifiers Marell accepted on 2026-09-18, named.
+  //
+  //     The digest above already fails on any edit, but it fails saying
+  //     "something changed". These fail saying WHICH protection went. The
+  //     cap qualifier is the one that matters most: without "subject to
+  //     Section 14", their "in any event we remain liable for the acts and
+  //     omissions of such third parties" is what someone argues overrides
+  //     the consequential-damages limitation both sides agreed to — a lost
+  //     show billed to us because a partner's generator failed.
+  const s32 = a.appendedClauses.find((c) => c.ref === '32')?.body ?? ''
+  check(
+    s32.includes('subject to Section 14'),
+    '§32 lost "subject to Section 14" — their third-party liability would sit OUTSIDE the limitation of liability',
+  )
+  check(
+    s32.includes('in connection with the Equipment supplied under this Agreement during the rental period'),
+    '§32 lost its scope limiter — "acts and omissions of such third parties" would have no boundary in time or subject',
+  )
+  check(
+    s32.includes('The Limited Collision Damage Waiver Addendum applies only to vehicles owned by us.'),
+    '§32 lost the LCDW sentence — "all of our obligations" would drag our damage waiver onto a partner\'s unit',
+  )
+  check(
+    !/failure of such third party's or our failure/.test(s32),
+    '§32 reverted to their ungrammatical first draft of the Section 4 proviso',
   )
 
   // 1. The client's clauses, and the deliberate gap where 15 was.
