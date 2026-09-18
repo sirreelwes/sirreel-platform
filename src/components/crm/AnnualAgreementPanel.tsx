@@ -76,6 +76,56 @@ export function AnnualAgreementPanel({
   const [newAutoCover, setNewAutoCover] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  /**
+   * Send the agreement to the client's COUNSEL for review (Wes 2026-09-18:
+   * "I'll need to send my finished one to him. Ideally, I can just send it in
+   * HQ to him, and he can review it there with a button that allows him to
+   * download a DOCX file").
+   *
+   * One row at a time — `counselFor` holds which agreement's box is open.
+   * NO Cc by design (Wes: "no cc"): this is counsel-to-counsel, not the COI
+   * broker case where the coordinator is copied.
+   */
+  const [counselFor, setCounselFor] = useState<string | null>(null);
+  const [counselEmail, setCounselEmail] = useState('');
+  const [counselName, setCounselName] = useState('');
+  const [counselMessage, setCounselMessage] = useState('');
+  const [counselSent, setCounselSent] = useState<string | null>(null);
+
+  const sendToCounsel = async (agreementId: string) => {
+    if (busyId) return;
+    setBusyId(agreementId);
+    setError(null);
+    try {
+      const r = await fetch(
+        `/api/crm/companies/${companyId}/agreements/${agreementId}/counsel-review`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            email: counselEmail.trim(),
+            name: counselName.trim() || null,
+            message: counselMessage.trim() || null,
+          }),
+        },
+      );
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.ok) {
+        setError(d.fix ? `${d.error} ${d.fix}` : d.error || 'Could not send it.');
+        return;
+      }
+      setCounselSent(`Sent to ${d.to}. The link shows the current copy — a later change needs no re-send.`);
+      setCounselFor(null);
+      setCounselEmail('');
+      setCounselName('');
+      setCounselMessage('');
+    } catch {
+      setError('Could not send it.');
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const load = useCallback(async () => {
     try {
       const r = await fetch(`/api/crm/companies/${companyId}/agreements`);
@@ -273,7 +323,12 @@ export function AnnualAgreementPanel({
         <div className="text-[10px] uppercase tracking-wider font-semibold text-lt-fg3 mb-1">
           Annual agreement
         </div>
-        {error && <p className="text-xs text-chip-bad-fg mb-2">{error}</p>}
+        {counselSent && (
+        <div className="mt-2 rounded-md border border-chip-good-bg bg-chip-good-bg px-2.5 py-1.5 text-[12px] text-chip-good-fg">
+          {counselSent}
+        </div>
+      )}
+      {error && <p className="text-xs text-chip-bad-fg mb-2">{error}</p>}
         {filing ? (
           fileForm
         ) : (
@@ -356,6 +411,66 @@ export function AnnualAgreementPanel({
                   Open PDF ↗
                 </a>
               </div>
+
+              {canEdit && (
+                <div className="mt-2">
+                  {counselFor === a.id ? (
+                    <div className="rounded-md border border-lt-hairline bg-lt-inner px-2.5 py-2">
+                      <div className="text-[12px] font-semibold text-lt-fg">
+                        Send to their counsel for review
+                      </div>
+                      <p className="mt-0.5 text-[11px] leading-relaxed text-lt-fg3">
+                        They get a read-only page with the whole agreement and a button to download it
+                        as Word — composed from the agreement text, not converted from the PDF. No Cc:
+                        this goes to them alone. The link is added by HQ, so editing the note below
+                        can&rsquo;t remove it.
+                      </p>
+                      <input
+                        value={counselEmail}
+                        onChange={(e) => setCounselEmail(e.target.value)}
+                        placeholder="counsel@theirfirm.com"
+                        className="mt-2 w-full rounded-md border border-lt-hairline bg-lt-card px-2 py-1.5 text-[13px]"
+                      />
+                      <input
+                        value={counselName}
+                        onChange={(e) => setCounselName(e.target.value)}
+                        placeholder="Their name (optional — used for the greeting)"
+                        className="mt-1.5 w-full rounded-md border border-lt-hairline bg-lt-card px-2 py-1.5 text-[13px]"
+                      />
+                      <textarea
+                        value={counselMessage}
+                        onChange={(e) => setCounselMessage(e.target.value)}
+                        rows={3}
+                        placeholder="Your note (optional — leave blank and HQ writes the standard one)"
+                        className="mt-1.5 w-full rounded-md border border-lt-hairline bg-lt-card px-2 py-1.5 text-[13px]"
+                      />
+                      <div className="mt-2 flex items-center gap-2">
+                        <button
+                          onClick={() => sendToCounsel(a.id)}
+                          disabled={busyId === a.id || !counselEmail.trim()}
+                          className="rounded-md bg-amber-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-amber-500 disabled:opacity-50"
+                        >
+                          {busyId === a.id ? 'Sending…' : 'Send it'}
+                        </button>
+                        <button
+                          onClick={() => { setCounselFor(null); setError(null); }}
+                          className="text-[12px] font-semibold text-lt-fg2 hover:text-lt-fg"
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => { setCounselFor(a.id); setCounselSent(null); setError(null); }}
+                      className="text-[11px] font-semibold text-lt-fg hover:text-black"
+                      title="Email their lawyer a read-only link to this agreement, with a Word download"
+                    >
+                      Send to their counsel ↗
+                    </button>
+                  )}
+                </div>
+              )}
 
               {canEdit && (
                 <label className="mt-2 flex items-start gap-2 cursor-pointer">

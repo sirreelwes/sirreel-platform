@@ -290,6 +290,58 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   and the alternative puts their coordinators back to signing our baseline
   per job — strictly worse paper than their negotiated document.
 
+## Their counsel reviews the agreement in HQ (2026-09-18 — Wes)
+- Wes: "Marell will probably want to see the entire agreement again. I'll
+  need to send my finished one to him. Ideally, I can just send it in HQ to
+  him, and he can review it there with a button that allows him to download
+  a DOCX file."
+- **The Word file is COMPOSED from the clause data, never converted.**
+  `src/lib/contracts/generateNegotiatedAgreementDocx.ts` writes
+  WordprocessingML and zips it with `pizzip` (already a dependency). Why not
+  `docxtemplater`, which is also here: it FILLS a template, and a template
+  means a binary .docx in the repo carrying clause text that has to stay in
+  lockstep with contractClauses.ts — the exact drift the digest test exists
+  to stop. Why not a conversion: the file Marell returned on 9/17 was a
+  PDF→Word conversion with ten invented hyphens and no front matter at all.
+  Composing cannot reproduce either defect, and the test asserts both
+  directions (no artifact words, "non-payment" intact).
+- Headings are LITERAL text, never Word auto-numbering — their numbering
+  carries a deliberate GAP at 15 (counsel deleted Subrogation) and Word
+  would silently close it. The test pins the gap.
+- **`/agreement/review/[token]`** is read-only in the strong sense: no form,
+  no POST, no session, two download buttons. `signCounselReviewToken`
+  (`counselReviewToken.ts`) reuses the COI HMAC envelope with a THIRD domain
+  separator (`counsel-review.v1`); `npm run test:counsel-review` asserts a
+  COI broker token does not verify as a counsel token or the reverse —
+  three schemes now sign JSON with one secret. Payload is ONE
+  `companyAgreementId`, 45-day TTL, so a forwarded link never widens.
+- **`buildCounselReviewPacket()` IS the disclosure envelope** and the page
+  renders nothing it does not return. OUT: every rate and dollar figure that
+  is not contract text, the orders and jobs the master papers, other
+  paperwork, any other client's terms, HQ's notes, who filed it, and the
+  partner arrangements behind §32.
+- **Rendered LIVE from the registry, not from the filed blob** — the same
+  "recomputed on every view" rule as the broker desk, because §32 is still
+  moving. So the page SAYS it is the current copy for review rather than the
+  executed agreement (`isCurrentDraft`), and a later correction needs no
+  re-send. Once signed it flips to "Executed — this copy is for your file".
+- **Sent from /crm/companies → Annual agreement → "Send to their counsel ↗"**
+  (`POST …/agreements/[agreementId]/counsel-review`). Posture copied from
+  the COI broker desk: the EMAIL IS THE ACT (a send failure stamps nothing),
+  the **LINK is appended by the ROUTE and never by the editable note** (the
+  partner-welcome rule), Reply-To is the sender exact, audited
+  `company_agreement.counsel_review_sent` with who it went to and never the
+  body. **NO Cc (Wes: "no cc")** — the COI rule copies the coordinator
+  because nobody's broker should be approached behind their back; counsel is
+  Wes writing to the lawyer he is negotiating with, and the box is free for
+  a human to add one.
+- Refuses (409) for a company with no registry agreement: the Word copy is
+  composed from clause text, so there has to be clause text.
+- NOT built: counsel cannot upload a redline BACK — they email it and it is
+  transcribed into `appendedClauses` by hand (`ContractReview` already has a
+  redline-upload path if that changes). Nothing nudges when a link has been
+  open for days with no reply.
+
 ## No partner's gear on a job without their signature (2026-09-18 — Wes)
 - Wes, reading his counsel's §32 redline: "go ahead with the unsigned-partner
   gate." §32 supplies a partner's unit to the client **on SirReel's own

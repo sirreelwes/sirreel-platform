@@ -15,6 +15,7 @@
     "db:migrate": "prisma migrate dev",
     "db:reset": "prisma migrate reset",
     "test:confirm-booking": "tsx tests/bookings/confirm-booking.test.ts",
+    "test:counsel-review": "tsx tests/contracts/counsel-review.test.ts",
     "test:negotiated-agreement": "tsx tests/contracts/negotiated-agreement.test.ts",
     "test:counter-pdf": "tsx tests/contract-review/counter-pdf.test.ts",
     "test:clause-diff": "tsx tests/contracts/clause-diff.test.ts",
