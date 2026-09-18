@@ -1,6 +1,15 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getServerSession } from "next-auth";
+
+/**
+ * Scan only. The merge that used to live here (POST) moved Order,
+ * Affiliation and Activity and then deleted the duplicate Company —
+ * which silently cascaded away that client's cards, negotiated rates,
+ * annual agreements and portal logins, and stranded every booking, COI
+ * and job it never looked at. /crm/duplicates now posts to
+ * /api/crm/companies/[id]/merge, which sweeps every Company foreign key
+ * from the Prisma schema and audits what it moved.
+ */
 
 // Normalize company name for matching
 function normalize(name: string): string {
@@ -48,48 +57,4 @@ export async function GET() {
   }
 
   return NextResponse.json({ duplicates, manualCount: manual.length, importedCount: imported.length });
-}
-
-export async function POST(req: NextRequest) {
-  const session = await getServerSession();
-  if (!session?.user?.email) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-  // Merge manual company into RW company
-  // Move all orders, affiliations, activities from manual to rw
-  const body = await req.json();
-  const { manualId, rwId } = body;
-
-  if (!manualId || !rwId) {
-    return NextResponse.json({ error: "manualId and rwId required" }, { status: 400 });
-  }
-
-  // Move all relations
-  await prisma.order.updateMany({ where: { companyId: manualId }, data: { companyId: rwId } });
-  await prisma.affiliation.updateMany({ where: { companyId: manualId }, data: { companyId: rwId } });
-  await prisma.activity.updateMany({ where: { companyId: manualId }, data: { companyId: rwId } });
-
-  // Preserve stats: add manual spend/bookings to RW record
-  const manual = await prisma.company.findUnique({ where: { id: manualId } });
-  const rw = await prisma.company.findUnique({ where: { id: rwId } });
-
-  if (manual && rw) {
-    await prisma.company.update({
-      where: { id: rwId },
-      data: {
-        totalSpend: { increment: manual.totalSpend },
-        totalBookings: { increment: manual.totalBookings },
-        // Preserve better tier
-        tier: (["VIP", "PREFERRED"].indexOf(manual.tier) < ["VIP", "PREFERRED"].indexOf(rw.tier))
-          ? manual.tier : rw.tier,
-        // Keep any billing email from manual if RW lacks one
-        billingEmail: rw.billingEmail || manual.billingEmail,
-      },
-    });
-  }
-
-  // Delete the manual duplicate
-  await prisma.company.delete({ where: { id: manualId } });
-
-  return NextResponse.json({ success: true });
 }

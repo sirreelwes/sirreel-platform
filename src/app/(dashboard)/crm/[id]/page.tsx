@@ -12,6 +12,8 @@ import { CompanyPortalAccessPanel } from "@/components/crm/CompanyPortalAccessPa
 import { CompanyDiscountsPanel } from "@/components/crm/CompanyDiscountsPanel";
 import { canEditCompanyTerms } from "@/lib/portal/companyTermsEditors";
 import { CompanyCardsPanel } from "@/components/crm/CompanyCardsPanel";
+import { MergeCompanyModal } from "@/components/crm/MergeCompanyModal";
+import { isAllowedDedupEmail } from "@/lib/people/dedupAllowlist";
 
 type Activity = {
   id: string; type: string; subject: string | null; body: string;
@@ -191,6 +193,11 @@ export default function CompanyDetailPage() {
   const [editing, setEditing] = useState(false);
   // Quick-log outreach modal (pre-linked to this company).
   const [showLogOutreach, setShowLogOutreach] = useState(false);
+  // Merge-duplicate modal. Allowlisted the same way as the people
+  // dedup queue — the route enforces it again, this only decides
+  // whether the entry point is drawn.
+  const [showMerge, setShowMerge] = useState(false);
+  const canMerge = isAllowedDedupEmail(session?.user?.email);
   const [savingCompany, setSavingCompany] = useState(false);
   const [editForm, setEditForm] = useState<{
     name: string;
@@ -394,7 +401,7 @@ export default function CompanyDetailPage() {
   return (
     <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1200px] mx-auto">
-      <button onClick={() => router.push("/crm")} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">&larr; Back to Clients</button>
+      <button onClick={() => router.push("/crm?tab=companies")} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">&larr; Back to Clients</button>
 
       <ClientArPanel companyId={companyId} />
 
@@ -730,6 +737,15 @@ export default function CompanyDetailPage() {
                   >
                     Edit
                   </button>
+                  {canMerge && (
+                    <button
+                      onClick={() => setShowMerge(true)}
+                      className="text-xs text-lt-fg2 hover:text-lt-fg"
+                      title="Fold a duplicate record for this client into one"
+                    >
+                      Merge duplicate…
+                    </button>
+                  )}
                 </div>
                 <p className="text-2xl font-semibold text-lt-fg font-mono">{fmt(company.totalSpend)}</p>
                 <p className="text-sm text-lt-fg2">
@@ -1174,6 +1190,19 @@ export default function CompanyDetailPage() {
           presetCompany={{ id: company.id, name: company.name }}
           onClose={() => setShowLogOutreach(false)}
           onSaved={() => { fetchCompany(); }}
+        />
+      )}
+      {showMerge && canMerge && (
+        <MergeCompanyModal
+          companyId={company.id}
+          companyName={company.name}
+          onClose={() => setShowMerge(false)}
+          onMerged={(survivingId) => {
+            setShowMerge(false);
+            // The record we were on may be the one that just went away.
+            if (survivingId === company.id) fetchCompany();
+            else router.push(`/crm/${survivingId}`);
+          }}
         />
       )}
       </div>

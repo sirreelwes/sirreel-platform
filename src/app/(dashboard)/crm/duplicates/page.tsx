@@ -14,6 +14,7 @@ export default function DuplicatesPage() {
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState({ manual: 0, imported: 0 });
   const [merging, setMerging] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchDups = useCallback(async () => {
     setLoading(true);
@@ -26,16 +27,34 @@ export default function DuplicatesPage() {
 
   useEffect(() => { fetchDups(); }, [fetchDups]);
 
+  // Posts to the shared merge primitive — the same one behind the
+  // "Merge duplicate…" button on a company page and the CLI. The merge
+  // that used to live in /api/crm/find-duplicates moved three tables and
+  // deleted the row, cascading away cards, rates, agreements and portal
+  // logins on its way out.
   const merge = async (manualId: string, rwId: string) => {
     if (!confirm("Merge this manual company into the RentalWorks record? The manual entry will be deleted.")) return;
     setMerging(manualId);
-    await fetch("/api/crm/find-duplicates", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ manualId, rwId }),
-    });
-    setMerging(null);
-    fetchDups();
+    setError(null);
+    try {
+      const res = await fetch(`/api/crm/companies/${rwId}/merge`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ duplicateId: manualId, apply: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setError(res.status === 403
+          ? "Merging clients is limited to the dedup allowlist — ask Wes or Dani to run it."
+          : data.error || "Merge failed.");
+        return;
+      }
+      fetchDups();
+    } catch {
+      setError("Merge failed.");
+    } finally {
+      setMerging(null);
+    }
   };
 
   return (
@@ -49,6 +68,10 @@ export default function DuplicatesPage() {
           {counts.manual} manually-added companies | {counts.imported} from RentalWorks | {dups.length} potential matches
         </p>
       </div>
+
+      {error && (
+        <p className="text-sm bg-chip-bad-bg text-chip-bad-fg rounded-lg px-3 py-2 mb-4">{error}</p>
+      )}
 
       {loading ? (
         <p className="text-lt-fg3 py-12 text-center">Scanning for duplicates...</p>

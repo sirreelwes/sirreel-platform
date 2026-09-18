@@ -224,8 +224,16 @@ export default function CRMPage() {
   // People-first default. selectForQuote (incoming from the new-quote
   // builder's "pick a client" flow) still lands on Companies — that
   // flow specifically needs the company picker.
+  //
+  // `?tab=` wins over the default: backing out of a company detail page
+  // used to dump you on People, because /crm always mounted at its
+  // default and the detail page's back button had no way to say which
+  // list you came from.
+  const tabFromUrl = searchParams?.get('tab');
   const [tab, setTab] = useState<"companies" | "people">(
-    selectForQuote ? "companies" : "people",
+    tabFromUrl === 'companies' || tabFromUrl === 'people'
+      ? tabFromUrl
+      : selectForQuote ? "companies" : "people",
   );
   const [companies, setCompanies] = useState<Company[]>([]);
   const [people, setPeople] = useState<PersonResult[]>([]);
@@ -390,6 +398,21 @@ export default function CRMPage() {
       tab === "companies" ? fetchCompanies() : fetchPeople(),
     ]).then(() => setLoading(false));
   }, [tab, fetchCompanies, fetchPeople]);
+
+  // Mirror the open tab into the URL, so the company/person detail pages
+  // can come back to the list you were actually in. Replace, not push —
+  // flipping tabs shouldn't pile up history entries. People is the
+  // default, so it carries no param.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (tab === 'companies') params.set('tab', 'companies');
+    else params.delete('tab');
+    const query = params.toString();
+    const next = `/crm${query ? `?${query}` : ''}`;
+    if (next !== window.location.pathname + window.location.search) {
+      router.replace(next, { scroll: false });
+    }
+  }, [tab, router]);
 
   // Mirror roleFilter into the URL so refresh + share preserve it.
   // Replace (not push) so the back button doesn't accumulate every
