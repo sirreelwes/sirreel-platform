@@ -35,6 +35,7 @@ function withPartnerSubs<T extends { subRentals?: { subcontractedVehicleId: stri
   }
 }
 import { pullGapsForLine } from '@/lib/orders/pullAmbiguity'
+import { addedAfterPull } from '@/lib/orders/addedAfterPull'
 import React from 'react'
 import { prisma } from '@/lib/prisma'
 import {
@@ -67,7 +68,7 @@ async function loadsOnUnitNameFor(order: { gearHandoff: string | null; gearLoads
 
 export async function renderPickListPdf(
   orderId: string,
-  opts: { lineIds?: string[]; receipt?: boolean } = {},
+  opts: { lineIds?: string[]; receipt?: boolean; addedOnly?: boolean } = {},
 ): Promise<RenderPickListFailure | { ok: true; result: RenderPickListResult }> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -178,6 +179,26 @@ export async function renderPickListPdf(
     }
   }
 
+  // ── Gear added after the floor already pulled this order ──────────
+  // Wes, 2026-09-18: a mid-job add was showing up on the check-out as
+  // staged and ready. The filed sheet is the anchor — a pickable line it
+  // has no row for is gear nobody has touched (lib/orders/addedAfterPull).
+  const addedSincePullIds = new Set(
+    addedAfterPull(
+      pickable,
+      filedOut
+        ? { submittedAt: filedOut.submittedAt, lineIds: filedOut.lines.map((l) => l.orderLineItemId) }
+        : null,
+    ).map((li) => li.id),
+  )
+  if (opts.addedOnly && addedSincePullIds.size === 0) {
+    return {
+      ok: false,
+      error: 'Nothing has been added to this order since its check-out sheet was filed.',
+      status: 400,
+    }
+  }
+
   let receipt: PickListReceipt | null = null
   /** Order lines that exist only because the warehouse wrote them in —
    *  printed in their own block, so they are not part of the pull. */
@@ -209,9 +230,14 @@ export async function renderPickListPdf(
   // On a receipt the SHEET's scope wins over ?lines= — what the driver
   // is holding is what was counted, and a stale selection from whatever
   // screen printed it must not quietly drop a line off the record.
+  // A sheet of JUST the new gear is the "as if it were a new order"
+  // pull — the floor should not have to read forty lines to find the two
+  // that are new.
   const onSheet = counted
     ? pickable.filter((li) => counted!.has(li.id))
-    : (selected.length > 0 ? selected : pickable)
+    : opts.addedOnly
+      ? pickable.filter((li) => addedSincePullIds.has(li.id))
+      : (selected.length > 0 ? selected : pickable)
   // Written-in lines are accounted for in their own block, so they are
   // neither on the pull nor missing from it.
   const omittedLineCount =
@@ -294,6 +320,7 @@ export async function renderPickListPdf(
       out: sheet ? sheet.actualQty : (isOut ? li.quantity : 0),
       picked: warehousePicked,
       includedAccessory: !!li.autoKitPieceId,
+      addedAfterPull: !receipt && addedSincePullIds.has(li.id),
       unitChecks: receipt ? [] : printableChecks(li.inventoryItem?.unitChecks ?? []),
     }
   })
@@ -321,6 +348,7 @@ export async function renderPickListPdf(
       generatedAt: new Date(),
       omittedLineCount,
       receipt,
+      addedOnly: !!opts.addedOnly,
     }) as React.ReactElement<DocumentProps>
     const pdf = await renderToBuffer(element)
     return {
@@ -329,6 +357,8 @@ export async function renderPickListPdf(
         pdf,
         stem: receipt
           ? `GearReceipt-${order.orderNumber}${omittedLineCount > 0 ? '-partial' : ''}`
+          : opts.addedOnly
+            ? `PickList-${order.orderNumber}-added`
           : omittedLineCount > 0
             ? `PickList-${order.orderNumber}-partial`
             : `PickList-${order.orderNumber}`,

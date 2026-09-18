@@ -61,6 +61,21 @@ export interface NegotiatedAgreement {
    * under a heading that SAYS they are additions — a client who reads this
    * document must be able to see what is their counsel's text and what is
    * not, without diffing it against their own file.
+   *
+   * ── An appended clause the client REDLINES is overridden HERE ──────────
+   * Spell the agreed body out in this array. Do NOT edit the clause in
+   * contractClauses.ts to match: `canonical('30')` is the baseline
+   * Third-Party Equipment clause, and the same body is rendered by
+   * RentalAgreementBody (the portal's readable agreement),
+   * SignedAgreementDocument (every signed copy) and the review tooling's
+   * baseline map. Editing it there renegotiates that clause for every
+   * client at once, silently, on the strength of one client's counsel.
+   *
+   * An override is `{ ...canonical('30'), ref: …, body: '<agreed text>' }`
+   * with a comment saying whose redline it came from and when. The digest in
+   * npm run test:negotiated-agreement covers these clauses too, so an edit
+   * to either side — here or in the canonical module — fails the test rather
+   * than reaching a filed contract unnoticed.
    */
   appendedClauses: CanonicalClause[]
   /** Company names this document is the master for. Filing script targets these. */
@@ -152,6 +167,27 @@ export const NEGOTIATED_AGREEMENTS: NegotiatedAgreement[] = [GRADUATION_DAY_2026
 
 export function findNegotiatedAgreement(key: string): NegotiatedAgreement | undefined {
   return NEGOTIATED_AGREEMENTS.find((a) => a.key === key)
+}
+
+/**
+ * The negotiated agreement on file for a company, matched on the name its
+ * CRM row carries — the same resolution the filing task uses, aliases
+ * included.
+ *
+ * This is what lets the account portal offer a client THEIR document for
+ * signature rather than our baseline: `offerAnnualForSignature` asks this
+ * first and only falls back to the standard agreement when the answer is
+ * nothing. Matching stays EXACT (see `companyAliases`) — a near-match here
+ * would put one client's negotiated terms in front of another.
+ */
+export function negotiatedAgreementForCompany(
+  companyName: string | null | undefined,
+): NegotiatedAgreement | undefined {
+  const name = (companyName ?? '').trim()
+  if (!name) return undefined
+  return NEGOTIATED_AGREEMENTS.find((a) =>
+    a.companies.some((registryName) => (a.companyAliases?.[registryName] ?? registryName) === name),
+  )
 }
 
 /** The appended addenda are the canonical ones, unmodified. */

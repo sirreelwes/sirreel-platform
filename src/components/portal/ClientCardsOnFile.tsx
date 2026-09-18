@@ -1,6 +1,7 @@
 'use client'
 
 import { useCallback, useEffect, useState } from 'react'
+import { clientCardWasDeclined } from '@/lib/payments/cardAsk'
 
 /**
  * The cards a client has on file, and which one we charge — the shared half
@@ -33,6 +34,12 @@ export interface WalletCard {
   isDefault: boolean
   expired: boolean
   label: string | null
+  /** The $0 stored-credential check came back approved. */
+  validated?: boolean
+  /** We asked the gateway at all. False on every card stored before that
+   *  check shipped, which is why `validated: false` alone must never be
+   *  rendered to a client as a decline — see clientCardWasDeclined. */
+  authChecked?: boolean
 }
 
 /** MMYY → "12/27". Returns null for anything unparseable rather than guessing. */
@@ -110,6 +117,9 @@ export function ClientCardRows({
     <div className="space-y-2">
       {cards.map((c) => {
         const exp = prettyExpiry(c.expiry)
+        // Asked the gateway, told no. Never inferred from `validated` alone:
+        // that is also false for every card nobody checked (Wes 2026-09-18).
+        const declined = clientCardWasDeclined(c)
         return (
           <div
             key={c.id}
@@ -130,6 +140,14 @@ export function ClientCardRows({
                     Expired
                   </span>
                 )}
+                {declined && !c.expired && (
+                  <span
+                    className="ml-2 text-[10px] font-bold uppercase tracking-wide text-red-600 bg-red-50 border border-red-200 rounded px-1.5 py-0.5"
+                    title="Your bank did not approve this card when we verified it."
+                  >
+                    Not approved
+                  </span>
+                )}
               </div>
               <div className="text-[11px] text-gray-500 mt-0.5">
                 {c.cardholderName ?? 'Cardholder not recorded'}
@@ -140,8 +158,16 @@ export function ClientCardRows({
             {!c.isDefault && (
               <button
                 onClick={() => onUse(c.id)}
-                disabled={busy === c.id || c.expired}
-                title={c.expired ? 'This card has expired.' : undefined}
+                // A card the bank refused is no more chargeable than an
+                // expired one, so it is not offered as the one we charge.
+                disabled={busy === c.id || c.expired || declined}
+                title={
+                  c.expired
+                    ? 'This card has expired.'
+                    : declined
+                      ? 'Your bank did not approve this card.'
+                      : undefined
+                }
                 className="shrink-0 px-3 py-1.5 rounded-lg border border-gray-300 hover:border-gray-500 disabled:opacity-40 text-[12px] font-semibold text-gray-700"
               >
                 {busy === c.id ? 'Saving…' : 'Use this one'}

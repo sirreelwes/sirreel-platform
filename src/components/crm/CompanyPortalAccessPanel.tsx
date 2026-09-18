@@ -173,7 +173,14 @@ export function CompanyPortalAccessPanel({
       const res = await fetch(`/api/crm/companies/${companyId}/agreements/offer-annual`, { method: 'POST' })
       const json = await res.json().catch(() => ({}))
       if (!res.ok) throw new Error(json?.error || 'Could not file the annual')
-      setNotice(`Annual agreement offered in their portal: ${json.pending?.title ?? ''}. Auto-cover turns on when they sign; each job still logs a one-page addendum under it.`)
+      // Name the document, and say when it is THEIR negotiated one — the
+      // offer renders whichever the registry holds for this company, and an
+      // operator pressing one button should be told which went out.
+      setNotice(
+        json.pending?.negotiatedKey
+          ? `Their negotiated agreement is offered in their portal: ${json.pending?.title ?? ''} — their counsel's terms, on our paper. Auto-cover turns on when they sign, and signing supersedes any unsigned master covering this account.`
+          : `Annual agreement offered in their portal: ${json.pending?.title ?? ''}. Auto-cover turns on when they sign; each job still logs a one-page addendum under it.`,
+      )
       // Filing it answers any open ask — the route closes the request, so
       // the panel stops advertising one.
       setAnnualRequest(null)

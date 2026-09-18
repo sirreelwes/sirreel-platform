@@ -6,6 +6,7 @@ import { formatPhone } from '@/lib/format/phone'
 import type { PaymentPreference } from '@/lib/payments/paymentPreference'
 import { PORTAL } from '@/lib/brand/portalTokens'
 import { CC_GUARANTEE_TEXT, CC_ACK_TEXT, CC_SURCHARGE_TEXT } from './terms'
+import { CARD_DECLINED_AT_SUBMIT, CARD_DECLINED_ON_FILE, clientCardWasDeclined } from '@/lib/payments/cardAsk'
 import { CardShell, ContextChip, LockedNote } from './CardShell'
 import { ClientCardRows, useClientCards } from '@/components/portal/ClientCardsOnFile'
 import type { V2Booking, V2Intake } from './types'
@@ -91,6 +92,10 @@ export function CcAuthCard({
   // capture form below rather than cloning it, and the card already on file
   // stays there (Wes 2026-09-03: "we don't wanna remove the first card").
   const [addingCard, setAddingCard] = useState(false)
+  // The bank refused the card they just submitted. Separate from `error`,
+  // which means the submission itself failed: this one succeeded, was
+  // stored, and still needs a different card (Wes 2026-09-18).
+  const [declined, setDeclined] = useState<string | null>(null)
 
   // Seed cardholder name + deposit estimate from the collect-once intake the
   // first time real data is available. Fields stay editable — the cardholder
@@ -233,6 +238,17 @@ export function CcAuthCard({
         <div className="text-xs text-gray-400">Loading secure card entry…</div>
       ) : (
         <div className="space-y-4">
+          {/* The card they just gave us came back refused. First thing on the
+              step, above their own details, because it is the only reason
+              they are still looking at this form. Says what happened, that
+              nothing was charged, and what survives — never why the bank
+              said no, which we do not know. */}
+          {declined && (
+            <div className="rounded-xl border-2 border-red-200 bg-red-50 p-4">
+              <div className="text-sm font-bold text-red-800">Card not approved</div>
+              <p className="mt-1 text-[13px] leading-relaxed text-red-700">{declined}</p>
+            </div>
+          )}
           <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-xs text-gray-600 space-y-1">
             <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">From your details</div>
             <div>
@@ -476,6 +492,28 @@ export function CcAuthCard({
                   }).catch(() => {})
                   return
                 }
+                // 200, but the bank said no (Wes 2026-09-18). The row IS
+                // stored — signature, preference, details and card — so this
+                // is not an error and nothing is rolled back. What must not
+                // happen is the step reporting success and collapsing to the
+                // green "Credit Card Authorized" panel, which is how a client
+                // used to walk away believing a dead card was on file while
+                // only the desk knew. Stay on the form, say it plainly, and
+                // leave them one field away from a different card.
+                const result = (await r.json().catch(() => ({}))) as {
+                  cardDeclined?: boolean
+                  cardMessage?: string
+                }
+                if (result.cardDeclined) {
+                  setDeclined(result.cardMessage || CARD_DECLINED_AT_SUBMIT)
+                  // Clear ONLY the card: their signature, name, ZIP and
+                  // acknowledgment stay, so a second card is the card alone.
+                  setCpToken('')
+                  setIframeUrl('')
+                  setAddingCard(true)
+                  return
+                }
+                setDeclined(null)
                 onAuthorized()
                 // Back to the list, which reloads on mount and shows the card
                 // just added next to the one that was already there. The
@@ -554,13 +592,38 @@ export function CcAuthCard({
 function CardsOnFilePanel({ token, onAddAnother }: { token: string; onAddAnother: () => void }) {
   const { cards, busy, msg, makeDefault } = useClientCards(token)
 
+  // Is there a card here we could actually charge? A client whose only card
+  // was refused used to get the green "Credit Card Authorized" banner on
+  // every return visit — the same false success the submit step used to
+  // give them, one page-load later, which would have made the fix at submit
+  // time last exactly until they refreshed (Wes 2026-09-18).
+  //
+  // Read on the LIST, not on one card: a production that added a second card
+  // after the first was refused IS covered, and must not be nagged. While the
+  // list is still loading (null) nothing is claimed either way.
+  const usable = cards === null ? null : cards.some((c) => !clientCardWasDeclined(c) && !c.expired)
+
   return (
     <div className="space-y-4">
-      <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
-        <div className="mb-1 flex justify-center text-emerald-500"><CheckCircle2 size={24} aria-hidden /></div>
-        <div className="text-emerald-800 font-bold text-sm">Credit Card Authorized</div>
-        <div className="text-emerald-600 text-xs mt-0.5">Authorization on file with SirReel</div>
-      </div>
+      {usable === false ? (
+        <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4">
+          <div className="text-red-800 font-bold text-sm">Card not approved</div>
+          <p className="mt-1 text-[13px] leading-relaxed text-red-700">{CARD_DECLINED_ON_FILE}</p>
+          <button
+            type="button"
+            onClick={onAddAnother}
+            className="mt-3 w-full py-2.5 rounded-lg text-sm font-semibold text-white bg-red-600 hover:bg-red-700"
+          >
+            Add a different card
+          </button>
+        </div>
+      ) : (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-4 text-center">
+          <div className="mb-1 flex justify-center text-emerald-500"><CheckCircle2 size={24} aria-hidden /></div>
+          <div className="text-emerald-800 font-bold text-sm">Credit Card Authorized</div>
+          <div className="text-emerald-600 text-xs mt-0.5">Authorization on file with SirReel</div>
+        </div>
+      )}
 
       <div>
         <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Your payment options</div>

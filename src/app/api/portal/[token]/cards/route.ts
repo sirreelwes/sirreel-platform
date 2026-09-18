@@ -64,6 +64,14 @@ export async function GET(_req: NextRequest, { params }: { params: { token: stri
       isDefault: c.isDefault,
       expired: c.expired,
       label: c.label,
+      // Whether the card will actually charge. Both fields, because one
+      // cannot be read without the other: `validated` is false for a refused
+      // card AND for every card stored before the $0 check shipped, and only
+      // the first of those is something to tell a client (Wes 2026-09-18).
+      // Neither is a charging capability — they say nothing the client does
+      // not already know about their own card.
+      validated: c.validated,
+      authChecked: c.authChecked,
     })),
   })
 }

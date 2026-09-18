@@ -84,6 +84,90 @@ export async function resolveWalletCardForJob(
   }
 }
 
+/** A job a card request can be sent on, for the company-wallet ask. */
+export interface CardAskJob {
+  id: string
+  jobCode: string
+  name: string
+  /** Soonest pickup on the job, when it has one. Null sorts last. */
+  startsAt: string | null
+}
+
+/**
+ * The company's jobs a card request could go out on, soonest pickup first.
+ *
+ * The wallet panel (/crm/[id]#cards) is COMPANY-scoped and the card ask is
+ * JOB-scoped — the email carries a portal token minted against a booking, and
+ * the recipient is ranked off the job's contacts. So a staffer whose keyed
+ * card just declined needs a job named before the ask can go anywhere, and
+ * this is that list.
+ *
+ * Deliberately a LIST, not a pick. With two shows running for the same
+ * production, choosing one for the rep is how a card request lands on the
+ * wrong job's thread — and the job is what the client sees in the subject
+ * line. One candidate is offered as a button; several are offered as a
+ * choice; none says so plainly instead of dead-ending again.
+ *
+ * Archived and lost jobs are out: nobody chases a card for a show that is not
+ * happening. An off-ramped job (HOLD / WRAPPED) is out for the same reason —
+ * except WRAPPED, which stays, because a wrapped job still gets invoiced and
+ * a dead card on it is exactly Ana's problem.
+ */
+export async function cardAskJobsForCompany(
+  companyId: string,
+  limit = 6,
+): Promise<CardAskJob[]> {
+  const jobs = await prisma.job.findMany({
+    where: {
+      companyId,
+      archivedAt: null,
+      status: { notIn: ['LOST', 'HOLD'] },
+    },
+    orderBy: { updatedAt: 'desc' },
+    take: 40,
+    select: {
+      id: true,
+      jobCode: true,
+      name: true,
+      bookings: {
+        where: { status: { notIn: ['CANCELLED', 'ARCHIVED'] } },
+        orderBy: { startDate: 'asc' },
+        take: 1,
+        select: { startDate: true },
+      },
+      orders: {
+        where: { status: { not: 'CANCELLED' } },
+        orderBy: { startDate: 'asc' },
+        take: 1,
+        select: { startDate: true },
+      },
+    },
+  })
+
+  const rows = jobs.map((j) => {
+    const dates = [j.bookings[0]?.startDate, j.orders[0]?.startDate].filter(
+      (d): d is Date => !!d,
+    )
+    const soonest = dates.length ? new Date(Math.min(...dates.map((d) => d.getTime()))) : null
+    return {
+      id: j.id,
+      jobCode: j.jobCode,
+      name: j.name,
+      startsAt: soonest ? soonest.toISOString() : null,
+    }
+  })
+
+  // Soonest pickup first; a job with no date on file sorts after every job
+  // that has one rather than to the top, where a null would otherwise land.
+  rows.sort((a, b) => {
+    if (a.startsAt && b.startsAt) return a.startsAt.localeCompare(b.startsAt)
+    if (a.startsAt) return -1
+    if (b.startsAt) return 1
+    return 0
+  })
+  return rows.slice(0, limit)
+}
+
 /**
  * Which of these companies have at least one live wallet card — one query for
  * a whole page of jobs, so the /jobs list can ask the same question the detail

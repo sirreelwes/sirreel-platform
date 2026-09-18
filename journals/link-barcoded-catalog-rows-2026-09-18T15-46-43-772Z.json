@@ -1,0 +1,59 @@
+{
+  "ranAt": "2026-09-18T15:46:43.773Z",
+  "entries": [
+    {
+      "icode": "103845",
+      "live": {
+        "id": "616f9be5-1d0d-4327-8670-7f875ba2826c",
+        "code": "CLI-HEATER-PROPANE",
+        "rwICodeBefore": null
+      },
+      "cleared": [],
+      "unitCount": 19
+    },
+    {
+      "icode": "104401",
+      "live": {
+        "id": "940638d9-4a1f-4846-9c61-7fe718adafa7",
+        "code": "CLI-MISTERS-10-GALLON",
+        "rwICodeBefore": null
+      },
+      "cleared": [
+        {
+          "id": "957307b4-28e7-42a0-8bac-9eb94a993d57",
+          "code": "104401",
+          "rwICodeBefore": "104401",
+          "archived": true
+        }
+      ],
+      "unitCount": 13
+    },
+    {
+      "icode": "103828",
+      "live": {
+        "id": "255a16e9-a4b5-4197-892e-28f5f4a9ad8c",
+        "code": "ECOFLOW",
+        "rwICodeBefore": "ECOFLOW"
+      },
+      "cleared": [],
+      "unitCount": 2
+    },
+    {
+      "icode": "104593",
+      "live": {
+        "id": "26de9dd8-cf60-4819-8882-a833a4d4655e",
+        "code": "DOL-DOLLY-MAGLINER-SR-W-SHELF",
+        "rwICodeBefore": null
+      },
+      "cleared": [
+        {
+          "id": "3b9bf57b-8981-46ee-ae7e-1287e7475bf8",
+          "code": "104593",
+          "rwICodeBefore": "104593",
+          "archived": true
+        }
+      ],
+      "unitCount": 3
+    }
+  ]
+}
