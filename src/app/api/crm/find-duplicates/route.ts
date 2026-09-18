@@ -21,6 +21,13 @@ function normalize(name: string): string {
     .trim();
 }
 
+// A live scan of the CRM, not a snapshot. Without this Next tries to
+// prerender the route at build time — which reaches the database during
+// `next build` (it fails the build outright where the DB is unreachable)
+// and, where it succeeds, bakes one moment's duplicates into a static
+// response. Every other API route here carries the same line.
+export const dynamic = 'force-dynamic'
+
 export async function GET() {
   // Get non-RW companies (manually created)
   const manual = await prisma.company.findMany({
