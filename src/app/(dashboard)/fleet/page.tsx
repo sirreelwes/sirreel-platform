@@ -204,7 +204,7 @@ function FleetPageInner() {
         </div>
         <div className="flex gap-2">
           {/* The bulk door. The per-unit panel takes one PDF at a time, which
-              for a folder of registrations and BIT scans is a morning of
+              for a folder of registrations and DOT inspection scans is a morning of
               clicking — and therefore a job that does not get done. */}
           <a href="/fleet/paperwork"
             className="border border-gray-200 bg-white hover:border-gray-400 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-gray-700 whitespace-nowrap">
@@ -272,9 +272,9 @@ function FleetPageInner() {
                     <div className="text-[9px] text-gray-300 flex gap-1.5">
                       {a.mileage ? <span>{a.mileage.toLocaleString()} mi</span> : null}
                       {a.licensePlate ? <span className="font-mono">{a.licensePlate}</span> : null}
-                      {a.latestBitDate ? <span className="text-emerald-500">BIT {a.latestBitDate.slice(0, 10)}</span> : null}
+                      {a.latestBitDate ? <span className="text-emerald-500">DOT {a.latestBitDate.slice(0, 10)}</span> : null}
                       <DocChip label="Reg" hasFile={a.hasRegistration} expiresAt={a.registrationExpiresAt} />
-                      <DocChip label="Cert" hasFile={a.hasBitCertificate} expiresAt={a.bitCertificateExpiresAt} />
+                      <DocChip label="DOT" hasFile={a.hasBitCertificate} expiresAt={a.bitCertificateExpiresAt} />
                     </div>
                   </div>
                 </div>
@@ -370,9 +370,9 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
   const [regExpires, setRegExpires] = useState(asset.registrationExpiresAt?.slice(0, 10) ?? '');
   const [uploadingReg, setUploadingReg] = useState(false);
   const [regError, setRegError] = useState<string | null>(null);
-  // The BIT CERTIFICATE pointer follows the newest inspection on file — it is
-  // not uploaded here (see src/lib/fleet/vehicleDocs.ts), so this is display
-  // only, refreshed from the upload response.
+  // The current-inspection pointer follows the newest one on file — it is not
+  // uploaded here (see src/lib/fleet/vehicleDocs.ts), so this is display only,
+  // refreshed from the upload response.
   const [certExpiresOn, setCertExpiresOn] = useState<string | null>(asset.bitCertificateExpiresAt);
   const [hasCert, setHasCert] = useState(asset.hasBitCertificate);
 
@@ -408,9 +408,9 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
     setUploadingBit(false);
     if (!res.ok) { const d = await res.json().catch(() => ({})); setBitError(d.error || 'Upload failed'); return; }
     const d = await res.json().catch(() => ({}));
-    // Only the newest inspection becomes the unit's current certificate; a
-    // backfill files the history and leaves the pointer where it was, and the
-    // panel has to say so rather than implying the client now sees this one.
+    // Only the newest inspection becomes the unit's current one; a backfill
+    // files the history and leaves the pointer where it was, and the panel has
+    // to say so rather than implying the client now sees this one.
     if (d?.isCurrent) { setHasCert(true); setCertExpiresOn(d.expiresAt ?? null); }
     setBitDate(''); setBitNotes(''); setBitFile(null); setBitExpires('');
     await loadBits();
@@ -451,7 +451,7 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
         <header className="flex items-start justify-between px-5 py-3.5 border-b border-gray-100">
           <div>
             <h2 className="text-base font-bold text-gray-900">{asset.unitName} · DOT</h2>
-            <p className="text-[11px] text-gray-400">{asset.categoryName} — vehicle details &amp; BIT inspections</p>
+            <p className="text-[11px] text-gray-400">{asset.categoryName} — vehicle details &amp; DOT inspections</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
         </header>
@@ -520,7 +520,7 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
               </div>
             </div>
             <p className="text-[10px] text-gray-400 mb-3">
-              The certificate follows the newest BIT inspection below — file one there and it updates here.
+              This follows the newest inspection below — file one there and it updates here.
             </p>
 
             <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-2">
@@ -547,14 +547,14 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
 
           {/* BIT inspections */}
           <section className="border-t border-gray-100 pt-4">
-            <div className="text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-2">BIT inspections</div>
+            <div className="text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-2">DOT inspections</div>
             <div className="text-[12px] text-gray-700 mb-2">
               {latest ? (
                 <span>Latest: <span className="font-semibold">{latest.inspectionDate.slice(0, 10)}</span>
                   {' · '}
                   <a href={`/api/fleet/${asset.id}/bit/${latest.id}/pdf`} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline">View PDF</a>
                 </span>
-              ) : <span className="text-gray-400">No BIT on file.</span>}
+              ) : <span className="text-gray-400">No inspection on file.</span>}
             </div>
 
             {bits.length > 1 && (
@@ -572,7 +572,8 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
             )}
 
             <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-2">
-              <div className="text-[10px] font-semibold text-gray-500">Add a BIT inspection</div>
+              <div className="text-[10px] font-semibold text-gray-500">Add a DOT inspection</div>
+              <p className="text-[10px] text-gray-400 -mt-1">The annual inspection on a truck, the BIT on a passenger van — same box either way.</p>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className={labelCls}>Inspection date</label><input className={fieldCls} type="date" value={bitDate} onChange={(e) => setBitDate(e.target.value)} /></div>
                 <div><label className={labelCls}>PDF scan</label><input type="file" accept="application/pdf" onChange={(e) => setBitFile(e.target.files?.[0] ?? null)} className="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-200 file:text-gray-700 file:text-[11px]" /></div>
@@ -584,7 +585,7 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
               <div><label className={labelCls}>Notes (optional)</label><input className={fieldCls} value={bitNotes} onChange={(e) => setBitNotes(e.target.value)} placeholder="Passed · next due 2026" /></div>
               {bitError && <p className="text-[11px] text-rose-600">{bitError}</p>}
               <button onClick={uploadBit} disabled={uploadingBit || !bitFile || !bitDate} className="px-3 py-1.5 bg-gray-900 hover:bg-black disabled:bg-gray-300 text-white text-[12px] font-semibold rounded-lg">
-                {uploadingBit ? 'Uploading…' : 'Upload BIT'}
+                {uploadingBit ? 'Uploading…' : 'Upload inspection'}
               </button>
             </div>
           </section>

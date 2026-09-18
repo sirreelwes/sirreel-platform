@@ -21,7 +21,7 @@ export interface DotUnit {
   model: string | null
   vin: string | null
   licensePlate: string | null
-  /** Latest BitInspection date (ISO yyyy-mm-dd) or null when none on file. */
+  /** Latest inspection date (ISO yyyy-mm-dd) or null when none on file. */
   latestBitDate: string | null
   /** What's missing on this unit (for the client-visible note). */
   missing: string[]
@@ -129,10 +129,13 @@ export function DotSheetDocument(props: DotSheetProps): React.ReactElement<Docum
             </View>
 
             <View style={styles.bitRow}>
-              <Text style={styles.cellLabel}>Latest BIT inspection (CHP Biennial Inspection of Terminals)</Text>
+              {/* Julian 2026-09-18: a truck's is a DOT ANNUAL inspection, a
+                  passenger van's a CHP BIT. The old label named only the van's
+                  document and printed it on every page, including the cubes. */}
+              <Text style={styles.cellLabel}>Latest DOT inspection</Text>
               {u.latestBitDate
                 ? <Text style={styles.cellVal}>{fmtDate(u.latestBitDate)} — certificate on file{' '}</Text>
-                : <Text style={styles.missing}>— No BIT inspection on file —</Text>}
+                : <Text style={styles.missing}>— No DOT inspection on file —</Text>}
             </View>
 
             {u.missing.length > 0 && (

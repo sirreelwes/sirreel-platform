@@ -16,6 +16,7 @@ import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Check, Loader2 } from 'lucide-react'
 import { SignaturePad } from '@/components/portal/SignaturePad'
+import { annualSigningState } from '@/lib/portal/annualSigningRules'
 import { PORTAL } from '@/lib/brand/portalTokens'
 
 /**
@@ -110,6 +111,12 @@ export default function SignAnnualPage() {
     }
   }
 
+  // A covering master is NOT a signature — the negotiated masters filed on
+  // 2026-09-18 cover every job with nobody's name on them. This page used to
+  // read `info.current` as "signed" and tell the person who came here to
+  // sign that there was nothing to sign.
+  const toSign = annualSigningState({ coverage: info?.current ?? null, pending: info?.pending ?? null })
+
   return (
     <div className="min-h-screen bg-[#F8F7F4]">
       <header className="w-full" style={{ backgroundColor: PORTAL.dark }}>
@@ -136,14 +143,16 @@ export default function SignAnnualPage() {
             </p>
             <Link href={`/portal/company/${companyId}`} className="inline-block mt-4 text-sm font-semibold underline text-zinc-900">Back to your account</Link>
           </div>
-        ) : info?.current ? (
-          <div className="bg-white border border-zinc-200 rounded-xl p-6 text-sm text-zinc-700">
-            Your account already has a signed annual agreement{info.current.signerName ? ` (signed by ${info.current.signerName})` : ''}, through {fmt(info.current.expiryDate)}. Nothing to sign.
-          </div>
         ) : !info?.pending ? (
-          <div className="bg-white border border-zinc-200 rounded-xl p-6 text-sm text-zinc-700">
-            There&apos;s no annual agreement waiting for a signature on this account. Ask your SirReel rep if you&apos;d like one.
-          </div>
+          toSign.executed ? (
+            <div className="bg-white border border-zinc-200 rounded-xl p-6 text-sm text-zinc-700">
+              Your account already has a signed annual agreement{toSign.executed.signerName ? ` (signed by ${toSign.executed.signerName})` : ''}, through {fmt((toSign.executed.expiryDate as string | null) ?? null)}. Nothing to sign.
+            </div>
+          ) : (
+            <div className="bg-white border border-zinc-200 rounded-xl p-6 text-sm text-zinc-700">
+              There&apos;s no annual agreement waiting for a signature on this account. Ask your SirReel rep if you&apos;d like one.
+            </div>
+          )
         ) : (
           <>
             <div>
@@ -155,6 +164,14 @@ export default function SignAnnualPage() {
                 <p className="text-sm text-zinc-600 mt-1">
                   These are the terms your counsel negotiated with us, on our paper. The sections we
                   added — the ones your document didn&apos;t carry — are marked as additions inside.
+                </p>
+              ) : null}
+              {toSign.coveringUnsigned ? (
+                <p className="text-sm text-zinc-600 mt-1">
+                  These terms are already applying to your shows — we filed them so your
+                  coordinators would stop signing a rental agreement per job. Signing here puts
+                  your signature on the document itself and records the damage-waiver election
+                  for the account.
                 </p>
               ) : null}
             </div>

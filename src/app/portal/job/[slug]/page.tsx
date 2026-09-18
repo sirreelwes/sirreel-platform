@@ -2640,7 +2640,7 @@ function VehiclePaperworkRow({ vehicle }: { vehicle: PortalData['paperwork']['ve
           expired={expired(regExpiry)}
         />
         <DocLink
-          label="BIT certificate"
+          label="DOT inspection"
           url={vehicle.bitCertificateUrl}
           expiry={bitExpiry}
           expiringSoon={expiringSoon(bitExpiry)}

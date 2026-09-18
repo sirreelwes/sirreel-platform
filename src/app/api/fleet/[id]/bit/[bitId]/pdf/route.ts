@@ -1,5 +1,5 @@
 /**
- * GET /api/fleet/[id]/bit/[bitId]/pdf — streams a BIT inspection PDF back
+ * GET /api/fleet/[id]/bit/[bitId]/pdf — streams a DOT inspection PDF back
  * through the gated private-blob proxy. The stored pdfBlobKey points at a
  * PRIVATE blob (403 on direct fetch), so links MUST target this route, not
  * the raw blob URL.
@@ -23,8 +23,8 @@ export async function GET(_req: NextRequest, { params }: Params) {
     select: { pdfBlobKey: true, assetId: true, inspectionDate: true },
   })
   if (!bit || bit.assetId !== id) {
-    return NextResponse.json({ error: 'BIT inspection not found' }, { status: 404 })
+    return NextResponse.json({ error: 'inspection not found' }, { status: 404 })
   }
   const stamp = bit.inspectionDate.toISOString().slice(0, 10)
-  return streamPrivateBlobAsResponse({ fileUrl: bit.pdfBlobKey, filename: `BIT-${stamp}.pdf` })
+  return streamPrivateBlobAsResponse({ fileUrl: bit.pdfBlobKey, filename: `DOT-inspection-${stamp}.pdf` })
 }

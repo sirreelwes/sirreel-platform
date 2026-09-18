@@ -86,8 +86,8 @@ export async function POST(req: NextRequest, { params }: Params) {
     // Deliberate: see vehicleDocs.ts. The pointer follows the history.
     return NextResponse.json(
       {
-        error: 'the BIT certificate is filed as a BIT inspection',
-        reason: 'Upload it at POST /api/fleet/[id]/bit with its inspection date — the unit\'s current certificate follows the newest inspection on file.',
+        error: 'the DOT inspection is filed with its inspection date',
+        reason: 'Upload it at POST /api/fleet/[id]/bit with its inspection date — the unit\'s current inspection is the newest one on file.',
       },
       { status: 409 },
     )
@@ -180,8 +180,8 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   if (!isUploadableKind(kind)) {
     return NextResponse.json(
       {
-        error: 'the BIT certificate cannot be cleared on its own',
-        reason: 'It points at the newest BIT inspection on file. File a newer inspection to move it.',
+        error: 'the DOT inspection cannot be cleared on its own',
+        reason: 'It points at the newest inspection on file. File a newer one to move it.',
       },
       { status: 409 },
     )

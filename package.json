@@ -110,6 +110,7 @@
     "test:check-report": "tsx tests/orders/check-report-classify.test.ts",
     "test:check-passes": "tsx tests/orders/check-passes.test.ts",
     "test:annual-coverage": "tsx tests/agreements/annual-coverage.test.ts",
+    "test:annual-signing": "tsx tests/portal/annual-signing-state.test.ts",
     "test:card-expiry": "tsx tests/payments/company-card-expiry.test.ts",
     "test:card-ask": "tsx tests/payments/card-ask.test.ts",
     "test:manual-payment": "tsx tests/payments/manual-received-at.test.ts",
