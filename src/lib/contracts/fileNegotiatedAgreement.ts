@@ -78,6 +78,23 @@ export interface FileNegotiatedOptions {
   /** Registry name → the company's EXACT name in the DB. Overrides the
    *  agreement's own `companyAliases`. */
   aliases?: Record<string, string> | null
+  /**
+   * Re-file a company whose covering master was rendered from an OLDER
+   * version of this document, superseding the stale row.
+   *
+   * Why this exists (2026-09-18): both masters were filed on the morning of
+   * 9/18 and §32 was agreed that afternoon. The skip below asked only "is a
+   * master covering?", never "is it the CURRENT document?" — so the run that
+   * was supposed to put the agreed clause on file reported "already covered
+   * — skipped" twice, and the PDF the client would have signed still carried
+   * our pre-redline clause 30. An idempotent filer has to key on the
+   * DOCUMENT, not just on the company.
+   *
+   * A master whose note already names this version is still skipped, so a
+   * second run changes nothing. A SIGNED master is never superseded here —
+   * that is `signAnnual`'s job and a human's decision.
+   */
+  refresh?: boolean
   /** The HQ user who pressed the button. Null on the CLI. */
   actorUserId?: string | null
 }
@@ -89,14 +106,16 @@ export interface FiledCompany {
   companyAgreementId: string | null
   blobKey: string | null
   /** Whether their standing negotiated terms were pointed at this document. */
-  standingTerms: 'set' | 'left-alone' | 'would-set'
+  standingTerms: 'set' | 'left-alone' | 'would-set' | 'moved'
+  /** The stale master this run switched off, when it replaced one. */
+  supersededId?: string | null
 }
 
 export interface SkippedCompany {
   registryName: string
   /** The name we looked for — the alias, when one was given. */
   lookedFor: string
-  reason: 'no-match' | 'ambiguous' | 'already-covered'
+  reason: 'no-match' | 'ambiguous' | 'already-covered' | 'already-current' | 'stale-needs-refresh' | 'signed'
   detail: string
 }
 
@@ -134,6 +153,28 @@ export function parseAliasEntries(raw: string | null | undefined): Record<string
     if (from && to) out[from] = to
   }
   return out
+}
+
+/**
+ * Was this filed row rendered from the version of the document we hold now?
+ *
+ * PURE, and the whole of the staleness decision. Every path that files or
+ * offers this document writes `agreement.version` verbatim into the row's
+ * note, so the note is the record of WHICH text is inside that PDF — there is
+ * no column for it, and adding one is a laptop job.
+ *
+ * Unreadable or absent → treated as NOT current, deliberately. The failure
+ * we are fixing is a stale contract passing as current; a needless re-render
+ * costs one PDF and converges on the next run, because the fresh row's note
+ * does name the version.
+ */
+export function renderedFromVersion(
+  note: string | null | undefined,
+  version: string,
+): boolean {
+  const n = (note ?? '').trim()
+  if (!n || !version.trim()) return false
+  return n.includes(version.trim())
 }
 
 /** The exact DB name to look for: an explicit alias, else the agreement's own
@@ -262,30 +303,90 @@ export async function fileNegotiatedAgreement(opts: FileNegotiatedOptions): Prom
 
     const existing = await prisma.companyAgreement.findMany({
       where: { companyId: company.id, contractType: 'RENTAL_AGREEMENT', deletedAt: null },
-      select: { id: true, title: true, autoCoverJobs: true, deletedAt: true, effectiveDate: true, expiryDate: true },
+      select: {
+        id: true,
+        title: true,
+        autoCoverJobs: true,
+        deletedAt: true,
+        effectiveDate: true,
+        expiryDate: true,
+        note: true,
+        fileUrl: true,
+        signedAt: true,
+        signerName: true,
+      },
     })
     const covering = existing.find((a) => isCoverageCurrent(a))
+    let superseding: typeof covering | null = null
     if (covering) {
-      log.push(`  ✗ ${company.name}: already covered by "${covering.title ?? covering.id}" — skipped (supersede by hand)`)
-      skipped.push({
-        registryName,
-        lookedFor: companyName,
-        reason: 'already-covered',
-        detail: `covered by ${covering.title ?? covering.id}`,
-      })
-      continue
+      const current = renderedFromVersion(covering.note, agreement.version)
+      const label = covering.title ?? covering.id
+      if (current) {
+        // The document on file IS this document. Nothing to do, and saying
+        // so is the useful answer — not "skipped, supersede by hand".
+        log.push(`  – ${company.name}: already covered by "${label}", rendered from this same version — nothing to re-file`)
+        skipped.push({
+          registryName,
+          lookedFor: companyName,
+          reason: 'already-current',
+          detail: `${label} already carries ${agreement.version}`,
+        })
+        continue
+      }
+      if (covering.signedAt) {
+        // Somebody signed that one. Replacing it is not a script's call.
+        log.push(
+          `  ✗ ${company.name}: covered by "${label}", SIGNED by ${covering.signerName ?? 'someone'} — skipped, never superseded automatically`,
+        )
+        skipped.push({
+          registryName,
+          lookedFor: companyName,
+          reason: 'signed',
+          detail: `signed by ${covering.signerName ?? 'someone'} — re-file by hand if the signed terms really are superseded`,
+        })
+        continue
+      }
+      if (!opts.refresh) {
+        log.push(
+          `  ✗ ${company.name}: covered by "${label}", but it was NOT rendered from the version we hold now — skipped`,
+        )
+        log.push(`      on file: ${covering.note?.trim() || '(no version recorded)'}`)
+        log.push(`      current: ${agreement.version}`)
+        log.push(`      re-run with "Re-file if the document changed" set to yes`)
+        skipped.push({
+          registryName,
+          lookedFor: companyName,
+          reason: 'stale-needs-refresh',
+          detail: `on file is an older version of this document — re-run with refresh to supersede it`,
+        })
+        continue
+      }
+      superseding = covering
+      log.push(`  ! ${company.name}: covered by "${label}" from an older version — superseding it`)
     }
 
     const buffer = await generateNegotiatedAgreementPdf({ agreement, companyName: company.name })
     const filename = agreementFilename(agreement, company.name)
     const standingHeld = !!company.negotiatedTermsUrl
 
+    // Standing terms MOVE when they point at the very file being replaced —
+    // the same rule signAnnual uses. Leaving them on a superseded document is
+    // how a per-job release hands the client the clause their lawyer redlined.
+    const standingPointsAtStale = !!superseding && !!company.negotiatedTermsUrl &&
+      company.negotiatedTermsUrl === superseding.fileUrl
+
     if (dryRun) {
-      log.push(`  · ${company.name}: would file "${filename}" (${buffer.length.toLocaleString()} bytes) as their annual master`)
+      if (superseding) {
+        log.push(`  · ${company.name}: would supersede ${superseding.id} and file "${filename}" (${buffer.length.toLocaleString()} bytes)`)
+      } else {
+        log.push(`  · ${company.name}: would file "${filename}" (${buffer.length.toLocaleString()} bytes) as their annual master`)
+      }
       log.push(
-        standingHeld
-          ? '      standing terms: already on file — would be left alone'
-          : '      standing terms: would point at this document, so any per-job signature uses their paper',
+        standingPointsAtStale
+          ? '      standing terms: point at the document being replaced — would move to the new one'
+          : standingHeld
+            ? '      standing terms: already on file — would be left alone'
+            : '      standing terms: would point at this document, so any per-job signature uses their paper',
       )
       filed.push({
         registryName,
@@ -293,7 +394,8 @@ export async function fileNegotiatedAgreement(opts: FileNegotiatedOptions): Prom
         companyId: company.id,
         companyAgreementId: null,
         blobKey: null,
-        standingTerms: standingHeld ? 'left-alone' : 'would-set',
+        standingTerms: standingPointsAtStale ? 'moved' : standingHeld ? 'left-alone' : 'would-set',
+        supersededId: superseding?.id ?? null,
       })
       continue
     }
@@ -328,9 +430,26 @@ export async function fileNegotiatedAgreement(opts: FileNegotiatedOptions): Prom
         select: { id: true },
       })
 
+      // Switch the stale master off. Never deleted, and its own document and
+      // window are left exactly as filed — only auto-cover goes, with the
+      // reason appended to its note.
+      if (superseding) {
+        await tx.companyAgreement.update({
+          where: { id: superseding.id },
+          data: {
+            autoCoverJobs: false,
+            note:
+              `${superseding.note ? `${superseding.note}\n\n` : ''}Auto-cover switched off ` +
+              `${new Date().toISOString().slice(0, 10)}: superseded by ${row.id}, re-rendered from ` +
+              `${agreement.key} ${agreement.version}. Row kept as filed — its document and window are unchanged.`,
+          },
+        })
+      }
+
       // Their paper becomes the document any per-job release would send —
-      // never overwriting terms somebody already recorded.
-      if (!standingHeld) {
+      // never overwriting terms somebody already recorded, EXCEPT where they
+      // point at the file just superseded.
+      if (!standingHeld || standingPointsAtStale) {
         await tx.company.update({
           where: { id: company.id },
           data: {
@@ -368,21 +487,48 @@ export async function fileNegotiatedAgreement(opts: FileNegotiatedOptions): Prom
       },
     }).catch(() => {})
 
+    if (superseding) {
+      await prisma.auditLog.create({
+        data: {
+          userId: opts.actorUserId ?? undefined,
+          action: 'company_agreement.superseded',
+          entityType: 'CompanyAgreement',
+          entityId: superseding.id,
+          newValues: {
+            companyId: company.id,
+            companyName: company.name,
+            supersededBy: created.id,
+            reason: 'refiled-from-newer-document-version',
+            key: agreement.key,
+            version: agreement.version,
+            standingTermsMoved: standingPointsAtStale,
+          },
+        },
+      }).catch(() => {})
+    }
+
     createdIds.push(created.id)
-    if (!standingHeld) touchedIds.push(company.id)
+    if (!standingHeld || standingPointsAtStale) touchedIds.push(company.id)
     filed.push({
       registryName,
       companyName: company.name,
       companyId: company.id,
       companyAgreementId: created.id,
       blobKey,
-      standingTerms: standingHeld ? 'left-alone' : 'set',
+      standingTerms: standingPointsAtStale ? 'moved' : standingHeld ? 'left-alone' : 'set',
+      supersededId: superseding?.id ?? null,
     })
-    log.push(`  ✓ ${company.name}: filed ${created.id} — every job inside the window is papered by it`)
     log.push(
-      standingHeld
-        ? '      standing terms: already on file, left alone'
-        : '      standing terms: now their document, so a per-job signature uses their paper',
+      superseding
+        ? `  ✓ ${company.name}: filed ${created.id} and switched ${superseding.id} off — every job inside the window is now papered by the agreed document`
+        : `  ✓ ${company.name}: filed ${created.id} — every job inside the window is papered by it`,
+    )
+    log.push(
+      standingPointsAtStale
+        ? '      standing terms: moved to the new document (they pointed at the superseded file)'
+        : standingHeld
+          ? '      standing terms: already on file, left alone'
+          : '      standing terms: now their document, so a per-job signature uses their paper',
     )
   }
 

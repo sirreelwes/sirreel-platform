@@ -131,7 +131,7 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     summary:
       'Renders the client\u2019s own negotiated redline on SirReel paper and files it as their annual agreement, so every job they book is papered by it.',
     detail:
-      'Wes 2026-09-18, on Party Giraffes and Graduation Day: "make those negotiated agreements standard for each job as an annual agreement." Their counsel\u2019s redline is already transcribed word-for-word; this renders it for each company and files it TWO ways. As their ANNUAL master it covers every job inside the agreed window \u2014 nothing to sign per job, the portal asks only for the damage-waiver election. As their STANDING terms it becomes the document that goes out whenever an agreement is released for signature anyway, so they are never handed our standard template after their lawyer redlined it. Companies are matched by exact name and it refuses to guess: 0 or 2+ matches are skipped and the near-misses printed. A company already covered by a current master is skipped for a person to supersede by hand, and standing terms already on file are never overwritten. Run the dry run first \u2014 it names the exact company row each name resolved to.',
+      'Wes 2026-09-18, on Party Giraffes and Graduation Day: "make those negotiated agreements standard for each job as an annual agreement." Their counsel\u2019s redline is already transcribed word-for-word; this renders it for each company and files it TWO ways. As their ANNUAL master it covers every job inside the agreed window \u2014 nothing to sign per job, the portal asks only for the damage-waiver election. As their STANDING terms it becomes the document that goes out whenever an agreement is released for signature anyway, so they are never handed our standard template after their lawyer redlined it. Companies are matched by exact name and it refuses to guess: 0 or 2+ matches are skipped and the near-misses printed. A company already covered by a current master is skipped for a person to supersede by hand, and standing terms already on file are never overwritten. A company already covered by a master rendered from THIS version is left alone; one covered by an OLDER version is re-rendered and the stale row superseded (never deleted), which is how a settled redline reaches the client. A SIGNED master is never superseded automatically. Run the dry run first \u2014 it names the exact company row each name resolved to and says which version is on file.',
     category: 'seed',
     writes:
       'sr_company_agreements (one row per company, annual + auto-covering) \u00b7 companies (the standing negotiated terms fields, only where there are none) \u00b7 sr_audit_logs \u00b7 the rendered PDF in the private blob store',
@@ -146,6 +146,13 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
         options: ['graduation-day-2026'],
         defaultValue: 'graduation-day-2026',
         help: 'Graduation Day Productions and Party Giraffes, LLC \u2014 their May redline, effective 5/15 through 12/31.',
+      },
+      {
+        key: 'refresh',
+        label: 'Re-file if the document changed',
+        options: ['yes', 'no'],
+        defaultValue: 'yes',
+        help: 'A company already covered by THIS version is always left alone. "yes" re-renders and supersedes a master that was filed from an OLDER version of the document \u2014 which is what a settled redline needs. A SIGNED master is never superseded either way.',
       },
       {
         key: 'alias',
@@ -193,6 +200,13 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
         key: 'signerTitle',
         label: 'Their title (optional)',
         placeholder: 'Head of Production',
+      },
+      {
+        key: 'refresh',
+        label: 'Re-offer if the document changed',
+        options: ['yes', 'no'],
+        defaultValue: 'yes',
+        help: 'An offer already on file from THIS version is reused. "yes" withdraws one rendered from an OLDER version and offers the current text \u2014 otherwise they sign the wrong document. Nothing is deleted.',
       },
       {
         key: 'sendInvite',

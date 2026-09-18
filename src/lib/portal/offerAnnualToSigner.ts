@@ -43,6 +43,7 @@ import {
 } from '@/lib/contracts/negotiatedAgreement'
 import { resolveCompanyName } from '@/lib/contracts/fileNegotiatedAgreement'
 import { findPendingAnnual, offerAnnualForSignature } from '@/lib/portal/companyAnnual'
+import { renderedFromVersion } from '@/lib/contracts/fileNegotiatedAgreement'
 import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
 import { annualSigningState } from '@/lib/portal/annualSigningRules'
 import { grantCompanyPortalAccess, isEmailAddress, normalizeGrantInputs } from '@/lib/portal/grantCompanyAccess'
@@ -63,6 +64,12 @@ export interface OfferAnnualOptions {
   signerTitle?: string | null
   /** false grants access without mailing them — the panel can send later. */
   sendInvite?: boolean
+  /**
+   * Replace a pending offer rendered from an OLDER version of the document.
+   * On by default: an offer that is not the agreed text is the one thing
+   * this task must never hand to a signer.
+   */
+  refresh?: boolean
   actorUserId?: string | null
 }
 
@@ -212,19 +219,42 @@ export async function offerAnnualToSigner(opts: OfferAnnualOptions): Promise<Off
       continue
     }
 
+    // Is the offer already on file the CURRENT document? Reusing a stale one
+    // is how the pre-redline clause reaches a signer.
+    const pendingNote = pending
+      ? (await prisma.companyAgreement.findUnique({ where: { id: pending.id }, select: { note: true } }))?.note
+      : null
+    const pendingIsCurrent = !!pending && renderedFromVersion(pendingNote, agreement.version)
+    const refresh = opts.refresh !== false
+
     let agreementId: string
     let title: string
-    const alreadyOffered = !!pending
-    if (pending) {
+    const alreadyOffered = !!pending && pendingIsCurrent
+    if (pending && pendingIsCurrent) {
       agreementId = pending.id
       title = pending.title
-      log.push(`  ✓ ${company.name}: "${title}" is already offered — reusing it`)
+      log.push(`  ✓ ${company.name}: "${pending.title}" is already offered, from this same version — reusing it`)
+    } else if (pending && !refresh) {
+      agreementId = pending.id
+      title = pending.title
+      log.push(`  ! ${company.name}: "${pending.title}" is offered but from an OLDER version of the document`)
+      log.push(`      re-run with "Re-offer if the document changed" set to yes, or they sign the wrong text`)
+    } else if (pending && dryRun) {
+      agreementId = '(would be replaced — dry run)'
+      title = agreement.title
+      log.push(`  ! ${company.name}: the offer on file is an older version — would withdraw it and offer "${title}"`)
     } else if (dryRun) {
       agreementId = '(not created — dry run)'
       title = agreement.title
       log.push(`  ✓ ${company.name}: would offer "${title}" for signature in their portal`)
     } else {
-      const created = await offerAnnualForSignature(company.id, { byUserId: opts.actorUserId ?? null })
+      const created = await offerAnnualForSignature(company.id, {
+        byUserId: opts.actorUserId ?? null,
+        refresh,
+      })
+      if (pending && created.id !== pending.id) {
+        log.push(`      withdrew the older offer ${pending.id} — kept on file, never signed`)
+      }
       agreementId = created.id
       title = created.title
       createdIds.push(created.id)

@@ -70,6 +70,7 @@ async function main() {
     signerName: arg('name') ?? null,
     signerTitle: arg('title') ?? null,
     sendInvite: !process.argv.includes('--no-invite'),
+    refresh: !process.argv.includes('--no-refresh'),
   })
 
   console.log()

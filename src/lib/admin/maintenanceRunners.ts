@@ -138,6 +138,7 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
       signerName: clean(params.signerName),
       signerTitle: clean(params.signerTitle),
       sendInvite: clean(params.sendInvite) !== 'no',
+      refresh: clean(params.refresh) !== 'no',
       actorUserId: actorUserId ?? null,
     })
     const n = r.offered.length
@@ -166,16 +167,26 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
       key,
       dryRun,
       aliases: parseAliasEntries(params.alias),
+      refresh: clean(params.refresh) !== 'no',
       actorUserId: actorUserId ?? null,
     })
     const n = r.filed.length
     const who = r.filed.map((f) => f.companyName).join(' and ')
+    // "Nothing filed" is two different answers and they must not read alike:
+    // every company already carrying THIS version is done, while a skip for
+    // any other reason is work outstanding.
+    const allCurrent = r.skipped.length > 0 && r.skipped.every((sk) => sk.reason === 'already-current')
+    const refiled = r.filed.filter((f) => f.supersededId).length
     const headline =
       n === 0
-        ? `Nothing filed — ${r.skipped.length} compan${r.skipped.length === 1 ? 'y was' : 'ies were'} skipped. Read the log.`
+        ? allCurrent
+          ? `Already on file — every company carries the current ${r.title}. Nothing to re-file.`
+          : `Nothing filed — ${r.skipped.length} compan${r.skipped.length === 1 ? 'y was' : 'ies were'} skipped. Read the log.`
         : dryRun
           ? `Dry run — would file ${r.title} for ${who}, covering through ${r.expiryDate}.`
-          : `${r.title} filed for ${who}. Their jobs are papered by it through ${r.expiryDate}.`
+          : refiled
+            ? `${r.title} re-filed for ${who} — ${refiled} stale master${refiled === 1 ? '' : 's'} superseded. Their jobs are papered by the agreed document through ${r.expiryDate}.`
+            : `${r.title} filed for ${who}. Their jobs are papered by it through ${r.expiryDate}.`
     // A skip is the part a person must read — a company that quietly did
     // not get its contract is exactly what a headline count hides.
     const log = r.skipped.length

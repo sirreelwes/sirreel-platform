@@ -62,6 +62,7 @@ import {
   negotiatedAgreementForCompany,
   type NegotiatedAgreement,
 } from '@/lib/contracts/negotiatedAgreement'
+import { renderedFromVersion } from '@/lib/contracts/fileNegotiatedAgreement'
 import { applyAnnualCoverage } from '@/lib/orders/annualCoverage'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 
@@ -150,10 +151,54 @@ export async function offerAnnualForSignature(
      * negotiated agreement but is being offered the standard one.
      */
     negotiatedKey?: string | null
+    /**
+     * Replace a pending offer that was rendered from an OLDER version of the
+     * same negotiated document.
+     *
+     * 2026-09-18: this function returned the existing offer unconditionally,
+     * which is right for "pressed twice" and wrong the moment the DOCUMENT
+     * moves — §32 was agreed after the first offers were filed, so a reuse
+     * would have put the pre-redline clause in front of the signer. The
+     * version lives in the row's note (see `renderedFromVersion`); an offer
+     * that already names the current one is still reused untouched.
+     */
+    refresh?: boolean
   },
 ): Promise<PendingAnnual> {
   const existing = await findPendingAnnual(companyId)
-  if (existing) return existing
+  if (existing) {
+    const row = await prisma.companyAgreement.findUnique({
+      where: { id: existing.id },
+      select: { note: true },
+    })
+    const key = existing.negotiatedKey
+    const doc = key ? findNegotiatedAgreement(key) : undefined
+    const stale = !!doc && !renderedFromVersion(row?.note, doc.version)
+    if (!stale || !opts.refresh) return existing
+    // Park the stale offer rather than deleting it: it is what somebody was
+    // shown, and the audit question "which document did we put in front of
+    // them" has to stay answerable.
+    await prisma.companyAgreement.update({
+      where: { id: existing.id },
+      data: {
+        pendingSignature: false,
+        note:
+          `${row?.note ? `${row.note}\n\n` : ''}Withdrawn ${new Date().toISOString().slice(0, 10)}: ` +
+          `re-offered from ${doc!.key} ${doc!.version}. Never signed. Row kept as filed.`,
+      },
+    })
+    await prisma.auditLog
+      .create({
+        data: {
+          userId: opts.byUserId ?? undefined,
+          action: 'company_agreement.offer_withdrawn',
+          entityType: 'CompanyAgreement',
+          entityId: existing.id,
+          newValues: { companyId, reason: 'reoffered-from-newer-document-version', version: doc!.version },
+        },
+      })
+      .catch(() => null)
+  }
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
