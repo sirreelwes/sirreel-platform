@@ -171,6 +171,51 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - The client COI drop link now runs the AI review on arrival (it used to store
   the PDF with no analysis at all).
 
+## A negotiated agreement becomes the client's annual (2026-09-18 — Wes)
+- Wes: "for party giraffe and graduation day, I need to make those negotiated
+  agreements standard for each job as an annual agreement." Their counsel's
+  redline was already transcribed (`negotiated/graduationDay2026.ts`, verbatim
+  — read `negotiatedAgreement.ts` before touching a word of it) and had a
+  filing script since 2026-09-15. Nothing had run it: the write needs the
+  production DB **and** `BLOB_READ_WRITE_TOKEN`, which is deliberately not in
+  `.env.local`, so the only thing in the way was a laptop.
+- **`src/lib/contracts/fileNegotiatedAgreement.ts` is the work**, with the
+  two entry points: `scripts/file-negotiated-agreement.ts` (argv + journal +
+  exit code, nothing else) and /admin/maintenance →
+  `file-negotiated-agreement`. The web path is the one place the blob token
+  simply IS — a phone run needs no `vercel env run`. Add behaviour to the
+  lib or the phone loses it.
+- **It files the document TWICE, for two different questions**, because
+  Wes's sentence names both mechanisms: `CompanyAgreement.autoCoverJobs` (the
+  ANNUAL master — every job inside the window is papered by it and the portal
+  asks only for the LCDW election, `annualCoverage.ts`) and
+  `Company.negotiatedTermsUrl` (the STANDING document — what goes out
+  whenever an agreement IS released for signature,
+  `ensureSignedAgreementForOrder`). Coverage outranks standing terms, so only
+  the first is felt while it holds; the second is what stops the day the
+  window lapses (2026-12-31 here) from handing that client our baseline
+  template after their lawyer redlined it. One PDF, both pointers.
+- `standingLcdwDecision` stays NULL on purpose — their counsel settled the
+  terms, nobody elected the damage waiver, and a null standing answer is
+  exactly what makes the portal ask per job.
+- **What it refuses, rather than guessing:** companies are matched on EXACT
+  name (0 or 2+ → skipped, near-misses printed as pasteable aliases); a
+  company already carrying a CURRENT auto-covering master is skipped for a
+  person to supersede by hand; standing terms already on file are never
+  overwritten (the annual is still filed and the log says so); no expiry date
+  is a refusal, because a master that never lapses never hands the signing
+  ask back. Dry run is the default on both paths and still renders the PDF.
+- `Party Giraffes` → **`Party Giraffes, LLC`** is a confirmed
+  `companyAliases` entry on the agreement, so nothing is typed on a phone.
+  Matching stays exact anyway: "Party Giraffes" also near-matches "Giraffe
+  Air LLC DBA Studio Sands", which is somebody else. An `alias` param
+  overrides it when the dry run says a name did not match — one per LINE or
+  semicolon, never comma-separated, because the values carry commas.
+- Coverage is read live, so jobs already open for these companies are covered
+  on their next read; no backfill. **Not run yet** — this session had no
+  production access. `npm run test:negotiated-agreement`,
+  `npm run test:maintenance-tasks`.
+
 ## The broker gets the review, not a forwarded paragraph (2026-09-17 — Wes)
 - Wes: "Is there a way to extract the broker from a COI and add an option to
   send a link to them when we need an updated COI or something isn't passing
@@ -598,6 +643,55 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - `promoteHoldsOnApproval` in holdOnQuoteSend.ts is dead (no callers) and
   must STAY dead — it updateMany's every rank-2 REQUESTED item to rank 1,
   which would silently promote every LiteHold.
+
+## Action items are labelled by the PICKUP, not the record (2026-09-17 — Wes)
+- Wes, with 41 COI rows and 71 replacement-cost rows on his phone: "a ton
+  of action items that are persistent on the screen even if their time of
+  action has passed … after [a day or two] we need to have them drop off."
+  Nothing on the list was old — every provider re-derives its rows on each
+  load, so a row exists only while its condition is still true — but the
+  row's timestamp was `occurredAt`, the date the RECORD was created (a
+  booking made yesterday for a pickup six weeks out read "17h ago").
+- **Age-based expiry was considered and rejected**: dropping a live "COI
+  missing" at 48h hides the row exactly when the pickup it warns about gets
+  close. **The window is measured from the PICKUP.** `ActionItem.dueAt` is
+  the pickup; the panel labels the row "pickup in 4d" / "pickup today" and
+  the group header "next pickup …"; the registry sorts soonest pickup first
+  inside a priority. Items with no pickup (a quiet quote, an untouched
+  inquiry) keep the "N ago" label. Rules in `src/lib/actionItems/rules.ts`
+  (pure, `npm run test:action-window`).
+- **`PICKUP_WINDOW_DAYS = 14`**: COI and card-required show only for
+  bookings starting today through +14 days (the SQL says
+  `start_date <= CURRENT_DATE + 14`). A COI for a pickup six weeks out is
+  not this week's chase and was the bulk of the 41. The day-of-pickup row
+  still shows (2026-08-31 ruling); the day after, it is gone.
+  Kit-incomplete keeps its 7-day lookahead and now carries `dueAt`.
+- **COI is ONE ROW PER JOB** (`groupCoiByJob`): the certificate lives on
+  `sr_coi_checks.job_id`, so a job with two bookings was the same ask twice
+  (Digital Paradigm, in the screenshot). The item is keyed on the LEAD
+  booking — the soonest pickup, ties by id — so a `coi:<bookingId>`
+  dismissal recorded before the merge still matches for the usual
+  one-booking job. A `coi_received` on ANY of the job's paperwork rows now
+  settles the whole job (it used to settle only its own booking).
+- **Replacement cost is three shapes, not 71 rows**
+  (`splitReplacementGroups`): a VEHICLE row going out inside 7 days is its
+  own HIGH item (same `replacement-cost:item:<id>` key as before); every
+  other catalog row folds into ONE item `replacement-cost:backlog`
+  (low, medium while something in it goes out inside the window — it never
+  lights the red badge) linking to
+  `/inventory/wizard?view=value&upcoming=1`; free-typed lines fold into ONE
+  agent item `replacement-cost:free-typed` linking to the soonest order.
+  The wizard's new "On upcoming orders" chip / `?upcoming=1` on
+  `/api/inventory/items` is the same predicate (no catalog cost, no priced
+  RentalWorks unit, a line on a live not-yet-returned order), soonest
+  pickup first — so the queue IS the backlog the panel counted. The
+  backlog's dismissal key is fixed: "Mark handled" hides the chore for
+  that user until they clear the dismissal; a changing count does not
+  bring it back, the urgent rows still surface on their own.
+- NOT done (Wes chose 1, 3, 4 of the four): a 30-day backstop on the
+  past-event providers (quote-aging, inquiry-untouched, payment-info,
+  annual-requested, duplicate-job, driver-hours, partner-photos) — a quote
+  quiet for 90 days still sits there until the job is marked lost.
 
 ## Sign-in is gated on the DOMAIN, not on having an account (2026-09-11)
 - Hugo: warehouse@ "is presenting as a sales view". It was: the NextAuth

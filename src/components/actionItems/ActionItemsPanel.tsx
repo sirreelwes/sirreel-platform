@@ -21,6 +21,15 @@
  * moves into the group header so each row is just the WHO. The panel
  * itself collapses to a single summary line. Nothing about the items
  * changed — same ids, same dismissals, same hrefs.
+ *
+ * LABELLED BY PICKUP since 2026-09-17 (Wes: items "persistent on the
+ * screen even if their time of action has passed"). A row that carries
+ * `dueAt` — a COI, a card, a kit, a replacement cost, all tied to a
+ * rental going out — reads "pickup in 4d" instead of "17h ago"; the ago
+ * label was the booking's CREATION date and read as urgency it never
+ * had. Its group header says "next pickup …" for the same reason. Rows
+ * without a pickup (a quiet quote, an untouched inquiry) keep "N ago".
+ * The window itself lives server-side (lib/actionItems/rules.ts).
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -35,6 +44,8 @@ interface ActionItem {
   priority: 'high' | 'medium' | 'low';
   href: string | null;
   occurredAt: string;
+  /** The pickup this work is for, when there is one — see rules.ts. */
+  dueAt?: string | null;
   source: string;
   dismissal: { kind: 'alert'; alertId: string } | { kind: 'sideRow' };
 }
@@ -67,7 +78,7 @@ const GROUP_META: Record<string, { label: string; hint: string }> = {
   'rw-token': { label: 'RentalWorks', hint: 'The RentalWorks credential needs renewing' },
   'partner-cancelled-off-pick-list': { label: 'Not on the pick list', hint: 'A partner’s booking was cancelled and we’re filling the line — the warehouse was never told' },
   'walkies-short': { label: 'Sub walkies', hint: 'Booked orders need more Motorola CP200s than we own on those days — record a sub-rental on the walkie line' },
-  'replacement-cost-missing': { label: 'Replacement cost to add', hint: 'Gear on an upcoming order has no replacement cost on file — the client’s broker needs the figure for the COI' },
+  'replacement-cost-missing': { label: 'Replacement cost to add', hint: 'Gear on an upcoming order has no replacement cost on file — the client’s broker needs the figure for the COI. Vehicles going out this week are their own rows; the rest is one backlog that opens the pricing wizard' },
 };
 
 /** Rows inside a group shouldn't repeat the group's verb. Provider
@@ -97,6 +108,41 @@ function fmtWhen(iso: string): string {
   }
   if (days < 30) return `${days}d ago`;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/** "pickup in 4d" — the row label for a due-dated item. Whole days from
+ *  local midnight; the server's window is in UTC days, but a label one
+ *  day off at the edge is a label, not a filter. */
+function fmtDue(iso: string): string {
+  const due = new Date(iso);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const dueDay = new Date(due.getUTCFullYear(), due.getUTCMonth(), due.getUTCDate());
+  const d = Math.round((dueDay.getTime() - today.getTime()) / 86_400_000);
+  if (d < 0) return d === -1 ? 'went out yesterday' : `went out ${-d}d ago`;
+  if (d === 0) return 'pickup today';
+  if (d === 1) return 'pickup tomorrow';
+  if (d <= 14) return `pickup in ${d}d`;
+  return `pickup ${dueDay.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
+
+/** The one time label per row: the pickup when the item has one, else
+ *  how long the record has been waiting. */
+function fmtRowWhen(item: ActionItem): string {
+  return item.dueAt ? fmtDue(item.dueAt) : fmtWhen(item.occurredAt);
+}
+
+/** The group header's time: the SOONEST pickup among due-dated rows, or
+ *  the newest record when the group has no pickups. */
+function fmtGroupWhen(items: ActionItem[]): string {
+  const due = items.filter((i) => !!i.dueAt).map((i) => i.dueAt as string);
+  if (due.length > 0) {
+    const soonest = due.reduce((a, b) => (new Date(b) < new Date(a) ? b : a));
+    const label = fmtDue(soonest);
+    return label.startsWith('pickup ') ? `next ${label}` : label;
+  }
+  const newest = items[0];
+  return newest ? `newest ${fmtWhen(newest.occurredAt)}` : '';
 }
 
 /** Rows shown when a group is first opened; "Show all" lifts the cap. */
@@ -311,7 +357,7 @@ export function ActionItemsPanel() {
                     <span className="min-w-0 truncate text-[12px] text-gray-400">{g.hint}</span>
                   )}
                   <span className="ml-auto text-[10px] text-gray-400 whitespace-nowrap">
-                    {newest ? `newest ${fmtWhen(newest.occurredAt)}` : ''}
+                    {fmtGroupWhen(g.items)}
                   </span>
                 </button>
 
@@ -339,7 +385,7 @@ export function ActionItemsPanel() {
                                   {ip.label}
                                 </span>
                               )}
-                              <span className="text-[10px] text-gray-400">{fmtWhen(item.occurredAt)}</span>
+                              <span className="text-[10px] text-gray-400">{fmtRowWhen(item)}</span>
                             </div>
                             <div className="text-[12px] text-gray-500 mt-0.5">{item.subtitle}</div>
                           </div>
