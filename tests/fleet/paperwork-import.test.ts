@@ -72,6 +72,13 @@ check('and it says which two', two.kind === 'many' && two.units.map((u) => u.id)
 console.log('\nregistration or DOT inspection')
 check('reg', guessDocKind('Cube 27 registration.pdf') === 'registration')
 check('short reg', guessDocKind('cube27_reg.pdf') === 'registration')
+// Julian's own filename word, off a screenshot of his folder (2026-09-18):
+// "Cube 9 PFR.pdf" — the CA DMV Permanent Fleet Registration. Two of every
+// four of his scans use it, and without this each one needed a hand-picked
+// kind, which is the tax this importer exists to remove.
+check('PFR is a registration', guessDocKind('Cube 9 PFR.pdf') === 'registration')
+check('PFR beside the long word', guessDocKind('Cube 12 PFR Registration.pdf') === 'registration')
+check('a trailing space before the extension is fine', guessDocKind('Cube 10 Registration .pdf') === 'registration')
 // ONE document, several names on the paper (Julian 2026-09-18): a truck
 // carries a DOT ANNUAL inspection, a passenger van a CHP BIT. Every word
 // anyone actually writes has to reach the same kind — "dot" was missing, and

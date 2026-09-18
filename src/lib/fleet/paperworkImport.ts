@@ -96,7 +96,11 @@ export function matchUnit(filename: string, units: readonly ImportUnit[]): UnitM
 export function guessDocKind(filename: string): VehicleDocKind | null {
   const t = tokenize(filename)
   const has = (...words: string[]) => words.some((w) => t.includes(w))
-  const reg = has('reg', 'regis', 'registration', 'registrations', 'dmv', 'tags')
+  // `pfr` is Julian's own filename word — his scans are "Cube 9 PFR.pdf"
+  // (Permanent Fleet Registration, the CA DMV document). Without it two of
+  // every four files came back needing a hand-picked kind, which is the same
+  // tax the bulk importer exists to remove.
+  const reg = has('reg', 'regis', 'registration', 'registrations', 'pfr', 'dmv', 'tags')
   // ONE document, several names on the paper (Julian 2026-09-18): a truck
   // carries a DOT ANNUAL inspection, a passenger van a CHP BIT. Both file the
   // same way, so every word people actually write is read as the same kind —

@@ -101,6 +101,15 @@ function FleetPaperworkInner() {
     return out;
   }
 
+  /**
+   * A browser exception is not an explanation. Safari in particular throws
+   * bare DOMExceptions ("The string did not match the expected pattern.") that
+   * tell an operator nothing about what to do next — Julian got exactly that
+   * one mid-upload — so every catch below wraps the raw text in what actually
+   * happened and what state the work is in.
+   */
+  const msgOf = (e: unknown) => (e instanceof Error ? e.message : String(e)) || 'no detail from the browser';
+
   function accept(list: File[]) {
     if (list.length === 0) { setError('Nothing in that drop — try the files themselves, or the folder they are in.'); return; }
     if (list.length > 60) {
@@ -134,7 +143,7 @@ function FleetPaperworkInner() {
       const d = await planFor(list, {});
       setUnits(d.units || []); setRows(d.rows || []); setSummary(d.summary || '');
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(`Couldn't read that list — nothing has been uploaded. (${msgOf(e)})`);
     } finally { setBusy(false); }
   }
 
@@ -146,7 +155,9 @@ function FleetPaperworkInner() {
       const d = await planFor(files, next);
       setRows(d.rows || []); setSummary(d.summary || '');
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      // Nothing is written by a re-check, so the list below is still good —
+      // say so, or the error reads as though the work was lost.
+      setError(`Couldn't re-check the list — your corrections are still here and nothing has been filed. (${msgOf(e)})`);
     }
   }
 
@@ -185,7 +196,17 @@ function FleetPaperworkInner() {
       setRows(null); setFiles([]);
       if (inputRef.current) inputRef.current.value = '';
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      // The request went out and did not come back, so we genuinely do not
+      // know whether the server filed them — saying "nothing was filed" would
+      // be a guess, and Julian's screen said nothing at all the first time
+      // this happened (2026-09-18). Registrations replace, so a retry is
+      // free; an inspection would land a second dated row, which is why that
+      // half is worth a look first.
+      setError(
+        `The upload didn't come back, so some may have been filed. (${msgOf(e)}) ` +
+        `Check a unit on Fleet before pressing File again — re-sending a registration just replaces it, ` +
+        `but a second inspection would add a duplicate row.`,
+      );
     } finally { setBusy(false); }
   }
 
