@@ -1,0 +1,84 @@
+{
+  "ranAt": "2026-09-18T16:55:25.060Z",
+  "entries": [
+    {
+      "icode": "103845",
+      "live": {
+        "id": "616f9be5-1d0d-4327-8670-7f875ba2826c",
+        "code": "CLI-HEATER-PROPANE",
+        "rwICodeBefore": "103845",
+        "archivedAtBefore": null,
+        "isActiveBefore": true
+      },
+      "cleared": [],
+      "unitCount": 19
+    },
+    {
+      "icode": "104401",
+      "live": {
+        "id": "940638d9-4a1f-4846-9c61-7fe718adafa7",
+        "code": "CLI-MISTERS-10-GALLON",
+        "rwICodeBefore": "104401",
+        "archivedAtBefore": null,
+        "isActiveBefore": true
+      },
+      "cleared": [],
+      "unitCount": 13
+    },
+    {
+      "icode": "103828",
+      "live": {
+        "id": "255a16e9-a4b5-4197-892e-28f5f4a9ad8c",
+        "code": "ECOFLOW",
+        "rwICodeBefore": "103828",
+        "archivedAtBefore": null,
+        "isActiveBefore": true
+      },
+      "cleared": [],
+      "unitCount": 2
+    },
+    {
+      "icode": "105020",
+      "live": {
+        "id": "19775401-ab04-41e3-bb7c-0a01f65863ba",
+        "code": "105020",
+        "rwICodeBefore": "105020",
+        "archivedAtBefore": null,
+        "isActiveBefore": true
+      },
+      "cleared": [],
+      "unitCount": 23
+    },
+    {
+      "icode": "104430",
+      "live": {
+        "id": "efedd3a1-9259-4efc-9826-e92c2315167d",
+        "code": "TOO-LEAF-BLOWER-ELECTRIC",
+        "rwICodeBefore": null,
+        "archivedAtBefore": null,
+        "isActiveBefore": true
+      },
+      "cleared": [
+        {
+          "id": "4ff42476-f8f4-4b0a-b1e3-79c2feda8117",
+          "code": "104430",
+          "rwICodeBefore": "104430",
+          "archived": true
+        }
+      ],
+      "unitCount": 4
+    },
+    {
+      "icode": "104593",
+      "live": {
+        "id": "26de9dd8-cf60-4819-8882-a833a4d4655e",
+        "code": "DOL-DOLLY-MAGLINER-SR-W-SHELF",
+        "rwICodeBefore": "104593",
+        "archivedAtBefore": null,
+        "isActiveBefore": true
+      },
+      "cleared": [],
+      "unitCount": 3
+    }
+  ]
+}
