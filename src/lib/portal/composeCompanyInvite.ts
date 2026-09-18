@@ -20,6 +20,7 @@ import {
 } from '@/lib/email/templates/companyPortal'
 import { findCompanyAnnualCoverage } from '@/lib/orders/annualCoverage'
 import { findPendingAnnual } from '@/lib/portal/companyAnnual'
+import { annualSigningState } from '@/lib/portal/annualSigningRules'
 import { listOtherAccessHolders } from '@/lib/portal/grantCompanyAccess'
 
 export interface CompanyInviteCompositionOk {
@@ -69,6 +70,7 @@ export async function composeCompanyPortalInvite(args: {
     findPendingAnnual(access.company.id),
     listOtherAccessHolders(access.company.id, access.id),
   ])
+  const signing = annualSigningState({ coverage: annual, pending })
   const rep = access.company.defaultAgent
   const repName = rep?.name || args.fallbackRep.name || 'Your SirReel rep'
   const repEmail = rep?.email || args.fallbackRep.email || null
@@ -78,11 +80,21 @@ export async function composeCompanyPortalInvite(args: {
     portalUrl: `${args.base}/portal/company/${access.company.id}`,
     repName,
     repEmail,
-    annualAgreementTitle: annual ? annual.title || annual.originalFilename : null,
-    pendingAnnual:
-      !annual && pending
-        ? { title: pending.title, signUrl: `${args.base}/portal/company/${access.company.id}/sign/annual` }
-        : null,
+    // A covering master is NOT a signature: the negotiated masters filed on
+    // 2026-09-18 paper every job with nobody's name on them. This used to
+    // gate the sign link on `!annual && pending`, so the invite to the
+    // executive who was going to sign named no document and carried no
+    // link — the one thing the email existed to deliver. `annualSigningState`
+    // is the shared rule; the portal card and the sign page read the same one.
+    annualAgreementTitle: signing.executed
+      ? signing.executed.title || (annual ? annual.originalFilename : null)
+      : null,
+    pendingAnnual: signing.signable
+      ? {
+          title: signing.signable.title,
+          signUrl: `${args.base}/portal/company/${access.company.id}/sign/annual`,
+        }
+      : null,
     otherPeople: others,
   }
   const defaultBody = defaultCompanyPortalInviteBody(input)
