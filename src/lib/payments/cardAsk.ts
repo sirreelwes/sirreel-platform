@@ -202,3 +202,47 @@ export function clientCardWasDeclined(card: {
 }): boolean {
   return card.authChecked === true && card.validated === false
 }
+
+/** The three facts every card surface has about whether a card will charge. */
+export interface CardUsability {
+  authChecked?: boolean | null
+  validated?: boolean | null
+  expired?: boolean | null
+}
+
+/**
+ * Would we expect this card to charge?
+ *
+ * Refused or expired is a no; ANYTHING ELSE is a yes, including a card we
+ * never checked. That default is deliberate and load-bearing: on 2026-09-06,
+ * 21 of the 23 bookings going out in the next 14 days held no HQ-validated
+ * card at all, because their authorization lives in Cognito or RentalWorks.
+ * Treating "we never asked" as unusable would light up almost every job on
+ * the board and train everyone to ignore the row.
+ */
+export function isCardUsable(card: CardUsability): boolean {
+  return !clientCardWasDeclined(card) && card.expired !== true
+}
+
+/**
+ * Does this client owe us a REPLACEMENT — cards on file, none of them good?
+ *
+ * The three-way split this encodes, and why the middle case needed a name:
+ *
+ *   no cards at all        → the `card-required` action item already owns it,
+ *                            and the yard's gate refuses the check-out.
+ *   cards, none usable     → THIS. Invisible to both of the above, because
+ *                            every existence check in HQ — card-required's
+ *                            NOT EXISTS, cardGateForJob's `onFile` — is
+ *                            satisfied by the very card that will fail.
+ *   at least one usable    → nothing to chase. A production that added a
+ *                            good second card after the first was refused is
+ *                            covered, and must not be nagged about the dead
+ *                            one still sitting on their account.
+ *
+ * Same predicate the client's own portal reads for its red banner, so what
+ * HQ chases and what the client is being told cannot drift apart.
+ */
+export function replacementNeeded(cards: CardUsability[]): boolean {
+  return cards.length > 0 && !cards.some(isCardUsable)
+}

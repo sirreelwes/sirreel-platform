@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { authorizeStoredCredential, isApproved } from '@/lib/cardpointe/client'
 import { recordCardTrouble } from '@/lib/portal/cardTrouble'
+import { emailClientAboutDecline } from '@/lib/portal/cardDeclinedEmail'
 import { notifyPortalPaperwork } from '@/lib/email/notifyPortalPaperwork'
 import { applyLcdwElectionToJobOrders } from '@/lib/lcdw/applyElectionToOrders'
 import { mirrorPaperworkCardToWallet } from '@/lib/payments/companyCards'
@@ -291,6 +292,15 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
               kind: 'AUTH_DECLINED',
               detail: [zero.respcode, zero.resptext].filter(Boolean).join(' ') || null,
             })
+            // …and tell the CLIENT (Wes 2026-09-18: "WE NEED AN email to go
+            // out to the client when their card declines"). The response
+            // below already says it on screen, but that reaches only the
+            // person still looking at the page; this follows the one who
+            // read it and closed the tab. Both are deliberate — the screen
+            // is immediate, the email is what they still have tomorrow.
+            // Fire-and-forget, and never on a gateway that threw: this sits
+            // inside the branch where the gateway gave us an explicit no.
+            emailClientAboutDecline({ token: params.token })
           }
         } catch (err) {
           console.error('[cc-auth] $0 validation threw:', err)

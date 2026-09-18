@@ -11,7 +11,7 @@ import {
 import { prisma } from '@/lib/prisma'
 import { tokenVariants, mergeMeasureTokens } from '@/lib/sales/catalogMatcher'
 import { negotiated } from '@/lib/pricing/companyRate'
-import { STOCK_ONLY_CODES } from '@/lib/catalog/walkies'
+import { STOCK_ONLY_CODES } from '@/lib/catalog/stockFills'
 
 export const dynamic = 'force-dynamic'
 

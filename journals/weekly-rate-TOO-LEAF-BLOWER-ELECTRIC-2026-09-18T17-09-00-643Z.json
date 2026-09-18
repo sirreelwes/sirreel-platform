@@ -1,0 +1,16 @@
+{
+  "ranAt": "2026-09-18T17:09:00.644Z",
+  "authorisedBy": "Wes, 2026-09-18",
+  "itemId": "efedd3a1-9259-4efc-9826-e92c2315167d",
+  "code": "TOO-LEAF-BLOWER-ELECTRIC",
+  "description": "Leaf Blower, Electric",
+  "before": {
+    "dailyRate": "15",
+    "weeklyRate": "0"
+  },
+  "after": {
+    "dailyRate": "15",
+    "weeklyRate": "45"
+  },
+  "existingLinesUntouched": 0
+}

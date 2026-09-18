@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client'
 import { randomUUID } from 'crypto'
 import { prisma } from '@/lib/prisma'
 import { resolveScan, type ScanResolution } from '@/lib/warehouse/resolveScan'
+import { STOCK_FILLS, stockCodesFor } from '@/lib/catalog/stockFills'
 import {
   clampMissing, decideIn, decideOut, isOpen, summarizeUnitScans,
   type LiveScan, type ScanEdge, type ScanLine, type UnitScanSummary,
@@ -128,15 +129,55 @@ export async function unitScanSummary(orderId: string): Promise<UnitScanSummary 
  * Catalog rows that have at least one barcoded unit in the register —
  * the lines a scanner can count. Everything else is quantity-only and
  * is typed in as before.
+ *
+ * A row whose orders are filled from STOCK rows counts too: the
+ * "Mobile Internet MiFi" line has no units of its own, because every
+ * hotspot on the shelf is a T-Mobile or a Verizon one, and a scan of
+ * either resolves back to that line (lib/catalog/stockFills.ts). Without
+ * this the sheet would offer no scanner for exactly the products whose
+ * whole point is that the floor picks which one goes out.
  */
 export async function unitTrackedItemIds(inventoryItemIds: string[]): Promise<Set<string>> {
   const ids = inventoryItemIds.filter(Boolean)
   if (!ids.length) return new Set()
+
+  // Ask by ID first — one indexed group-by, the answer for almost every
+  // line on almost every order.
   const rows = await prisma.inventoryUnit.groupBy({
     by: ['inventoryItemId'],
     where: { inventoryItemId: { in: ids }, inactive: false },
   })
-  return new Set(rows.map((r) => r.inventoryItemId).filter((x): x is string => !!x))
+  const tracked = new Set(rows.map((r) => r.inventoryItemId).filter((x): x is string => !!x))
+
+  // Then the handful of rows that are filled from stock. Only the ones
+  // not already tracked, and only when the order row is actually among
+  // the ids asked about — a normal order never reaches this query.
+  const untracked = ids.filter((id) => !tracked.has(id))
+  if (untracked.length === 0) return tracked
+  const orderRows = await prisma.inventoryItem.findMany({
+    where: { id: { in: untracked }, code: { in: STOCK_FILLS.map((f) => f.order) } },
+    select: { id: true, code: true },
+  })
+  if (orderRows.length === 0) return tracked
+
+  const stockCodes = [...new Set(orderRows.flatMap((r) => stockCodesFor(r.code)))]
+  const stockRows = await prisma.inventoryItem.findMany({
+    where: { code: { in: stockCodes } },
+    select: { id: true, code: true },
+  })
+  const withUnits = new Set(
+    (
+      await prisma.inventoryUnit.groupBy({
+        by: ['inventoryItemId'],
+        where: { inventoryItemId: { in: stockRows.map((r) => r.id) }, inactive: false },
+      })
+    ).map((r) => r.inventoryItemId).filter((x): x is string => !!x),
+  )
+  const codeHasUnits = new Set(stockRows.filter((r) => withUnits.has(r.id)).map((r) => r.code))
+  for (const row of orderRows) {
+    if (stockCodesFor(row.code).some((c) => codeHasUnits.has(c))) tracked.add(row.id)
+  }
+  return tracked
 }
 
 function toLive(

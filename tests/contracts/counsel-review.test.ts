@@ -34,6 +34,11 @@ import {
   negotiatedDocxFilename,
 } from '@/lib/contracts/generateNegotiatedAgreementDocx'
 import { GRADUATION_DAY_2026 as AGREEMENT } from '@/lib/contracts/negotiatedAgreement'
+import {
+  renderCounselReviewEmail,
+  counselReviewSubject,
+  defaultCounselReviewBody,
+} from '@/lib/contracts/counselReviewEmail'
 
 let fail = 0
 const eq = (label: string, got: unknown, want: unknown) => {
@@ -134,6 +139,56 @@ for (const part of ['[Content_Types].xml', '_rels/.rels', 'word/document.xml', '
 yes('the buffer is a plausible size', buf.length > 5000 && buf.length < 2_000_000)
 yes('the filename names the document and the company', negotiatedDocxFilename(AGREEMENT, COMPANY).endsWith('Graduation-Day-Productions.docx'))
 yes('the filename carries no comma or separator', !/[,/\\]/.test(negotiatedDocxFilename(AGREEMENT, 'Party Giraffes, LLC')))
+
+// ── 3. The email, and the review that shows it ───────────────────────────
+// Wes 2026-09-18: "Where is the review of the email to Marell?" The answer
+// has to be "the same function that sends it" — a preview assembled
+// separately is a preview of a different email. Both the GET and the POST
+// call renderCounselReviewEmail, so these assertions cover both.
+const PACKET = { title: AGREEMENT.title, companyName: COMPANY }
+const URL = 'https://hq.sirreel.com/agreement/review/tok.sig'
+
+const standard = renderCounselReviewEmail({ packet: PACKET, url: URL, senderName: 'Wes Bailey' })
+eq('the subject names the document and the company', standard.subject, counselReviewSubject(PACKET))
+yes('a blank note sends the standard body', standard.text.includes(defaultCounselReviewBody(PACKET).split('\n')[0]))
+yes('with no name it opens "Hello,"', standard.html.includes('<p>Hello,</p>'))
+yes('the sender signs it', standard.html.includes('Wes Bailey'))
+
+const named = renderCounselReviewEmail({
+  packet: PACKET,
+  url: URL,
+  senderName: 'Wes Bailey',
+  recipientName: 'Nicholas Marell',
+  message: 'Nicholas — three small edits on top of yours.\n\nSecond paragraph.',
+})
+yes('a name becomes a first-name greeting', named.html.includes('<p>Nicholas,</p>'))
+yes("the staffer's own words replace the standard body", named.html.includes('three small edits'))
+yes('and the standard wording is gone when they write their own', !named.html.includes('clean copy of the'))
+yes('paragraph breaks survive', (named.html.match(/<p>/g) || []).length >= 4)
+
+// THE rule: the link is the renderer's, not the note's. A staffer trimming
+// their message — or writing one that tries to talk around it — cannot
+// remove the thing the email exists to deliver.
+for (const [label, message] of [
+  ['a blank note', ''],
+  ['a one-word note', 'Thanks.'],
+  ['a note that mentions no link', 'See attached, per our call.'],
+  ['a note with its own link', 'Use https://example.com/other instead'],
+] as const) {
+  const m = renderCounselReviewEmail({ packet: PACKET, url: URL, senderName: 'W', message })
+  yes(`${label} still carries the review link (html)`, m.html.includes(URL))
+  yes(`${label} still carries the review link (text)`, m.text.includes(URL))
+}
+
+// A note is user input and lands in HTML.
+const hostile = renderCounselReviewEmail({
+  packet: PACKET,
+  url: URL,
+  senderName: 'W',
+  message: 'Terms & conditions <script>alert(1)</script> apply',
+})
+yes('user input is escaped', !hostile.html.includes('<script>'))
+yes('and the ampersand survives as an entity', hostile.html.includes('Terms &amp; conditions'))
 
 if (fail) { console.error(`\n${fail} failing`); process.exit(1) }
 console.log('\nall good')

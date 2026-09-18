@@ -23,6 +23,7 @@ import {
   coverageOfBlock,
   quotedBlocks,
   resolveAssignWindow,
+  soleOrderCoveringHold,
   type QuotedBlock,
 } from '@/lib/scheduling/assignWindow'
 import { computeUnitStates } from '@/lib/scheduling/availability'
@@ -116,20 +117,84 @@ eq(
   '2026-09-29→2026-09-30 (overlap)',
 )
 eq(
-  'no lines, no overlap: the order wins',
+  // Oliver, 2026-09-18, KPDH Multi Block 2: the hold said 9/18 and the
+  // job's only other order — S260914-021, already out on 9/15 — said
+  // 9/15, so Cargo 22 was bound to the 15th. The reservation showed on
+  // the job page and the board drew the van three days in the past.
+  'no lines, no overlap: the hold wins, not another week’s order',
   iso(
     resolveAssignWindow({
       hold: { start: d('2026-09-01'), end: d('2026-09-02') },
       orderWindow: { start: d('2026-10-06'), end: d('2026-10-10') },
     }),
   ),
-  '2026-10-06→2026-10-10 (order)',
+  '2026-09-01→2026-09-02 (hold)',
+)
+eq(
+  'a quoted block clear of the hold is not picked for it either',
+  iso(
+    resolveAssignWindow({
+      hold: { start: d('2026-09-18'), end: d('2026-09-19') },
+      orderWindow: { start: d('2026-09-24'), end: d('2026-09-25') },
+      blocks: quotedBlocks([line('2026-09-24', '2026-09-25')]),
+    }),
+  ),
+  '2026-09-18→2026-09-19 (hold)',
+)
+{
+  // NECTARHOUSE S3 (SR-JOB-0373): ONE order quotes a cube 9/18 → 9/19 and
+  // another 9/24 → 9/25; the booking envelope is the first block only.
+  // Cube 32 is on both, and the second leg must still be auto-pickable —
+  // the order reaches the hold, so every block on it is in play.
+  const nectar = {
+    hold: { start: d('2026-09-18'), end: d('2026-09-19') },
+    orderWindow: { start: d('2026-09-18'), end: d('2026-09-25') },
+    blocks: quotedBlocks([line('2026-09-18', '2026-09-19'), line('2026-09-24', '2026-09-25')]),
+  }
+  eq(
+    'a second block on an order that DOES reach the hold is still picked',
+    iso(resolveAssignWindow({ ...nectar, assignments: [span('2026-09-18', '2026-09-19')] })),
+    '2026-09-24→2026-09-25 (block-open)',
+  )
+  eq(
+    'and the agent can name it outright',
+    iso(resolveAssignWindow({ ...nectar, requested: { start: d('2026-09-24'), end: d('2026-09-25') } })),
+    '2026-09-24→2026-09-25 (requested)',
+  )
+}
+eq(
+  'lines read off an order that never reaches the hold are not its blocks',
+  iso(
+    resolveAssignWindow({
+      hold: { start: d('2026-09-18'), end: d('2026-09-18') },
+      orderWindow: { start: d('2026-09-10'), end: d('2026-09-11') },
+      blocks: quotedBlocks([line('2026-09-10', '2026-09-11')]),
+      assignments: [],
+    }),
+  ),
+  '2026-09-18→2026-09-18 (hold)',
 )
 eq(
   'a bare hold (a gantt drag, no order) keeps its own window',
   iso(resolveAssignWindow({ hold: { start: d('2026-09-29'), end: d('2026-09-30') } })),
   '2026-09-29→2026-09-30 (hold)',
 )
+
+// ── Which ORDER the unit goes out on ─────────────────────────────────
+console.log('\n— the order covering the hold —')
+{
+  const hold = { start: d('2026-09-18'), end: d('2026-09-18') }
+  const sept15 = { id: 'o-0914', start: d('2026-09-15'), end: d('2026-09-15') }
+  const sept18 = { id: 'o-0918', start: d('2026-09-18'), end: d('2026-09-18') }
+
+  // KPDH Multi Block 2 at 16:26: one order on the job, finished and out
+  // three days earlier. "The only order" is not "this hold's order".
+  eq('the job’s one order, about another week → none named', soleOrderCoveringHold([sept15], hold), null)
+  eq('the order whose days these are', soleOrderCoveringHold([sept15, sept18], hold), 'o-0918')
+  eq('two orders over the same days → the agent picks', soleOrderCoveringHold([sept18, { ...sept18, id: 'o-other' }], hold), null)
+  eq('an order with no dates says nothing', soleOrderCoveringHold([{ id: 'o-bare', start: null, end: null }], hold), null)
+  eq('touching counts — a longer order that covers the hold', soleOrderCoveringHold([{ id: 'o-wide', start: d('2026-09-14'), end: d('2026-09-20') }], hold), 'o-wide')
+}
 
 // ── What the operator was actually told ──────────────────────────────
 console.log('\n— the van in the yard —')

@@ -325,6 +325,19 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   moving. So the page SAYS it is the current copy for review rather than the
   executed agreement (`isCurrentDraft`), and a later correction needs no
   re-send. Once signed it flips to "Executed — this copy is for your file".
+- **There is a REVIEW step, and it is the mail** (Wes 2026-09-18: "Where is
+  the review of the email to Marell?"). The first cut composed the body
+  inside the POST, so the only thing on screen was the note box — for the
+  one message in HQ most worth reading twice. `renderCounselReviewEmail`
+  (`counselReviewEmail.ts`) is now the ONE renderer and the route's **GET**
+  returns exactly what its POST will send: subject, rendered html, Reply-To,
+  and "no Cc" stated. Two taps in the panel — **Review the email** then
+  **Send it** — and any edit to the address, the name or the note clears the
+  preview, the way the job composer's armed strip disarms. The GET mints its
+  own display token and the POST mints the one it sends; both are valid for
+  the same agreement. The test pins that a note cannot remove the LINK
+  (blank, one-word, or one carrying a rival URL) and that a note is escaped
+  before it reaches HTML.
 - **Sent from /crm/companies → Annual agreement → "Send to their counsel ↗"**
   (`POST …/agreements/[agreementId]/counsel-review`). Posture copied from
   the COI broker desk: the EMAIL IS THE ACT (a send failure stamps nothing),
@@ -1601,6 +1614,78 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   paperwork step's own `done`, so the header chip can disagree with a red
   body. Fixing it means lifting `useClientCards` into `CcAuthCard`, which
   would fetch on every portal open — deliberately not done.
+
+### …and HQ chases the ones who don't act — `card-declined` (2026-09-18 — Wes)
+- The third piece. #55 gave staff a button, #58 told the client; this one is
+  for the client who is told and does nothing. Provider
+  `src/lib/actionItems/providers/cardDeclined.ts`.
+- **`card-required` could never have covered it.** That provider's whole
+  condition is `NOT EXISTS` — no portal card on any of the job's paperwork
+  rows, nothing on the company wallet. **A declined card satisfies both, so
+  the dead card SILENCES the warning about itself.** Same blind spot in
+  `cardGateForJob`: `onFile` is computed from existence and never reads
+  `authRespStat`.
+- **So the yard WILL release a vehicle on a declined card, today.** That is
+  stated in the item's subtitle rather than fixed, deliberately: teaching the
+  gate to refuse starts stopping trucks at the dock and is Wes's call, not a
+  side effect of an action item. **If it is ever wired, gate on
+  `clientCardWasDeclined` (authChecked && !validated), NEVER on `!validated`**
+  — the latter is false for every card HQ never checked and would have
+  blocked 21 of the 23 bookings going out in the 14 days to 2026-09-06.
+- **One rule, three ways: `replacementNeeded(cards)` in cardAsk.ts** (pure).
+  No cards → card-required's row. Cards, none usable → this. One usable
+  anywhere on the job or the company → nothing, and the dead card is left
+  alone on the account. `isCardUsable` treats an UNCHECKED card as fine, for
+  the 21-of-23 reason above; the client portal's red banner reads the same
+  predicate, so what HQ chases and what the client is told cannot drift.
+- Same pickup window and live-booking predicate as its sibling (both halves
+  of one question must agree on scope), one row per JOB keyed on the lead
+  booking, high inside 3 days. The SQL `LEFT JOIN`s paperwork_requests where
+  card-required `JOIN`s it — a bad card can sit on the WALLET with no request
+  of its own — and orders `sent_at DESC` so "asked Nd ago" is the last ask.
+- **Not verified against live data** — this session had no `DATABASE_URL`.
+  The pure rules are covered by `npm run test:card-ask`; the query shape
+  copies card-required's, which was verified.
+
+### …and the CLIENT gets an EMAIL (2026-09-18 — Wes: "WE NEED AN email to go out to the client when their card declines")
+- Nothing did. The decline emailed the DESK (`recordCardTrouble` → rentals@ +
+  Wes, the client only as Reply-To) and, from earlier the same day, told the
+  client ON SCREEN — which reaches only the person still looking at the page.
+  A client who read "Card not approved" and closed the tab was never
+  contacted again by anything.
+- **`emailClientAboutDecline({ token })` in `src/lib/portal/cardDeclinedEmail.ts`**,
+  fired beside `recordCardTrouble` in the same `!isApproved` branch — so it
+  is structurally impossible for it to fire on a gateway that THREW. Words
+  are pure in `src/lib/email/templates/cardDeclined.ts`
+  (`buildCardDeclinedEmail`), the same template/compose split as
+  cardAuthRequest.ts.
+- **Four things the copy must do, all pinned by `npm run test:card-ask` in
+  both html and text:** say the BANK did not approve it (not "a problem" — a
+  client who doesn't know it was their bank comes looking at us); say
+  **nothing was charged** AND explain the $0, which is the sentence that
+  stops the phone call; ask for a different card and say the rest of their
+  paperwork is SAVED (or they redo a signature they never lost); and **never
+  guess why** — including no "call your bank", which is advice about a cause
+  we have not established.
+- **PORTAL path only.** The staff-keyed path (/crm/[id]#cards) is
+  deliberately not wired: nothing is stored there, the rep is standing right
+  there with the "Ask for another card" button, and an automatic "your card
+  was declined" to a client who does not know we keyed anything off their
+  paper CCA is a confusing email nobody chose to send.
+- **One email per client per hour**, however many cards they try — the same
+  window as the desk alert so the two cannot disagree about what counts as
+  one episode. Kept in the **AuditLog** (`portal.card_declined_client_emailed`
+  on the PaperworkRequest), the "sent is an audit row, no column" pattern the
+  job welcome uses. Stamped only AFTER a successful send — the opposite of
+  the desk alert, which stamps first because a repeated staff alert is worse
+  than a missed one; here a missed email is the whole failure being fixed.
+- Rides `sendOnJobThread` (label `card-declined-client`, named in
+  `systemLabel`), Reply-To the job's agent — a reply to this is "can I pay
+  another way", which is a person's question. Recipient is `sentTo` (who we
+  asked), falling back to the booking contact. Fire-and-forget: their
+  signature is already written and a Resend outage is not their problem.
+- Still NOT done: nothing chases the client a second time if they ignore it —
+  the `card-declined` action item puts it on a rep's list and sends nothing.
 
 ## Ana can correct an invoice from her own desk (2026-09-17 — Ana)
 - Ana: "how do I update an invoice from my side?" She could not. Both ways of

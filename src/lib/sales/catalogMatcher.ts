@@ -7,7 +7,7 @@ import {
   tokenVariants,
 } from '@/lib/sales/queryTokens'
 import type { LineItemDepartment, LineItemType } from '@prisma/client'
-import { STOCK_ONLY_CODES } from '@/lib/catalog/walkies'
+import { STOCK_ONLY_CODES } from '@/lib/catalog/stockFills'
 
 // Token helpers moved to queryTokens.ts (prisma-free, so the public order
 // form can rank client-side against the SAME singular/plural rules).

@@ -6,7 +6,7 @@ import { formatPhone } from '@/lib/format/phone'
 import type { PaymentPreference } from '@/lib/payments/paymentPreference'
 import { PORTAL } from '@/lib/brand/portalTokens'
 import { CC_GUARANTEE_TEXT, CC_ACK_TEXT, CC_SURCHARGE_TEXT } from './terms'
-import { CARD_DECLINED_AT_SUBMIT, CARD_DECLINED_ON_FILE, clientCardWasDeclined } from '@/lib/payments/cardAsk'
+import { CARD_DECLINED_AT_SUBMIT, CARD_DECLINED_ON_FILE, isCardUsable } from '@/lib/payments/cardAsk'
 import { CardShell, ContextChip, LockedNote } from './CardShell'
 import { ClientCardRows, useClientCards } from '@/components/portal/ClientCardsOnFile'
 import type { V2Booking, V2Intake } from './types'
@@ -601,7 +601,7 @@ function CardsOnFilePanel({ token, onAddAnother }: { token: string; onAddAnother
   // Read on the LIST, not on one card: a production that added a second card
   // after the first was refused IS covered, and must not be nagged. While the
   // list is still loading (null) nothing is claimed either way.
-  const usable = cards === null ? null : cards.some((c) => !clientCardWasDeclined(c) && !c.expired)
+  const usable = cards === null ? null : cards.some(isCardUsable)
 
   return (
     <div className="space-y-4">
