@@ -1423,6 +1423,38 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   body. Fixing it means lifting `useClientCards` into `CcAuthCard`, which
   would fetch on every portal open — deliberately not done.
 
+### …and HQ chases the ones who don't act — `card-declined` (2026-09-18 — Wes)
+- The third piece. #55 gave staff a button, #58 told the client; this one is
+  for the client who is told and does nothing. Provider
+  `src/lib/actionItems/providers/cardDeclined.ts`.
+- **`card-required` could never have covered it.** That provider's whole
+  condition is `NOT EXISTS` — no portal card on any of the job's paperwork
+  rows, nothing on the company wallet. **A declined card satisfies both, so
+  the dead card SILENCES the warning about itself.** Same blind spot in
+  `cardGateForJob`: `onFile` is computed from existence and never reads
+  `authRespStat`.
+- **So the yard WILL release a vehicle on a declined card, today.** That is
+  stated in the item's subtitle rather than fixed, deliberately: teaching the
+  gate to refuse starts stopping trucks at the dock and is Wes's call, not a
+  side effect of an action item. **If it is ever wired, gate on
+  `clientCardWasDeclined` (authChecked && !validated), NEVER on `!validated`**
+  — the latter is false for every card HQ never checked and would have
+  blocked 21 of the 23 bookings going out in the 14 days to 2026-09-06.
+- **One rule, three ways: `replacementNeeded(cards)` in cardAsk.ts** (pure).
+  No cards → card-required's row. Cards, none usable → this. One usable
+  anywhere on the job or the company → nothing, and the dead card is left
+  alone on the account. `isCardUsable` treats an UNCHECKED card as fine, for
+  the 21-of-23 reason above; the client portal's red banner reads the same
+  predicate, so what HQ chases and what the client is told cannot drift.
+- Same pickup window and live-booking predicate as its sibling (both halves
+  of one question must agree on scope), one row per JOB keyed on the lead
+  booking, high inside 3 days. The SQL `LEFT JOIN`s paperwork_requests where
+  card-required `JOIN`s it — a bad card can sit on the WALLET with no request
+  of its own — and orders `sent_at DESC` so "asked Nd ago" is the last ask.
+- **Not verified against live data** — this session had no `DATABASE_URL`.
+  The pure rules are covered by `npm run test:card-ask`; the query shape
+  copies card-required's, which was verified.
+
 ## Ana can correct an invoice from her own desk (2026-09-17 — Ana)
 - Ana: "how do I update an invoice from my side?" She could not. Both ways of
   correcting an invoice existed — **regenerate** (rewrite the figures from

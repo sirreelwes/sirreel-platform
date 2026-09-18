@@ -22,6 +22,8 @@ import {
   cardAskState,
   cardAskClientSentence,
   clientCardWasDeclined,
+  isCardUsable,
+  replacementNeeded,
   CARD_DECLINED_AT_SUBMIT,
   CARD_DECLINED_ON_FILE,
   type CardAskInput,
@@ -242,6 +244,49 @@ assert(
 assert(
   /stays on file/i.test(CARD_DECLINED_ON_FILE),
   'on file: says the dead card is not being removed underneath them',
+)
+
+console.log('\nWhich card will charge, and who chases it\n')
+
+const GOOD = { authChecked: true, validated: true, expired: false }
+const REFUSED = { authChecked: true, validated: false, expired: false }
+const STALE = { authChecked: true, validated: true, expired: true }
+// The shape most of this board is actually in: authorization lives in
+// Cognito or RentalWorks, so HQ has no gateway answer at all.
+const UNCHECKED = { authChecked: false, validated: false, expired: false }
+
+assert(isCardUsable(GOOD) === true, 'approved and current → usable')
+assert(isCardUsable(REFUSED) === false, 'refused → not usable')
+assert(isCardUsable(STALE) === false, 'expired → not usable')
+assert(
+  isCardUsable(UNCHECKED) === true,
+  'NEVER CHECKED is usable — 21 of 23 bookings were in this state on 2026-09-06',
+)
+assert(isCardUsable({}) === true, 'a card with nothing recorded is not presumed dead')
+
+// The three-way split. Getting the first case wrong double-reports every
+// cardless job; getting the third wrong nags a client who already fixed it.
+assert(
+  replacementNeeded([]) === false,
+  'NO cards is card-required’s row, never this one',
+)
+assert(replacementNeeded([REFUSED]) === true, 'one refused card → chase a replacement')
+assert(replacementNeeded([STALE]) === true, 'one expired card → chase a replacement')
+assert(
+  replacementNeeded([REFUSED, GOOD]) === false,
+  'they already added a good card → nothing to chase, dead one left alone',
+)
+assert(
+  replacementNeeded([REFUSED, STALE]) === true,
+  'two bad cards is still no working card',
+)
+assert(
+  replacementNeeded([UNCHECKED]) === false,
+  'an unvalidated legacy card must NOT raise this item',
+)
+assert(
+  replacementNeeded([REFUSED, UNCHECKED]) === false,
+  'a refused card beside an unchecked one clears — we cannot say the other is dead',
 )
 
 console.log('')
