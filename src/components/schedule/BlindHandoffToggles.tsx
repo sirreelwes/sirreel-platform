@@ -1,12 +1,21 @@
 'use client'
 
 /**
- * Blind pickup / blind return chips — job-wide, or for ONE vehicle.
+ * Blind pickup chips — job-wide, or for ONE vehicle.
  *
  * Wes 2026-09-15: sales should be able to "click blind on that
  * reservation"; fleet must always be able to flip it. Jose 2026-09-16:
  * "Sometimes jobs have multiple vehicles and we need the ability to only
  * mark certain vehicles as blind pickups or returns."
+ *
+ * Oliver 2026-09-18: "Can you remove the blind return buttons? We only
+ * need to know about blind pickup. It's confusing the system because it
+ * makes the vehicle purple, so fleet assumes the vehicle is going out
+ * blind." So this component is PICKUP ONLY. A blind RETURN is still a
+ * real thing — it is what the Sunday/after-3:30 drop-off question sets,
+ * and it still carries the client's drop-off instructions and lights the
+ * inbound "needs check-in" alert on Fleet Dispatch — but it is set in one
+ * place now, the order's Blind handoff card, and it never paints a bar.
  *
  * Every write goes through POST /api/jobs/[id]/blind-handoff:
  *   · job-wide  — every live order's flag, and every vehicle override on
@@ -38,7 +47,10 @@ export type BlindOrder = {
 }
 
 export type BlindKind = 'blindPickup' | 'blindReturn'
-type Kind = BlindKind
+/** The only edge these chips write. The route still accepts both kinds —
+ *  a stored blind-return override is left alone, not shown. */
+const KIND = 'blindPickup' as const
+type Kind = typeof KIND
 
 /** One live unit on the job, as GET /api/jobs/[id]/blind-handoff returns it. */
 export type BlindVehicleRow = {
@@ -56,7 +68,8 @@ export type BlindVehicleRow = {
 
 export type BlindState = { orders: BlindOrder[]; vehicles: BlindVehicleRow[] }
 
-const LABEL: Record<Kind, string> = { blindPickup: 'Blind pickup', blindReturn: 'Blind return' }
+const LABEL: Record<Kind, string> = { blindPickup: 'Blind pickup' }
+const KINDS: Kind[] = [KIND]
 
 export function BlindHandoffToggles({
   jobId,
@@ -66,7 +79,6 @@ export function BlindHandoffToggles({
   variant = 'job',
   canEdit,
   onChanged,
-  kinds = ['blindPickup', 'blindReturn'],
   size = 'sm',
   tone = 'light',
   className = 'mb-3',
@@ -86,8 +98,6 @@ export function BlindHandoffToggles({
    *  already owns the order-level control. */
   variant?: 'job' | 'list'
   canEdit: boolean
-  /** Which toggles to show — the yard check list shows only the edge it is on. */
-  kinds?: Kind[]
   /** 'md' for yard terminals, read standing up. */
   size?: 'sm' | 'md'
   /** 'dark' for the phone screens in the yard, which paint their own
@@ -187,7 +197,7 @@ export function BlindHandoffToggles({
     const eff = localVehicle ?? vehicle.effective
     return (
       <div className={`flex flex-wrap items-center gap-1.5 ${className}`}>
-        {kinds.map((kind) => {
+        {KINDS.map((kind) => {
           const active = eff[kind]
           const busy = pending === `${vehicle.assignmentId}:${kind}`
           return (
@@ -226,7 +236,7 @@ export function BlindHandoffToggles({
               {v.unitName}
               {v.category && <span className={`font-normal ${tone === 'dark' ? 'text-zinc-400' : 'text-lt-fg3'}`}> · {v.category}</span>}
             </span>
-            {kinds.map((kind) => {
+            {KINDS.map((kind) => {
               const active = v.effective[kind]
               const busy = pending === `${v.assignmentId}:${kind}`
               const own = v[kind] != null
@@ -271,7 +281,7 @@ export function BlindHandoffToggles({
   return (
     <div className={className}>
       <div className="flex flex-wrap items-center gap-1.5">
-        {kinds.map((kind) => {
+        {KINDS.map((kind) => {
           const { on, count, total } = jobOn(kind)
           const busy = pending === `job:${kind}`
           const disabled = !canWrite || noOrders

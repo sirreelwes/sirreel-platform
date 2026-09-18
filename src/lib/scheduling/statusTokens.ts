@@ -70,7 +70,7 @@ export const STATUS_COLORS: Record<string, BarColor> = {
 /** Alias kept for older imports — the `order` stage IS the order-attached red. */
 export const ORDER_ATTACHED_COLOR: BarColor = STATUS_COLORS.order
 
-/** A bar whose job carries an order flagged blind pickup OR blind return. Wins over every live stage — it's the day-of-operations alert. */
+/** A bar whose job carries an order flagged blind PICKUP. Wins over every live stage — it's the day-of-operations alert. */
 export const BLIND_PICKUP_COLOR: BarColor = { bg: 'bg-violet-500', border: 'border-violet-600', text: 'text-white' }
 
 /** Unit N/A (open maintenance window). The ONLY grey-filled bar on the board. */
@@ -78,32 +78,40 @@ export const UNIT_NA_COLOR: BarColor = { bg: 'bg-gray-400', border: 'border-gray
 
 /**
  * Bar color resolver. `stage` is the JOB's stage token (or the booking's
- * own status token for a job-less hold). Blind pickup or return (violet)
- * wins over every LIVE stage — it is the day-of-operations alert. It used
- * to require booked / order and read pickup only, so a blind handoff on a
- * reservation still on hold (the usual state when Make Reservation asks
- * the closed-day question) — or any blind RETURN — never went violet.
+ * own status token for a job-less hold). A blind PICKUP (violet) wins
+ * over every LIVE stage — it is the day-of-operations alert. It used to
+ * require booked / order, so a blind handoff on a reservation still on
+ * hold (the usual state when Make Reservation asks the closed-day
+ * question) never went violet.
+ *
+ * Oliver, 2026-09-18: "It's confusing the system because it makes the
+ * vehicle purple, so fleet assumes the vehicle is going out blind." The
+ * violet had also covered blind RETURNS, so a unit staffed on the way out
+ * and dropped back after hours painted exactly like one going out with
+ * nobody there. One colour, one fact: violet means NOBODY IS HANDING THIS
+ * UNIT OVER. A blind return still shows where it is acted on — the
+ * inbound "needs check-in" alert on Fleet Dispatch — it just no longer
+ * colours the bar or the meter.
+ *
  * Cancelled / lost stay struck: a dead job has no handoff to warn about. The old `hasOrder`
  * option is gone: order-attached red is now a stage the server derives
  * (a WAREHOUSE-lane order on a booked job), not a per-bar flag.
  */
-export function barColor(stage: string, opts?: { blindPickup?: boolean; blindReturn?: boolean }): BarColor {
+export function barColor(stage: string, opts?: { blindPickup?: boolean }): BarColor {
   if (isBlindBar(stage, opts)) return BLIND_PICKUP_COLOR
   return STATUS_COLORS[stage] || STATUS_COLORS.booked
 }
 
-/** True when a bar in this stage should wear the blind-handoff violet. */
-export function isBlindBar(stage: string, opts?: { blindPickup?: boolean; blindReturn?: boolean }): boolean {
+/** True when a bar in this stage should wear the blind-handoff violet.
+ *  Blind PICKUP only — see barColor. */
+export function isBlindBar(stage: string, opts?: { blindPickup?: boolean }): boolean {
   if (stage === 'cancelled' || stage === 'lost') return false
-  return !!(opts?.blindPickup || opts?.blindReturn)
+  return !!opts?.blindPickup
 }
 
-/** "Blind pickup" / "Blind return" / "Blind both ways" — the chip label. */
-export function blindLabel(opts: { blindPickup?: boolean; blindReturn?: boolean }): string | null {
-  if (opts.blindPickup && opts.blindReturn) return 'Blind both ways'
-  if (opts.blindPickup) return 'Blind pickup'
-  if (opts.blindReturn) return 'Blind return'
-  return null
+/** "Blind pickup" — the chip label, or null when the handoff is staffed. */
+export function blindLabel(opts: { blindPickup?: boolean }): string | null {
+  return opts.blindPickup ? 'Blind pickup' : null
 }
 
 /**
@@ -214,7 +222,7 @@ export const LEGEND_ITEMS: Array<{ label: string; swatch: string; struck?: boole
   { label: 'Hold', swatch: `${STATUS_COLORS.hold.bg} border ${STATUS_COLORS.hold.border}` },
   { label: 'Booked', swatch: `${STATUS_COLORS.booked.bg} border ${STATUS_COLORS.booked.border}` },
   { label: 'Booked · Warehouse order', swatch: `${STATUS_COLORS.order.bg} border ${STATUS_COLORS.order.border}` },
-  { label: 'Blind pickup / return', swatch: `${BLIND_PICKUP_COLOR.bg} border ${BLIND_PICKUP_COLOR.border}` },
+  { label: 'Blind pickup', swatch: `${BLIND_PICKUP_COLOR.bg} border ${BLIND_PICKUP_COLOR.border}` },
   { label: 'Cancelled', swatch: `${STATUS_COLORS.cancelled.bg} border ${STATUS_COLORS.cancelled.border}`, struck: true },
   { label: 'Lost', swatch: `${STATUS_COLORS.lost.bg} border ${STATUS_COLORS.lost.border}`, struck: true },
   { label: 'Maintenance / Unit N/A', swatch: `${UNIT_NA_COLOR.bg} border ${UNIT_NA_COLOR.border}` },
@@ -280,7 +288,8 @@ const METER_FILL_BY_STAGE: Record<string, string | null> = {
 /** violet-300 — a blind bar's wash follows its violet, not the stage's
  *  green/blue (Wes 2026-09-15: "the gradual build should be light purple
  *  in the case of blind pickups/returns to match the theme"). Same rule
- *  as the bar color: the blind violet outranks the stage. */
+ *  as the bar color, blind PICKUP included: the blind violet outranks the
+ *  stage. */
 const METER_FILL_BLIND = '196, 181, 253'
 /** The wash's opacity RAMPS with completion, and that is what makes both
  *  halves of Wes's sketch true at once. Part-way, the fill is translucent
@@ -322,7 +331,7 @@ const METER_PLATE = 'bg-white/85 text-zinc-900 px-1 rounded-sm'
 export function readinessMeterStyle(
   done: number,
   total: number,
-  opts?: { light?: boolean; stage?: string; blindPickup?: boolean; blindReturn?: boolean },
+  opts?: { light?: boolean; stage?: string; blindPickup?: boolean },
 ): CSSProperties {
   const steps = Math.max(1, total)
   const pct = Math.max(0, Math.min(1, done / steps)) * 100

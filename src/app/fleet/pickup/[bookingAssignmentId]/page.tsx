@@ -141,13 +141,13 @@ export default async function FleetPickupPage({ params }: Params) {
         {' · out '}{assignment.startDate.toISOString().slice(0, 10)}
       </p>
       {/* Nobody meeting the driver? Say so here — it opens the driver's
-          own check-out and the codes on their /drive page. */}
+          own check-out and the codes on their /drive page. Pickup only
+          since 2026-09-18 (Oliver). */}
       <VehicleBlindToggle
         jobId={booking.jobId}
         assignmentId={assignment.id}
         effective={{ blindPickup: blindEffective.blindPickup, blindReturn: blindEffective.blindReturn }}
         orders={booking.job?.orders ?? []}
-        kinds={['blindPickup', 'blindReturn']}
         tone="dark"
         className="mt-3"
       />

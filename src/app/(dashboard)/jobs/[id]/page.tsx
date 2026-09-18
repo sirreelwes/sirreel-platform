@@ -2221,8 +2221,9 @@ const driverTone = (d: any): string => {
                     light: true,
                     // Blind handoff outranks the stage here too, so the
                     // strip and the job's bar on the board are one color.
-                    // Any order flag, or any vehicle overridden blind.
-                    ...jobBlindRollup(
+                    // Any order flag, or any vehicle overridden blind —
+                    // on the PICKUP edge only (Oliver 2026-09-18).
+                    blindPickup: jobBlindRollup(
                       liveOrders,
                       liveB.flatMap((b: any) =>
                         (b.items ?? []).flatMap((i: any) =>
@@ -2231,7 +2232,7 @@ const driverTone = (d: any): string => {
                             .map((a: any) => ({ blindPickup: a.blindPickup ?? null, blindReturn: a.blindReturn ?? null })),
                         ),
                       ),
-                    ),
+                    ).blindPickup,
                   })}
                   aria-hidden="true"
                 />

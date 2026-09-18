@@ -5140,6 +5140,14 @@ export default function OrderDetailPage() {
         <p className="text-xs text-lt-fg3 mb-4">
           Turn on when the client handles the unit themselves. Instructions show on their portal page; a return alert lights up Fleet Dispatch so the unit doesn't sit in the lot unprocessed.
         </p>
+        {/* Oliver 2026-09-18: the blind-return toggles came off the board,
+            the check list and the handover screen — one violet covered
+            both edges, so a unit staffed on the way out but dropped back
+            after hours looked exactly like one going out blind. This card
+            is where a blind return is recorded now (it is also where the
+            weekend question below lands); it drives the client's drop-off
+            instructions and the inbound Fleet Dispatch alert, and nothing
+            else. Only the PICKUP paints a bar violet. */}
 
         {/* Out-of-hours prompt (Wes 2026-09-13: "we are closed on
             sundays, so all pickups and returns on that day should be
@@ -5249,7 +5257,7 @@ export default function OrderDetailPage() {
                 className="accent-lt-fg"
               />
               <span className="font-medium">Blind return</span>
-              <span className="text-xs text-lt-fg3">Client returns the unit themselves</span>
+              <span className="text-xs text-lt-fg3">Client drops the unit back themselves — instructions + a Fleet Dispatch check-in alert. Doesn&apos;t colour the board.</span>
             </label>
             {blindReturn && (
               <textarea
@@ -5270,8 +5278,9 @@ export default function OrderDetailPage() {
         {order?.job?.id && (
           <div className="mt-4 pt-4 border-t border-lt-hairline">
             <p className="text-xs text-lt-fg3 mb-2">
-              The checkboxes set the whole order. To make only some vehicles blind, flip them here — a
-              vehicle&apos;s own setting wins for that unit (driver check-out, lockbox code, the board).
+              The checkbox above sets the whole order. To send out only some vehicles blind, flip them
+              here — a vehicle&apos;s own setting wins for that unit (driver check-out, lockbox code, the
+              board). Pickup only; a blind return is an order-level fact.
             </p>
             <BlindHandoffToggles
               jobId={order.job.id}

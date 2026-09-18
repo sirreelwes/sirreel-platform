@@ -390,8 +390,9 @@ const DIRECTION_META = {
 
 function AgendaRow({ r, direction }: { r: AgendaBooking; direction: keyof typeof DIRECTION_META }) {
   const meta = DIRECTION_META[direction]
-  // Same precedence the gantt bars use — a blind pickup or return shouts
-  // over every live stage (isBlindBar).
+  // Same precedence the gantt bars use — a blind PICKUP shouts over every
+  // live stage (isBlindBar). A blind return no longer colours anything
+  // (Oliver 2026-09-18).
   // `stage` is the JOB'S color token (src/lib/jobs/stage.ts) — the same
   // one the gantt bar and the /jobs tile rail wear.
   const stage = r.stage ?? r.status

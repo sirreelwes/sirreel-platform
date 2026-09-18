@@ -461,7 +461,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
           // meter, which would read as a deficiency where there is no job
           // to chase.
           const rdy = b.jobId ? readiness[b.jobId] : undefined
-          const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { stage, blindPickup: b.blindPickup, blindReturn: b.blindReturn }) : undefined
+          const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { stage, blindPickup: b.blindPickup }) : undefined
           return (
             <div
               key={`p-${j}`}
@@ -510,7 +510,7 @@ const TimelineUnitRow = memo(function TimelineUnitRow({
             const rank = typeof b.holdRank === 'number' ? b.holdRank : 2
             const rankLabel = rank === 2 ? '2nd' : rank === 3 ? '3rd' : `${rank}th`
             const rdy = b.jobId ? readiness[b.jobId] : undefined
-            const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { light: true, stage: b.stage ?? b.status, blindPickup: b.blindPickup, blindReturn: b.blindReturn }) : undefined
+            const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { light: true, stage: b.stage ?? b.status, blindPickup: b.blindPickup }) : undefined
             return (
               <div
                 key={`b-${j}`}
@@ -2433,7 +2433,7 @@ export function GanttBoard() {
                       const stage: string = job.stage ?? job.status
                       const sc = barColor(stage, job)
                       const rdy = job.jobId ? readiness[job.jobId] : undefined
-                      const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { stage, blindPickup: job.blindPickup, blindReturn: job.blindReturn }) : undefined
+                      const meter = rdy ? readinessMeterStyle(rdy.done, rdy.total, { stage, blindPickup: job.blindPickup }) : undefined
                       return (
                         <div
                           onPointerEnter={(ev) => showBarHover(ev, barHoverInfo(job, rdy, {
@@ -2546,9 +2546,12 @@ export function GanttBoard() {
               <button onClick={closeModal} className="text-gray-400 hover:text-gray-600 text-lg"><X size={18} aria-hidden /></button>
             </div>
 
-            {/* Blind pickup / return — sales flips it right here; the bar
-                goes violet on the refresh. The top chips write the whole
-                job; the per-vehicle rows (Jose 2026-09-16) flip one unit. */}
+            {/* Blind pickup — sales flips it right here; the bar goes
+                violet on the refresh. The top chip writes the whole job;
+                the per-vehicle rows (Jose 2026-09-16) flip one unit. The
+                blind-RETURN twin was removed 2026-09-18 (Oliver: it
+                painted the same violet, so fleet read a staffed pickup as
+                a blind one). */}
             {selected.bookingId && (
               <BlindHandoffToggles
                 jobId={selected.jobId ?? null}
@@ -2569,10 +2572,7 @@ export function GanttBoard() {
                     const blindPickup = mine
                       ? mine.effective.blindPickup
                       : next.vehicles.some((v) => v.effective.blindPickup) || next.orders.some((o) => o.status !== 'CANCELLED' && o.blindPickup)
-                    const blindReturn = mine
-                      ? mine.effective.blindReturn
-                      : next.vehicles.some((v) => v.effective.blindReturn) || next.orders.some((o) => o.status !== 'CANCELLED' && o.blindReturn)
-                    return { ...prev, orders: next.orders, blindPickup, blindReturn }
+                    return { ...prev, orders: next.orders, blindPickup }
                   })
                   refreshTimeline()
                 }}

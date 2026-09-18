@@ -238,34 +238,43 @@ export default function SendingOrdersGuidePage() {
             </Step>
             <Step n={5} title="Nobody meeting the driver? Mark that vehicle blind">
               <p>
-                Blind pickup and blind return can be set for <strong>one vehicle</strong>, not only the
-                whole order — a job with three vans can send one out blind and hand the other two over
-                at the counter. Three places do it, and they all write the same thing:
+                Blind pickup can be set for <strong>one vehicle</strong>, not only the whole order — a
+                job with three vans can send one out blind and hand the other two over at the counter.
+                Three places do it, and they all write the same thing:
               </p>
               <ul className="ml-4 list-disc space-y-1">
                 <li>
                   <strong>Reservations</strong> → open the reservation. The top{' '}
-                  <strong>Blind pickup / Blind return</strong> chips are the whole job; under them the{' '}
-                  <strong>Per vehicle</strong> list has the same two chips beside each unit.
+                  <strong>Blind pickup</strong> chip is the whole job; under it the{' '}
+                  <strong>Per vehicle</strong> list has the same chip beside each unit.
                 </li>
                 <li>
-                  <strong>The order page</strong> → <strong>Blind handoff</strong>. The checkboxes set the
-                  whole order; the <strong>Per vehicle</strong> list under them flips one unit and saves
+                  <strong>The order page</strong> → <strong>Blind handoff</strong>. The checkbox sets the
+                  whole order; the <strong>Per vehicle</strong> list under it flips one unit and saves
                   on click.
                 </li>
                 <li>
-                  <strong>Vehicle Check In/Out</strong> → the blind toggle on a vehicle&rsquo;s row flips
-                  that vehicle only.
+                  <strong>Vehicle Check In/Out</strong> → the blind toggle on a vehicle&rsquo;s row in the
+                  going-out lane flips that vehicle only.
                 </li>
               </ul>
               <p>
                 The order is the default for every vehicle on the job; a vehicle&rsquo;s own setting
-                wins for that unit. Clicking a whole-job chip sets every vehicle the same way and clears
+                wins for that unit. Clicking the whole-job chip sets every vehicle the same way and clears
                 the per-vehicle settings — when they differ, the chip shows a count like{' '}
                 <strong>1/2</strong>. Only the blind vehicle&rsquo;s driver gets the photo check-out and
                 the lockbox code. A unit swapped for another keeps its blind setting. The list shows
                 assigned units only, so assign first (step 3). Gate code and where-to-park still go in
                 the text boxes on the order page.
+              </p>
+              <p>
+                <strong>Blind returns are not toggled here.</strong> Oliver, 18 Sep: a blind return
+                painted the bar the same violet as a blind pickup, so the yard read a staffed hand-over
+                as one going out blind. The <em>going out</em> question is the one on the board and the
+                check list. If a client is dropping back after hours — the Sunday and after-3:30
+                Saturday question — answer it on the order&rsquo;s <strong>Blind handoff</strong> card;
+                it puts the drop-off instructions on their portal and lights the{' '}
+                <strong>needs check-in</strong> alert on Fleet Dispatch when the unit comes back.
               </p>
             </Step>
             <Step n={6} title="Let the reminder close itself">

@@ -436,12 +436,14 @@ function JobTile({
                 <Truck size={9} aria-hidden /> Delivery
               </span>
             )}
-            {(j.blindPickup || j.blindReturn) && (
+            {/* Blind PICKUP only (Oliver 2026-09-18) — a chip that also
+                lit for blind returns read as "this one goes out blind". */}
+            {j.blindPickup && (
               <span
                 className="inline-flex items-center gap-0.5 text-[9px] font-bold uppercase tracking-wider px-1 rounded bg-zinc-100 text-zinc-600"
-                title={`Blind ${[j.blindPickup && 'pickup', j.blindReturn && 'return'].filter(Boolean).join(' + ')} — the driver handles it without staff`}
+                title="Blind pickup — the driver collects it without staff"
               >
-                <EyeOff size={9} aria-hidden /> Blind {j.blindPickup && j.blindReturn ? 'both ways' : j.blindPickup ? 'pickup' : 'return'}
+                <EyeOff size={9} aria-hidden /> Blind pickup
               </span>
             )}
             {j.hasLD && (

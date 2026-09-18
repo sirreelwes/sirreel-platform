@@ -34,7 +34,7 @@ export interface BarHoverInfo {
   contact?: { name: string; role: string | null; phone: string | null } | null
   orders?: string[]
   readiness?: JobReadiness
-  /** 'Blind pickup' / 'Blind return' / 'Blind both ways', or null. */
+  /** 'Blind pickup', or null — the return edge no longer shows here. */
   blind?: string | null
 }
 

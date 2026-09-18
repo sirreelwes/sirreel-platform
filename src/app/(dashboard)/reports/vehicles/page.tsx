@@ -306,18 +306,22 @@ function VehicleRow({ row, edge }: { row: FleetMovement; edge: 'out' | 'back' })
             Order attached · {row.attachedOrder.orderNumber}
           </Link>
         )}
-        {/* Blind pickup on the going-out lane, blind return on the coming-
-            back lane — the handoff THIS end of the arc is about. Violet
-            when set, same as the bar on the reservations board. Flips
-            THIS unit only (Jose 2026-09-16) — the whole-job switch is on
-            the reservation and the order. */}
-        <VehicleBlindToggle
-          jobId={row.jobId}
-          assignmentId={row.assignmentId}
-          effective={row.blind}
-          orders={row.liveOrders}
-          kind={edge === 'out' ? 'blindPickup' : 'blindReturn'}
-        />
+        {/* Blind pickup, on the going-out lane only. Violet when set,
+            same as the bar on the reservations board. Flips THIS unit
+            only (Jose 2026-09-16) — the whole-job switch is on the
+            reservation and the order. The coming-back lane used to carry
+            a Blind return twin; it went away 2026-09-18 (Oliver: the
+            violet it painted read as "this one is going out blind"). A
+            unit dropped back after hours announces itself on the inbound
+            lane of Fleet Dispatch instead. */}
+        {edge === 'out' && (
+          <VehicleBlindToggle
+            jobId={row.jobId}
+            assignmentId={row.assignmentId}
+            effective={row.blind}
+            orders={row.liveOrders}
+          />
+        )}
       </div>
 
       {done ? (

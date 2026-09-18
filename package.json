@@ -96,6 +96,7 @@
     "test:kit-completeness": "tsx tests/orders/kit-completeness.test.ts",
     "test:insured-match": "tsx tests/coi/insured-match.test.ts",
     "test:blind-handoff": "tsx tests/fleet/blind-handoff.test.ts",
+    "test:blind-bar": "tsx tests/scheduling/blind-bar.test.ts",
     "test:reserved-assets": "tsx tests/jobs/reserved-assets.test.ts",
     "test:counter-explanation": "tsx tests/contract-review/counter-explanation.test.ts",
     "test:logo-from-website": "tsx tests/companies/logo-from-website.test.ts",
