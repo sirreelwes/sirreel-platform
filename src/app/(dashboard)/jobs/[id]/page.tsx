@@ -75,6 +75,7 @@ import { STAGE_CHIP, STAGE_RAIL, readinessMeterStyle } from '@/lib/scheduling/st
 import { computeReadiness } from '@/lib/jobs/readiness';
 import { orderContentSummary } from '@/lib/orders/contentSummary';
 import { rollupCoiState } from '@/lib/coi/coiState';
+import { cardAskState } from '@/lib/payments/cardAsk';
 import { AlertTriangle, CalendarDays, Check, User, Mail } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { canCreateOrders } from '@/lib/permissions';
@@ -545,6 +546,13 @@ export default function JobDetailPage() {
   // not yanked back on the next re-render.
   const bookDeepLink = searchParams?.get('book') === '1';
   const bookLandedRef = useRef(false);
+  // `?card=ask` — where the company wallet's "Ask the client for another
+  // card" lands (Wes 2026-09-18). The wallet is where a keyed card declines,
+  // but the ask is job-scoped and its composer lives here, so the wallet
+  // hands the rep over rather than growing a second send path. Opens the
+  // review modal once per landing.
+  const cardAskDeepLink = searchParams?.get('card') === 'ask';
+  const cardAskLandedRef = useRef(false);
   const id = params?.id as string;
 
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -721,6 +729,19 @@ export default function JobDetailPage() {
     });
     return () => cancelAnimationFrame(raf);
   }, [bookDeepLink, job]);
+
+  // Land `?card=ask`: put the Card Authorization tile on screen and open the
+  // review modal on it. The modal is the same one the tile's own button
+  // opens — nothing is sent until the rep reads the preview and presses send.
+  useEffect(() => {
+    if (!cardAskDeepLink || !job || cardAskLandedRef.current) return;
+    cardAskLandedRef.current = true;
+    const raf = requestAnimationFrame(() => {
+      document.getElementById('card-auth')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setEmailTarget({ kind: 'card-auth', jobId: job.id });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [cardAskDeepLink, job]);
 
   // Add-contact form on the Contacts card. Contacts previously attached only
   // through order flows; since the payment-options email routes by them
@@ -1519,6 +1540,19 @@ const driverTone = (d: any): string => {
   // Amber, not green: the gateway refused the $0 check, or the card's own
   // expiry has passed. Either way someone should ask before the truck rolls.
   const cardWarn = !job.cardAuth?.validated || !!job.cardAuth?.expired;
+  // ...and "someone should ask" needs a button, not just a sentence. The tile
+  // told a rep to ask for another card and offered no way to do it — Send CC
+  // request renders only in the no-card branch, which is the one branch a
+  // declined card is never in (Wes 2026-09-18).
+  const cardAsk = cardAskState(
+    cardOnFile
+      ? {
+          onFile: true,
+          validated: job.cardAuth?.validated,
+          expired: job.cardAuth?.expired,
+        }
+      : null,
+  );
   // Five-check readiness — SAME helper the /jobs sidebar chip uses
   // (src/lib/jobs/readiness.ts), so the strip and the list agree. The
   // page's own richer statuses are mapped down to the helper's pass/fail
@@ -2287,6 +2321,31 @@ const driverTone = (d: any): string => {
                     for this job — staff keyed it from paper the client signed
                     elsewhere — so the tile says so rather than implying this
                     client sat down and typed it into the portal. */}
+                {/* A card that will not charge is an ask, not a status. The
+                    line above says what is wrong with it; this is the way to
+                    fix it, in the same place (Wes 2026-09-18). Same review
+                    modal as the missing-card branch — the client gets a
+                    secure link and adds a second card; the one on file is
+                    left alone (Wes 2026-09-03: "we don't wanna remove the
+                    first card"). */}
+                {cardAsk.ask && (
+                  <div className="mt-1.5 text-[12px]">
+                    <button
+                      onClick={sendCcRequest}
+                      className="font-semibold text-amber-700 hover:text-amber-700"
+                    >
+                      ↗ {cardAsk.label}
+                    </button>
+                    {' '}&middot;{' '}
+                    <button
+                      onClick={copyCcLink}
+                      disabled={ccBusy}
+                      className="underline underline-offset-2 hover:text-zinc-900 disabled:opacity-50"
+                    >
+                      {ccBusy ? 'copying…' : 'copy link'}
+                    </button>
+                  </div>
+                )}
                 {cardFromAccount && (
                   <div className="mt-1 text-[11px] text-zinc-500">
                     On the {job.company?.name || 'client'} account

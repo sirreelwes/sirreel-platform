@@ -19,6 +19,7 @@
  */
 
 import { defaultEmailBody } from '@/lib/email/standardOpening'
+import type { CardAskReason } from '@/lib/payments/cardAsk'
 
 const ABSOLUTE_LOGO_URL_WHITE = 'https://hq.sirreel.com/sirreel-logo-white.png'
 /** The S mark, for the footer. Absolute + on middleware's `/s-logo` public
@@ -56,6 +57,13 @@ export interface CardAuthRequestEmailInput {
    * write, along with the secure button and the sign-off.
    */
   customBody?: string | null
+  /**
+   * A card is already on file and it will not charge — DECLINED or EXPIRED.
+   * Swaps the first sentence of the standard ask for one that says so (see
+   * standardOpening.ts). Ignored when the rep wrote their own body: they are
+   * looking at the same fact on the tile they pressed the button from.
+   */
+  cardAskReason?: CardAskReason | null
 }
 
 export interface CardAuthRequestEmail {
@@ -114,7 +122,12 @@ export function buildCardAuthRequestEmail(input: CardAuthRequestEmailInput): Car
   // old hardcoded fallback had.)
   const askText =
     repBody ||
-    defaultEmailBody({ kind: 'card-auth', projectName: jobNameRaw, agentFirstName: agentRef })
+    defaultEmailBody({
+      kind: 'card-auth',
+      projectName: jobNameRaw,
+      agentFirstName: agentRef,
+      cardAskReason: input.cardAskReason ?? null,
+    })
   const askHtml = noteHtml(askText)
   // A rep-written ask carries its own greeting. Wes 2026-09-02 reversed the
   // composer default — it opens BLANK and no longer shows a "Starts with Hi

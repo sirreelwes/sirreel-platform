@@ -1,3 +1,5 @@
+import { cardAskClientSentence, type CardAskReason } from '@/lib/payments/cardAsk'
+
 /**
  * The one sentence every client-facing SirReel email opens with.
  *
@@ -44,6 +46,14 @@ export function defaultEmailBody(input: {
   projectName?: string | null
   /** card-auth only: personalizes the "Questions? Just reply" line. */
   agentFirstName?: string | null
+  /**
+   * card-auth only: a card is already on file and it will not charge —
+   * DECLINED (the $0 check was refused) or EXPIRED. Derived server-side from
+   * the job's card, never passed by the browser, so the words a client reads
+   * cannot disagree with the card HQ is looking at. Anything else (including
+   * MISSING) renders the original ask.
+   */
+  cardAskReason?: CardAskReason | null
 }): string {
   // The card-authorization request. This is the ASK only — the paragraph
   // explaining that the number goes straight to the processor and that we
@@ -55,11 +65,21 @@ export function defaultEmailBody(input: {
   // compose box): the template used to append it only on templated sends
   // and drop it when a rep wrote their own — but now every send carries
   // the box's text, so a line living outside the box would never render.
+  //
+  // A REPLACEMENT ask replaces that first sentence (Wes 2026-09-18). "We need
+  // a credit card on file" is right when we have none and plainly wrong to
+  // the client who typed one in last week — it reads as our mistake, and
+  // leaves them with no idea their card was refused. The rest of the body,
+  // the security paragraph and the button are identical: it is the same ask.
   if (input.kind === 'card-auth') {
     const project = input.projectName?.trim() || 'your production'
     const agent = input.agentFirstName?.trim() || 'your SirReel agent'
+    const replacement = input.cardAskReason
+      ? cardAskClientSentence(input.cardAskReason, project)
+      : null
     return [
-      `Before we can send ${project} out the door, we need a credit card on file to authorize the rental.`,
+      replacement ??
+        `Before we can send ${project} out the door, we need a credit card on file to authorize the rental.`,
       '',
       `Questions? Just reply to this email — ${agent} will sort it out.`,
     ].join('\n')
