@@ -33,6 +33,19 @@
 /** Half a cent — money arrives here as Number at the display boundary. */
 const CENT = 0.005
 
+/**
+ * Expendables are a SALE, not a rental — passed through at cost, no
+ * day-rate margin to give back (Wes 2026-08-29). computeOrderTotals skips
+ * the department outright and the discounts route refuses one out loud.
+ *
+ * The CRM's department list still offers it, though, so "20% off
+ * Expendables" can be sitting on an account — and applyStandingDiscounts
+ * has no such filter, so it may even have seeded a row. Reporting that as
+ * 'applied' would be the panel telling a rep a discount is live when the
+ * totals zero it. It gets its own verdict instead, whatever else is true.
+ */
+const NEVER_DISCOUNTED = 'EXPENDABLES'
+
 export interface StandingDealInput {
   id: string
   label: string
@@ -81,6 +94,8 @@ export type StandingDealVerdict =
   | 'over-billed'
   /** Item deal: covered lines carry no resolved rate to check against. */
   | 'unchecked'
+  /** The department carries no discount at all, so the deal cannot land. */
+  | 'not-applicable'
 
 export interface StandingDealLineFlag {
   lineId: string
@@ -102,6 +117,14 @@ export interface StandingDealReport {
   detail: string | null
   /** Lines billing above the deal. Only ever set on 'over-billed'. */
   lines: StandingDealLineFlag[]
+  /**
+   * The deal can be put on this order in one press — it is a department
+   * deal, the order quotes that department, and nothing is in the way.
+   * An item deal never sets it: there is no row to create, the price is
+   * the line's, and a button that silently retyped rates would be doing
+   * a rep's pricing for them.
+   */
+  canApply: boolean
 }
 
 /** True when the reminder has something a person should act on. */
@@ -136,6 +159,16 @@ export function reconcileStandingDeals(input: {
       percentOff: deal.percentOff,
       departmentKey: deal.departmentKey,
       lines: [] as StandingDealLineFlag[],
+      canApply: false,
+    }
+
+    if (deal.departmentKey === NEVER_DISCOUNTED) {
+      return {
+        ...base,
+        scope: 'DEPARTMENT',
+        verdict: 'not-applicable',
+        detail: 'expendables are a sale, not a rental — they carry no discount',
+      }
     }
 
     if (deal.departmentKey) {
@@ -161,6 +194,7 @@ export function reconcileStandingDeals(input: {
         scope: 'DEPARTMENT',
         verdict: quoted ? 'missing' : 'not-quoted',
         detail: quoted ? 'no discount row on this order' : null,
+        canApply: quoted,
       }
     }
 

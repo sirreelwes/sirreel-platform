@@ -134,6 +134,33 @@ export function DiscountsPanel({
 
   if (!data || !hasAnyContent) return null
 
+  // Applying a standing deal is its own call, not the generic discount
+  // POST — that one refuses a non-admin on any account WITH standing
+  // deals, which is every account this button can appear on. See the
+  // route's own note.
+  const [applyingDeal, setApplyingDeal] = useState<string | null>(null)
+  const applyDeal = async (dealId: string) => {
+    setError(null)
+    setApplyingDeal(dealId)
+    try {
+      const res = await fetch(`/api/orders/${orderId}/standing-deals/apply`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ dealId }),
+      })
+      const d = await res.json().catch(() => ({}))
+      if (!res.ok || !d?.ok) {
+        setError(d?.reason || d?.error || 'Could not apply that discount.')
+        return
+      }
+      onChange()
+    } catch {
+      setError('Could not apply that discount.')
+    } finally {
+      setApplyingDeal(null)
+    }
+  }
+
   const post = async (body: object) => {
     setError(null)
     setPending(true)
@@ -330,12 +357,20 @@ export function DiscountsPanel({
         <div className="mt-4 pt-3 border-t border-lt-hairline/60 text-sm">
           <div className="text-lt-fg font-medium py-1">Their standing deals</div>
           <div className="space-y-1.5">
-            {data.standingDeals.map((d) => <StandingDealRow key={d.dealId} d={d} />)}
+            {data.standingDeals.map((d) => (
+              <StandingDealRow
+                key={d.dealId}
+                d={d}
+                canEdit={isEditable}
+                pending={applyingDeal === d.dealId}
+                onApply={() => applyDeal(d.dealId)}
+              />
+            ))}
           </div>
           <div className="mt-2 text-[11px] text-lt-fg3">
             A department deal rides as a discount row on this order; an item deal is
-            priced into the line itself. Neither is applied from here — fix a miss with
-            the department row above, or by retyping the line&apos;s rate.
+            priced into the line itself — an item miss is fixed by retyping the
+            line&apos;s rate, which is why only the department ones have a button.
           </div>
         </div>
       )}
@@ -357,7 +392,17 @@ export function DiscountsPanel({
   )
 }
 
-function StandingDealRow({ d }: { d: StandingDealReport }) {
+function StandingDealRow({
+  d,
+  canEdit,
+  pending,
+  onApply,
+}: {
+  d: StandingDealReport
+  canEdit: boolean
+  pending: boolean
+  onApply: () => void
+}) {
   // Only three of the verdicts ask for anything. 'not-quoted' stays
   // quiet-neutral on purpose: a supplies deal on a vehicles-only order is
   // not a miss, and a panel that cries about it is a panel nobody reads.
@@ -372,7 +417,9 @@ function StandingDealRow({ d }: { d: StandingDealReport }) {
             ? { cls: 'bg-chip-warn-bg text-chip-warn-fg', text: 'Different figure' }
             : d.verdict === 'unchecked'
               ? { cls: 'bg-chip-neutral-bg text-chip-neutral-fg', text: 'Not checked' }
-              : { cls: 'bg-chip-neutral-bg text-chip-neutral-fg', text: 'Nothing quoted' }
+              : d.verdict === 'not-applicable'
+                ? { cls: 'bg-chip-neutral-bg text-chip-neutral-fg', text: 'Never discounted' }
+                : { cls: 'bg-chip-neutral-bg text-chip-neutral-fg', text: 'Nothing quoted' }
 
   return (
     <div className={needsAttention(d) ? 'rounded border border-amber-300 bg-amber-50/60 px-2 py-1.5' : 'px-2 py-1'}>
@@ -383,6 +430,18 @@ function StandingDealRow({ d }: { d: StandingDealReport }) {
         <span className={`shrink-0 text-[11px] px-1.5 py-0.5 rounded ${chip.cls}`}>{chip.text}</span>
       </div>
       {d.detail && <div className="text-[11px] text-lt-fg3 mt-0.5">{d.detail}</div>}
+      {/* One press puts the agreed figure on the order. The percent and the
+          label come off the deal server-side — this button carries the
+          deal's id and nothing else. */}
+      {d.canApply && canEdit && (
+        <button
+          onClick={onApply}
+          disabled={pending}
+          className="mt-1.5 text-[11px] font-semibold rounded px-2 py-1 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 text-white"
+        >
+          {pending ? 'Applying…' : `Apply ${d.percentOff}% to ${DEPT_LABELS[d.departmentKey ?? ''] ?? d.departmentKey}`}
+        </button>
+      )}
       {/* Naming the line is the point — "a line bills above their deal"
           sends the rep hunting; "Cube Truck at $170, theirs is $136" is
           one edit. */}

@@ -40,16 +40,20 @@ const line = (o: Partial<OrderLineInput>): OrderLineInput => ({
 function check(
   why: string,
   input: { deals: StandingDealInput[]; discounts: OrderDiscountInput[]; lines: OrderLineInput[] },
-  want: { verdict: string; attention: boolean; lines?: number },
+  want: { verdict: string; attention: boolean; lines?: number; canApply?: boolean },
 ): void {
   const [got] = reconcileStandingDeals(input)
   const wantLines = want.lines ?? 0
-  if (got.verdict === want.verdict && needsAttention(got) === want.attention && got.lines.length === wantLines) {
+  const wantApply = want.canApply ?? false
+  if (
+    got.verdict === want.verdict && needsAttention(got) === want.attention &&
+    got.lines.length === wantLines && got.canApply === wantApply
+  ) {
     console.log(`  ok — ${why}`)
   } else {
     failures.push(
-      `${why}: got ${got.verdict} attention=${needsAttention(got)} lines=${got.lines.length}, ` +
-      `wanted ${want.verdict} attention=${want.attention} lines=${wantLines}`,
+      `${why}: got ${got.verdict} attention=${needsAttention(got)} lines=${got.lines.length} canApply=${got.canApply}, ` +
+      `wanted ${want.verdict} attention=${want.attention} lines=${wantLines} canApply=${wantApply}`,
     )
   }
 }
@@ -71,7 +75,7 @@ check(
 check(
   'the order quotes that department and carries NO row',
   { deals: [SUPPLIES], discounts: [], lines: [line({})] },
-  { verdict: 'missing', attention: true },
+  { verdict: 'missing', attention: true, canApply: true },
 )
 
 // Not crying wolf: a supplies deal on a vehicles-only order is not a miss.
@@ -112,7 +116,7 @@ check(
     discounts: [{ scope: 'ORDER', departmentKey: null, type: 'PERCENT', value: 50, label: 'Order discount' }],
     lines: [line({})],
   },
-  { verdict: 'missing', attention: true },
+  { verdict: 'missing', attention: true, canApply: true },
 )
 
 console.log('\nItem deals — priced into the line, so there is no row to find\n')
@@ -182,6 +186,68 @@ check(
     lines: [line({ inventoryItemId: 'item-cube', department: 'VEHICLES', rate: 102.04, resolvedRate: 102.04 })],
   },
   { verdict: 'priced-in', attention: false },
+)
+
+console.log('\nThe Apply button — who may offer it\n')
+
+// Expendables are a sale, not a rental: computeOrderTotals skips the
+// department entirely. The CRM still lets one be entered and
+// applyStandingDiscounts has no filter, so a row may even be sitting
+// there — calling that 'applied' would be the panel reporting a discount
+// the totals zero.
+const EXPENDABLES_DEAL: StandingDealInput = {
+  id: 'd3', label: 'Expendables', percentOff: 15,
+  departmentKey: 'EXPENDABLES', inventoryItemIds: [],
+}
+
+check(
+  'an expendables deal is never applicable, and offers no button',
+  { deals: [EXPENDABLES_DEAL], discounts: [], lines: [line({ department: 'EXPENDABLES' })] },
+  { verdict: 'not-applicable', attention: false },
+)
+
+check(
+  'even with a row already seeded, expendables does not read as applied',
+  {
+    deals: [EXPENDABLES_DEAL],
+    discounts: [{ scope: 'DEPARTMENT', departmentKey: 'EXPENDABLES', type: 'PERCENT', value: 15, label: 'Expendables' }],
+    lines: [line({ department: 'EXPENDABLES' })],
+  },
+  { verdict: 'not-applicable', attention: false },
+)
+
+check(
+  'nothing to apply when the deal is already on the order',
+  {
+    deals: [SUPPLIES],
+    discounts: [{ scope: 'DEPARTMENT', departmentKey: 'PRO_SUPPLIES', type: 'PERCENT', value: 50, label: 'Production supply orders' }],
+    lines: [line({})],
+  },
+  { verdict: 'applied', attention: false },
+)
+
+// A row is there at another figure — replacing it is a decision about
+// somebody's existing concession, not a one-press fix.
+check(
+  'no button over a row that differs — that is a person\'s call',
+  {
+    deals: [SUPPLIES],
+    discounts: [{ scope: 'DEPARTMENT', departmentKey: 'PRO_SUPPLIES', type: 'PERCENT', value: 30, label: 'Courtesy' }],
+    lines: [line({})],
+  },
+  { verdict: 'differs', attention: true },
+)
+
+// An item deal has no row to create — the price is the line's, and a
+// button that retyped rates would be doing a rep's pricing for them.
+check(
+  'an item deal never offers a button, even when over-billed',
+  {
+    deals: [CUBES],
+    discounts: [],
+    lines: [line({ inventoryItemId: 'item-cube', department: 'VEHICLES', rate: 170, resolvedRate: 136 })],
+  },
+  { verdict: 'over-billed', attention: true, lines: 1 },
 )
 
 console.log('\nOrder of reports follows the deals passed in')
