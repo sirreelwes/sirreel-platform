@@ -38,6 +38,7 @@ scripts/*
 !scripts/add-partner-sms-columns.ts
 !scripts/add-job-thread-tables.ts
 !scripts/add-collector-columns.ts
+!scripts/add-ld-notice-table.ts
 !scripts/add-unit-scan-table.ts
 !scripts/add-unit-checks-columns.ts
 !scripts/add-check-in-report-columns.ts

@@ -77,6 +77,7 @@ interface LdRowView {
   damageFindings: number
   checkedInAt: string | null
   rentalInvoiceSent: boolean
+  noticedAt: string | null
 }
 
 interface QueuePayload {
@@ -319,6 +320,20 @@ export function BillingQueuePanel() {
             {r.damageFindings > 0 && (
               <Chip tone="warn" title="Damage findings triaged send-to-L&D and not yet on an invoice">
                 {r.damageFindings} damage finding{r.damageFindings === 1 ? '' : 's'}
+              </Chip>
+            )}
+            {/* Where it is in the conversation. Telling the production
+                comes first — a short count is evidence, not a verdict —
+                so an un-noticed row should read as the earlier step, not
+                as an overdue bill. */}
+            {r.noticedAt ? (
+              <Chip tone="good" title="The production has been told what did not come back and what replacing it costs">
+                Production told{' '}
+                {new Date(r.noticedAt).toLocaleDateString('en-US', { month: 'numeric', day: 'numeric' })}
+              </Chip>
+            ) : (
+              <Chip tone="neutral" title="Nobody has told the production yet — that is the first step, not the invoice">
+                Not yet told
               </Chip>
             )}
             {/* The case that sent Ana looking: the rental is settled and

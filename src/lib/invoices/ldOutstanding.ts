@@ -58,6 +58,10 @@ export interface LdOutstandingRow {
    *  chip, because it is exactly the case Ana lost: the rental is settled
    *  and the losses are still outstanding. */
   rentalInvoiceSent: boolean
+  /** When the production was last told what did not come back (LdNotice).
+   *  Null = nobody has been told yet, which is the step BEFORE the invoice
+   *  and the one the lane should push toward first. */
+  noticedAt: string | null
 }
 
 /**
@@ -128,6 +132,12 @@ export async function ldOutstanding(): Promise<LdOutstandingRow[]> {
         where: { type: 'RENTAL', NOT: { status: 'VOID' } },
         select: { sentAt: true },
       },
+      ldNotices: {
+        where: { sentAt: { not: null } },
+        orderBy: { sentAt: 'desc' },
+        take: 1,
+        select: { sentAt: true },
+      },
       checkReports: {
         where: { edge: 'IN' },
         select: {
@@ -170,6 +180,7 @@ export async function ldOutstanding(): Promise<LdOutstandingRow[]> {
       damageFindings,
       checkedInAt: report?.submittedAt.toISOString() ?? null,
       rentalInvoiceSent: o.invoices.some((i) => i.sentAt),
+      noticedAt: o.ldNotices[0]?.sentAt?.toISOString() ?? null,
     })
   }
 

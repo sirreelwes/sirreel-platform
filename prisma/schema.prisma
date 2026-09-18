@@ -3743,11 +3743,60 @@ model Order {
   // to a date, or dismissed as "not billed out of HQ". Zero-or-one; the
   // queue itself is derived from check-in and invoice state.
   billingMark        OrderBillingMark?
+  // What the production has been TOLD about loss & damage, before any
+  // invoice exists. See model LdNotice.
+  ldNotices          LdNotice[]
 
   @@index([jobId])
   @@index([quoteStatus, sentAt])
   @@index([cadenceState])
   @@map("sr_orders")
+}
+
+/// What we told the production did not come back, and what it would cost.
+///
+/// Wes, 2026-09-18, on Ana working from Albert's returned-order report:
+/// *"It should be cued up for her to first notify the production with those
+/// replacement items if they're lost, and what that would cost, or to be
+/// able to write in something about damage and the cost that that would
+/// be."*
+///
+/// The NOTICE is the step before the invoice, and it is a different kind of
+/// document: it says "these pieces did not come back, here is what replacing
+/// them costs, tell us if they turn up." Sending an invoice first makes that
+/// conversation an argument about a bill.
+///
+/// Lines are frozen as JSON at send. That is deliberate — the candidates are
+/// derived live from the check-in sheet and inventory `replacementCost`, both
+/// of which move, and what the client was quoted must not change under them.
+/// It is also what lets the invoice inherit exactly what was noticed instead
+/// of making Ana retype her damage write-ins.
+model LdNotice {
+  id      String @id @default(uuid())
+  orderId String @map("order_id")
+  order   Order  @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  /// LdNoticeLine[] — description, qty, unitPrice, source, note.
+  lines    Json
+  subtotal Decimal @default(0) @db.Decimal(12, 2)
+  /// Ana's covering note, in her words.
+  note     String? @db.Text
+
+  /// Null while it is a draft she has not sent. The notice exists as a row
+  /// only once it is sent, today — the column is nullable so a "save and
+  /// come back" draft can land later without a migration.
+  sentAt        DateTime? @map("sent_at")
+  sentToAddress String?   @map("sent_to_address")
+  sentCc        String[]  @default([]) @map("sent_cc")
+  /// SOFT FK, same choice as OrderCheckReport.submittedById: a plain id with
+  /// no relation, so adding this table touches no existing model.
+  sentById      String?   @map("sent_by_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([orderId, createdAt(sort: Desc)])
+  @@map("sr_ld_notices")
 }
 
 // ─────────────────────────────────────────────────────────────────────

@@ -11,13 +11,30 @@
  * substitutions, the notes, the rows the floor added, and the photo of
  * the marked-up paper, which is the only thing that still shows the
  * handwriting once the counts are in.
+ *
+ * ── The billing desk reads this too (2026-09-18) ──────────────────
+ *
+ * Wes, on Ana working from Albert's returned-order report: *"She will
+ * start from the returned order instead of having to read it like she
+ * does now and create her own response."* She could not: BILLING carries
+ * neither `fleet` nor `warehouse`, so this page answered "Yard access
+ * required" for the one person the workflow now starts with.
+ *
+ * So the door is yard staff OR the collections desk. Widening it is safe
+ * precisely because of the paragraph above — the page writes nothing.
+ * The TYPING screen next door is untouched and stays yard-only; a
+ * check-out there rewrites the order and can re-send a client's quote,
+ * which is not something to hand the billing desk by accident.
  */
 
 import Link from 'next/link'
 import { Lock, ArrowLeft, Printer } from 'lucide-react'
 import { getYardUser } from '@/lib/yard/requireYardAccess'
+import { requireCollectionsUser } from '@/lib/collections/access'
 import { reportDraft } from '@/lib/orders/checkReports'
 import { SendCheckInReportButton } from '@/components/reports/SendCheckInReportButton'
+import { LdFromReportCue } from '@/components/reports/LdFromReportCue'
+import { missingOnCheckIn } from '@/lib/invoices/ldMissingGear'
 
 export const dynamic = 'force-dynamic'
 
@@ -57,13 +74,18 @@ export default async function FiledSheetPage({
   params: Promise<{ id: string }>
   searchParams: Promise<{ edge?: string }>
 }) {
-  const user = await getYardUser()
+  // Yard staff read it because they filed it; the billing desk reads it
+  // because it is now where L&D starts.
+  const [yardUser, billingUser] = await Promise.all([getYardUser(), requireCollectionsUser()])
+  const user = yardUser ?? billingUser
   if (!user) {
     return (
       <div className="max-w-sm mx-auto text-center py-16 px-6">
         <Lock size={32} aria-hidden className="mx-auto mb-3 text-lt-fg3" />
-        <h1 className="text-lt-fg text-xl font-semibold mb-2">Yard access required</h1>
-        <p className="text-lt-fg2 text-[15px]">Check in/out sheets are for fleet and warehouse staff.</p>
+        <h1 className="text-lt-fg text-xl font-semibold mb-2">Access required</h1>
+        <p className="text-lt-fg2 text-[15px]">
+          Check in/out sheets are for fleet, warehouse and billing staff.
+        </p>
       </div>
     )
   }
@@ -90,10 +112,15 @@ export default async function FiledSheetPage({
         <p className="text-lt-fg2 text-[15px]">
           {draft.jobName} · <span className="font-mono">{draft.orderNumber}</span> has nothing filed for this
           edge yet.{' '}
-          <Link href={`/reports/orders/${id}?edge=${edge}`} className="text-amber-600 font-semibold">
-            Type it in
-          </Link>
-          .
+          {yardUser ? (
+            <Link href={`/reports/orders/${id}?edge=${edge}`} className="text-amber-600 font-semibold">
+              Type it in
+            </Link>
+          ) : (
+            // The typing screen is yard-only; sending billing to a door
+            // that 403s is worse than not offering it.
+            <span className="text-lt-fg3">The yard has not counted it yet.</span>
+          )}
         </p>
       </div>
     )
@@ -102,6 +129,13 @@ export default async function FiledSheetPage({
   const counted = draft.lines.filter((l) => l.onSheet)
   const held = draft.lines.filter((l) => !l.onSheet)
   const differed = counted.filter((l) => l.change !== 'NONE')
+
+  // What the sheet says did not come back, through the SAME rule the L&D
+  // composer and the billing queue use — `classifyCheckLine` calls 0-of-N
+  // REMOVED, not SHORT, and reading this any other way hides the worst
+  // shortfalls (ldMissingGear.ts).
+  const missing = !isOut ? missingOnCheckIn(draft.lines) : []
+  const missingPieces = missing.reduce((n, m) => n + m.missing, 0)
 
   return (
     <div className="max-w-3xl mx-auto px-1 py-2">
@@ -142,6 +176,22 @@ export default async function FiledSheetPage({
           </p>
         )}
       </header>
+
+      {/* The billing desk's next move, on the document that prompts it.
+          Yard staff read the same page without it — the composer prices
+          every line, and the yard cannot see rates. */}
+      {!isOut && billingUser && (
+        <LdFromReportCue
+          orderId={id}
+          orderNumber={draft.orderNumber}
+          shortLines={missing.length}
+          missingPieces={missingPieces}
+          // The inbound sheet grew a damaged-quantity column in a separate
+          // change; until that lands there is no damaged count to read, and
+          // a written-in damage line is still one tap away in the composer.
+          damagedPieces={0}
+        />
+      )}
 
       <div className="flex items-center gap-3 mb-4">
         <a
