@@ -42,6 +42,7 @@
     "test:non-rental-stock": "tsx tests/catalog/non-rental-stock.test.ts",
     "test:maintenance-tasks": "tsx tests/admin/maintenance-tasks.test.ts",
     "test:date-change-request": "tsx tests/portal/date-change-request.test.ts",
+    "test:portal-insurance": "tsx tests/portal/insurance-on-file.test.ts",
     "test:order-back": "tsx tests/nav/order-back-target.test.ts",
     "test:dropdown-placement": "tsx tests/ui/dropdown-placement.test.ts",
     "test:df50-fluid": "tsx tests/inventory/df50-fluid.test.ts",

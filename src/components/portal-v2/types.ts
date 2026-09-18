@@ -3,6 +3,7 @@
  * data the legacy /portal/[token] page fetches (GET /api/portal/[token]),
  * so these interfaces describe just the slices the v2 cards read.
  */
+import type { InsuranceStepState } from '@/lib/portal/insuranceRules'
 
 export interface V2Intake {
   fullName: string
@@ -72,6 +73,14 @@ export interface V2Booking {
   // here so they can hand it to their driver. Read-only in the portal.
   job?: { assistantAuthCode?: string | null; jobCode?: string; name?: string } | null
 }
+
+/**
+ * What insurance this client still owes — computed server-side over every
+ * certificate on the job and the account, never off the two booleans on the
+ * paperwork row (src/lib/portal/insuranceOnFile.ts). Null on an older cached
+ * payload; the cards fall back to the flags.
+ */
+export type V2Insurance = InsuranceStepState | null
 
 export interface V2Paperwork {
   contractType?: string

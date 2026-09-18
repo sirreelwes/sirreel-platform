@@ -7,7 +7,7 @@ import { prisma } from '@/lib/prisma'
 // the three copies, and the review desk's copy was the thinnest. Everything
 // reads through the shared one now.
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
-import { coiCheckWriteFields, coiFlags } from '@/lib/coi/checks'
+import { coiCarriesWorkersComp, coiCheckWriteFields, coiFlags } from '@/lib/coi/checks'
 import { COI_SCOPE_SELECT, deriveCoiScope } from '@/lib/coi/jobScope'
 import { uploadCoiDocument } from '@/lib/coi/uploadCoiDocument'
 import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
@@ -273,9 +273,19 @@ export async function POST(
       await prisma.$executeRawUnsafe(`ALTER TABLE paperwork_requests ADD COLUMN IF NOT EXISTS coi_review_at TIMESTAMP`)
     } catch {}
 
+    // Workers' comp is USUALLY on the certificate itself — the WC box sits on
+    // the same ACORD page — and a payroll company's separate certificate is
+    // the exception. `wc_received` was nonetheless written by exactly one
+    // route, the separate-WC upload, so for the ordinary client the flag could
+    // never become true: the portal's insurance step stayed outstanding and
+    // went on asking for a document already in the PDF above it, and every
+    // staff surface that reads the flag chased it too (Christopher Helmic on
+    // Pilot Pen, 2026-09-18). Set, never cleared — a re-upload that reads
+    // worse must not withdraw proof we already hold.
+    const wcOnCertificate = coiCarriesWorkersComp(review)
     await prisma.$executeRawUnsafe(
-      `UPDATE paperwork_requests SET coi_ai_review=$1::jsonb, coi_review_at=$2, coi_received=$3 WHERE token=$4`,
-      JSON.stringify(review), new Date(), review.criticalPass, params.token
+      `UPDATE paperwork_requests SET coi_ai_review=$1::jsonb, coi_review_at=$2, coi_received=$3, wc_received=(wc_received OR $5::boolean) WHERE token=$4`,
+      JSON.stringify(review), new Date(), review.criticalPass, params.token, wcOnCertificate
     )
 
     // Received = every CRITICAL requirement is met. An open ALERT item (no

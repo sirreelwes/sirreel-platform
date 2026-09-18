@@ -3,7 +3,7 @@
 import { useState } from 'react'
 import { PORTAL } from '@/lib/brand/portalTokens'
 import { CardShell, DoneNote, LockedNote } from './CardShell'
-import type { V2Paperwork } from './types'
+import type { V2Insurance, V2Paperwork } from './types'
 import { Check, CheckCircle2, Clock, FileText, XCircle } from 'lucide-react'
 
 /**
@@ -12,10 +12,18 @@ import { Check, CheckCircle2, Clock, FileText, XCircle } from 'lucide-react'
  *   POST /api/portal/[token]/coi         (stores the file)
  *   POST /api/portal/[token]/wc-review   (workers comp review)
  * Rehydrates prior review state from paperwork.coi_ai_review on load.
+ *
+ * `insurance` is the server's answer to "does this client still owe us
+ * anything" over EVERY certificate on the job and the account — the job
+ * portal's upload included. Without it this card knew only about documents
+ * that came through its own two routes, which is how a client who had
+ * already sent his certificate was asked for it a second time on the way to
+ * the card form (2026-09-18).
  */
 export function CoiCard({
   token,
   paperwork,
+  insurance,
   done,
   locked,
   open,
@@ -24,6 +32,7 @@ export function CoiCard({
 }: {
   token: string
   paperwork: V2Paperwork
+  insurance: V2Insurance
   done: boolean
   locked: boolean
   open: boolean
@@ -36,12 +45,27 @@ export function CoiCard({
   const [wcFile, setWcFile] = useState<File | null>(null)
   const [wcReview, setWcReview] = useState<any>(null)
   const [wcReviewing, setWcReviewing] = useState(false)
+  // A client whose certificate is already on file can still send a newer one
+  // — a renewal, or the corrected copy their broker just issued. The drop
+  // zone is one tap away rather than the first thing they see.
+  const [replacing, setReplacing] = useState(false)
 
-  const wcSatisfied = !!(paperwork.wcReceived || coiReview?.workersComp?.pass || wcReview?.pass)
-  const coiSatisfied = !!(paperwork.coiReceived || coiReview?.overallPass)
+  const wcSatisfied = !!(
+    insurance?.wc.satisfied ||
+    paperwork.wcReceived ||
+    coiReview?.workersComp?.pass ||
+    wcReview?.pass
+  )
+  const coiSatisfied = !!(insurance?.coi.satisfied || paperwork.coiReceived || coiReview?.overallPass)
+  // Nothing was uploaded through THIS portal, and nothing needs to be.
+  const coiOnFileElsewhere = !coiReview && coiSatisfied
 
   const status = done
-    ? 'done'
+    ? // An unreviewed certificate on file is 'pending', not 'done' — the
+      // client has nothing to do, and we have not finished.
+      insurance && !insurance.coi.verified
+      ? 'pending'
+      : 'done'
     : locked
       ? 'locked'
       : coiReview?.requiresAdminApproval
@@ -66,7 +90,18 @@ export function CoiCard({
       {locked && !done ? (
         <LockedNote title="Insurance Documents" />
       ) : done ? (
-        <DoneNote title="Insurance Documents Approved" sub="COI and Workers Comp on file" />
+        // "Approved" only when it IS approved. The step now closes on what is
+        // on file — which includes a certificate still in our review queue —
+        // and telling a client their insurance was approved when a reviewer
+        // has not looked is the one thing worse than asking them twice.
+        insurance && !insurance.coi.verified ? (
+          <DoneNote
+            title="Insurance documents received"
+            sub="With SirReel for review — we’ll be in touch if anything is missing."
+          />
+        ) : (
+          <DoneNote title="Insurance Documents Approved" sub="COI and Workers Comp on file" />
+        )
       ) : (
         <div className="space-y-4">
           <div>
@@ -90,7 +125,30 @@ export function CoiCard({
               <div className="font-semibold text-gray-700 mb-0.5">Certificate holder must read:</div>
               <div>SirReel Production Vehicles Inc. · 8500 Lankershim Blvd, Sun Valley, CA 91352</div>
             </div>
-            {!coiReview ? (
+            {coiOnFileElsewhere && !replacing ? (
+              // The certificate arrived somewhere else — the job page, the
+              // drop link, or the account — and this card used to have no way
+              // of knowing that, so it printed an empty drop zone at a client
+              // who had already sent it.
+              <div className="space-y-2">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-start gap-3">
+                  <span className="text-emerald-500 mt-0.5"><CheckCircle2 size={20} aria-hidden /></span>
+                  <div>
+                    <div className="text-sm font-bold text-emerald-800">Certificate on file</div>
+                    <div className="text-xs text-emerald-700 mt-0.5">
+                      {insurance?.coi.note ||
+                        'Your certificate of insurance is on file with SirReel — there is nothing to upload here.'}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setReplacing(true)}
+                  className="w-full py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50"
+                >
+                  Upload a newer certificate
+                </button>
+              </div>
+            ) : !coiReview ? (
               <div className="space-y-2">
                 <div
                   onDragOver={(e) => e.preventDefault()}
@@ -131,7 +189,7 @@ export function CoiCard({
                       const data = await res.json()
                       if (data.review) {
                         setCoiReview(data.review)
-                        if (data.review.overallPass && (data.review.workersComp?.pass || wcReview?.pass || paperwork.wcReceived)) {
+                        if (data.review.overallPass && (data.review.workersComp?.pass || wcSatisfied)) {
                           onComplete()
                         }
                       } else {
@@ -199,9 +257,16 @@ export function CoiCard({
               )}
             </div>
             {wcSatisfied && !wcReview ? (
-              <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
-                <span className="text-emerald-500"><Check size={16} aria-hidden /></span>
-                <span className="text-sm text-emerald-700">Workers Comp on file — no separate upload needed.</span>
+              // Says WHICH of the two it is. Before today "no separate upload
+              // needed" could not be reached by the ordinary client at all:
+              // wc_received was written by the separate-upload route alone, so
+              // workers' comp carried on their own COI still read as
+              // outstanding and the step never closed.
+              <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl">
+                <span className="text-emerald-500 mt-0.5"><Check size={16} aria-hidden /></span>
+                <span className="text-sm text-emerald-700">
+                  {insurance?.wc.note || 'Workers Comp on file — no separate upload needed.'}
+                </span>
               </div>
             ) : !wcReview ? (
               <div className="space-y-2">
@@ -248,7 +313,7 @@ export function CoiCard({
                       const data = await res.json()
                       if (data.review) {
                         setWcReview(data.review)
-                        if (data.review.pass && (coiReview?.overallPass || paperwork.coiReceived)) onComplete()
+                        if (data.review.pass && coiSatisfied) onComplete()
                       } else {
                         alert('Error: ' + (data.error || 'Unknown'))
                       }

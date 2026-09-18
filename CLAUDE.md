@@ -637,6 +637,65 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   merges two rows for one person at two addresses; and the directory is not
   offered anywhere outside the COI review desk and its own page.
 
+## Asked for the COI twice, and for a WC with nowhere to put it (2026-09-18 — Christopher Helmic, Pilot Pen)
+- First time through the portal: "I added the COI and sent it to agent …
+  signed the waiver, and added the CC details. **The CC section requires us to
+  add the COI again, plus the WC** (which is requested but it doesn't feature a
+  separate upload section on the first page)." Right on both counts.
+- **Two records for one certificate.** The job portal (`/portal/job/[slug]` —
+  his "first page") files a client's upload as a `CoiCheck` on the JOB
+  (`/api/portal/job/coi`). Its own Card Authorization row then hands him to
+  `/portal/v2/<token>?open=cc`, and that paperwork portal read
+  `PaperworkRequest.coi_received` and nothing else. So the second screen asked
+  for the document the first screen had taken ten minutes earlier — and the
+  same hole swallows a certificate from the drop link, from staff, or from the
+  account portal.
+- **`wc_received` was written by exactly ONE route** — the separate-WC upload.
+  Workers' comp normally rides on the ACORD itself, so for the ordinary client
+  that flag could never become true: `done.coi = coiReceived && wcReceived`
+  meant the insurance step **could not close**, on either portal, ever. It went
+  on asking for a document that was in the PDF above it.
+- **`insuranceStepState()` in `src/lib/portal/insuranceRules.ts` is the one
+  rule** (PURE; the DB half is `insuranceOnFile.ts`, returned by
+  `GET /api/portal/[token]` as `insurance`, read by both portals). Computed on
+  READ, like the named-insured verdict and the broker desk's verdicts: whatever
+  door a certificate came through, and whoever fixes the record later, the
+  client stops being asked. Certificates are read from the JOB **and** the
+  ACCOUNT, because from the client's side those are the same act.
+- **`satisfied` ≠ `verified`, and mixing them is the expensive mistake.**
+  `satisfied` answers the only question the portal may put to a client — is
+  there anything for you to upload — and a certificate sitting in our review
+  queue is not (the job portal has said "Reviewing" about that state since
+  2026-09-12). `verified` is whether it CLEARED (a person approved it, or every
+  critical check passed), and it is what picks the words: the step closing with
+  "Insurance Documents Approved" over an unreviewed certificate would be a
+  false all-clear, which is worse than the double-ask being fixed. Unreviewed
+  reads "Insurance documents received · With SirReel for review", amber chip.
+- **REJECTED, COUNTERED and a lapsed policy do NOT satisfy** — the desk has
+  told them a new one is owed, in those words (`coiClientDecision`), so the
+  ask comes back. Nothing is ever hidden behind an "on file" note: both portals
+  carry **Upload a newer certificate** beside it.
+- Write-side twin: `/api/portal/[token]/coi-review` now sets
+  `wc_received` when the certificate carries workers' comp
+  (`coiCarriesWorkersComp` in checks.ts — read through the checklist, so
+  UNKNOWN is still not a pass). Set, never cleared. That fixes the flag for
+  every STAFF reader too (the Dani dashboard's WC chip, reservation-context,
+  the paperwork summary), which had been chasing WC already in hand.
+- **The "first page" now says where workers' comp goes**: there was never a
+  second box to find — `/api/portal/job/coi` reads what the document IS off the
+  review (`coiDocumentKind`) and files a payroll company's certificate as
+  workers' comp, and `newestFullCoi` already steps past it so it can never
+  govern a rental. Nothing on the page said so. `JobCoiUpload` says it, that
+  route labels the HQ notification with the document kind, and it no longer
+  reports a WC certificate as "Required checks: REVIEW" or flags its named
+  insured — the payroll company is SUPPOSED to be somebody other than the
+  production.
+- `npm run test:portal-insurance`. NOT done: nothing back-fills
+  `wc_received` for certificates reviewed before today (the read rule covers
+  them on every portal load, but the staff flags stay false until a re-run),
+  and the job portal still has no upload of its own for a second document in
+  one go — it is one file at a time.
+
 ## After-hours VEHICLE pickup email (2026-09-10)
 - Wes: "an easy button for sales to send this summary" — Jose's hand-typed
   After Hours Instructions (address, Gate 1 code, driver's-license line,

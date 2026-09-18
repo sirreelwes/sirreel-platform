@@ -10,6 +10,14 @@
  *
  * Presentational: the page owns the file/uploading/error state and the POST
  * to /api/portal/job/coi, which is unchanged.
+ *
+ * It takes the WORKERS' COMP certificate too, and now says so. Christopher
+ * Helmic, first time through the portal on Pilot Pen (2026-09-18): the WC "is
+ * requested but it doesn't feature a separate upload section on the first
+ * page." There was never a second box to find — the route reads what the
+ * document IS off the review (lib/coi/coverageKind) and files it as workers'
+ * comp — but nothing on the page said that, so a client holding a payroll
+ * company's certificate had no reason to believe this was where it went.
  */
 
 import { FileText, Send } from 'lucide-react';
@@ -56,6 +64,11 @@ export function JobCoiUpload({
           onChange={(e) => onFile(e.target.files?.[0] || null)}
         />
       </label>
+      <p className="text-[11px] text-zinc-500 leading-relaxed">
+        Workers&rsquo; comp is usually on the same certificate. If your payroll company
+        (Entertainment Partners, Cast &amp; Crew, ADP) issues it separately, send that one
+        through here too &mdash; one file at a time.
+      </p>
       {error && <div className="text-[11px] text-red-600">{error}</div>}
       <button
         onClick={onSubmit}
