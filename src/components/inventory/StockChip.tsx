@@ -29,6 +29,45 @@ import { stockVerdict, type ItemStock } from '@/lib/inventory/stock'
 export type { ItemStock }
 export { stockVerdict }
 
+/**
+ * The readout itself: a number and, when the ask has passed it, red.
+ *
+ * Shared so the two things that can answer "is there enough?" — the
+ * catalog's on-hand count for warehouse gear, and the scheduler's
+ * serviceable-minus-booked count for vehicles — cannot drift into two
+ * different looks or two different notions of "over". Callers bring
+ * their own arithmetic; this owns the presentation and the threshold.
+ */
+export function StockReadout({
+  available,
+  requested,
+  detail,
+  className = '',
+}: {
+  /** How many are free. May be negative when already oversold. */
+  available: number
+  /** What is being asked for right now — the live input value. */
+  requested: number
+  /** Tooltip: where the number came from, in the caller's own terms. */
+  detail: string
+  className?: string
+}) {
+  const over = requested > available
+  const shown = Math.max(0, available)
+  return (
+    <span
+      title={detail}
+      aria-label={over ? `Only ${shown} available — ${requested - available} short` : `${shown} available`}
+      className={`inline-flex items-center gap-0.5 rounded px-1 text-[11px] leading-none tabular-nums whitespace-nowrap ${
+        over ? 'bg-chip-bad-bg text-chip-bad-fg font-semibold' : 'text-lt-fg3'
+      } ${className}`}
+    >
+      {shown}
+      <span className={over ? 'font-normal' : ''}>avail</span>
+    </span>
+  )
+}
+
 export interface StockChipProps {
   stock: ItemStock | null | undefined
   /** What this line is asking for right now (the value in the input). */
@@ -52,10 +91,9 @@ export function StockChip({
   if (!verdict.show) return null
 
   const { available, over, short } = verdict
-  const shown = Math.max(0, available)
 
   const detail = [
-    `${shown} of ${stock.onHand} free for these dates`,
+    `${Math.max(0, available)} of ${stock.onHand} free for these dates`,
     stock.committed > 0 ? `${stock.committed} out on other orders` : null,
     otherOnThisOrder > 0 ? `${otherOnThisOrder} on other lines of this order` : null,
     stock.quoted > 0 ? `${stock.quoted} more on quotes not yet approved` : null,
@@ -65,18 +103,12 @@ export function StockChip({
     .join(' · ')
 
   return (
-    <span
-      title={detail}
-      aria-label={over ? `Only ${shown} available — ${short} short` : `${shown} available`}
-      className={`inline-flex items-center gap-0.5 rounded px-1 text-[11px] leading-none tabular-nums whitespace-nowrap ${
-        over
-          ? 'bg-chip-bad-bg text-chip-bad-fg font-semibold'
-          : 'text-lt-fg3'
-      } ${className}`}
-    >
-      {shown}
-      <span className={over ? 'font-normal' : ''}>avail</span>
-    </span>
+    <StockReadout
+      available={available}
+      requested={requested}
+      detail={detail}
+      className={className}
+    />
   )
 }
 

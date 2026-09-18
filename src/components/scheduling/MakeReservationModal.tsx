@@ -161,6 +161,7 @@ import { CompanyPicker } from '@/components/orders/CompanyPicker'
 import { InquirySourceDrawer } from '@/components/inquiries/InquirySourceDrawer'
 import { holdRankLabel, MAX_HOLD_RANK } from '@/lib/scheduling/holdRanks'
 import { JobResolverModal, type ResolvedJob } from '@/components/shared/JobResolverModal'
+import { StockReadout } from '@/components/inventory/StockChip'
 import {
   ClosedDayHandoffPrompt,
   NO_CLOSED_DAY_ANSWERS,
@@ -1745,27 +1746,64 @@ export function MakeReservationModal({
                           >
                             How many
                           </label>
-                          <input
-                            id={`reservation-qty-${r.key}`}
-                            type="number"
-                            min={1}
-                            value={r.quantity}
-                            disabled={written}
-                            onChange={(e) => {
-                              const q = Math.max(1, parseInt(e.target.value) || 1)
-                              // Dropping the quantity drops the named
-                              // units past it — the assign route would
-                              // refuse them anyway, mid-write.
-                              setRows((rs) =>
-                                rs.map((x) =>
-                                  x.key === r.key
-                                    ? { ...x, quantity: q, queueChoice: 'none', unitIds: x.unitIds.slice(0, q) }
-                                    : x,
-                                ),
-                              )
-                            }}
-                            className="w-20 border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg disabled:opacity-60"
-                          />
+                          {/* The readout sits INLINE with the box, not
+                              under it: this row is `items-end`, so a
+                              taller quantity column would drag the type
+                              select's baseline down with it. */}
+                          <div className="flex items-center gap-1">
+                            <input
+                              id={`reservation-qty-${r.key}`}
+                              type="number"
+                              min={1}
+                              value={r.quantity}
+                              disabled={written}
+                              onChange={(e) => {
+                                const q = Math.max(1, parseInt(e.target.value) || 1)
+                                // Dropping the quantity drops the named
+                                // units past it — the assign route would
+                                // refuse them anyway, mid-write.
+                                setRows((rs) =>
+                                  rs.map((x) =>
+                                    x.key === r.key
+                                      ? { ...x, quantity: q, queueChoice: 'none', unitIds: x.unitIds.slice(0, q) }
+                                      : x,
+                                  ),
+                                )
+                              }}
+                              className="w-20 border border-lt-hairline rounded-lg px-2 py-1.5 text-[13px] bg-lt-card text-lt-fg disabled:opacity-60"
+                            />
+                            {/* How many of that type are free for THIS
+                                line's window, beside the number being
+                                typed — the same readout the order builder
+                                puts next to a quantity, so "is there
+                                enough" looks the same wherever it is
+                                asked. Red here is the same condition as
+                                `atCap`, which opens the queue panel below:
+                                the panel explains the decision, this says
+                                it at a glance.
+
+                                Never on a WRITTEN line. Once the line has
+                                landed, the hold it just took is part of
+                                the count, and the row would read red
+                                against its own reservation. */}
+                            {category && !dup && !written && p?.avail && !p.loading && (
+                              <StockReadout
+                                available={p.avail.availableToHold}
+                                requested={r.quantity}
+                                detail={
+                                  `${Math.max(0, p.avail.availableToHold)} of ${p.avail.serviceableCount} ` +
+                                  `${category.name} free ` + `${
+                                    rowStart(r) === rowEnd(r)
+                                      ? dayLabel(rowStart(r))
+                                      : `${dayLabel(rowStart(r))} – ${dayLabel(rowEnd(r))}`
+                                  }` +
+                                  (p.avail.availableToHold < r.quantity
+                                    ? ` · this line is ${r.quantity - p.avail.availableToHold} short — queue it as a backup, or cut the quantity.`
+                                    : '')
+                                }
+                              />
+                            )}
+                          </div>
                         </div>
                         {rows.length > 1 && !written && (
                           <button
@@ -1902,12 +1940,6 @@ export function MakeReservationModal({
                         <p className="text-[11px] text-chip-bad-fg">
                           That type is already on this reservation for those dates — raise its
                           quantity instead, or give this one its own dates.
-                        </p>
-                      )}
-                      {category && !dup && !written && p && !p.loading && p.avail && !atCap && (
-                        <p className="text-[11px] text-chip-good-fg">
-                          {p.avail.availableToHold} of {p.avail.serviceableCount} available for these
-                          dates
                         </p>
                       )}
                       {category?.dailyRate != null && !written && (
