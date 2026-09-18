@@ -1436,6 +1436,47 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   CLOSED/INVOICED order (`POST /api/orders/[id]/reopen`, billing-gated) to
   edit lines or discounts, then pull the figures through.
 
+## Orders by the day they were created — checking the EOD report (2026-09-17 — Ana)
+- Ana: "Is there a way I can check the drop down list of orders and quotes and
+  specify a certain date? … there is no filter for finding orders grouped
+  together by date. And a way to calculate the total value while I'm
+  searching would be great, too. That way I know if the EOD report that gets
+  generated is accurate or not."
+- **The value total already existed** (the `{total} orders · $X total` line in
+  the /orders header, `valueTotal` off the whole filtered set, not the page)
+  and follows every filter including the new dates. What was missing was the
+  date filter and, more importantly, a count Ana could hold against the report.
+- **`tallyOrderDay()` in `src/lib/orders/dayTally.ts` is the ONE definition,
+  and both surfaces read it** — the EOD report renders it into the evening
+  email, /orders renders it above the table. A date filter that counted rows
+  its own way would not CHECK the report; it would be a second number to argue
+  with. Pure, `npm run test:order-day-tally`.
+  - A quote is `quoteStatus` DRAFT or SENT — never `status`; an order can be
+    BOOKED while quoteStatus lags, and the question is whether the client said
+    yes. Orders are worth `bookedTotal ?? total` (`total` keeps moving with
+    post-booking edits), quotes are worth `total`.
+  - CANCELLED is out. DRAFT, LOST and ARCHIVED are IN — a quote written and
+    lost the same afternoon was still written.
+- **The card is deliberately NOT a description of the table under it.** The
+  /orders list hides drafts, lost and archived by default and still shows
+  cancelled rows, so the row count differs BOTH ways. `reconciliationNote()`
+  names it in one sentence ("Counts 1 draft, 1 lost … Leaves out 1 cancelled
+  order the list still shows") and says nothing on a day where they agree. A
+  card that quietly counted only the visible rows would be worse than no card:
+  a confirmation that agrees with nothing. The tally query therefore ignores
+  `where` and is built from the window + scope alone — a status filter must
+  not move the figures being checked.
+- **Pacific days, not UTC** (`createdFrom` / `createdTo`, `YYYY-MM-DD`, both
+  ends inclusive, either one alone means that single day). A UTC cut would put
+  every order written after 4pm into tomorrow's count and the two screens would
+  disagree every evening. The day helpers moved out of eodReport.ts (which
+  imports prisma) to `src/lib/time/pacificDay.ts` so the tally and its tests
+  stay pure; eodReport re-exports them, so its dozen importers are unchanged.
+- The EOD panel now prints the COUNT beside each of those two figures — it only
+  ever showed dollars — and links to `/orders?createdFrom=<date>&createdTo=<date>`.
+  The orders page reads that deep link off `window.location` in an effect, NOT
+  `useSearchParams` (a client page with no Suspense boundary fails `next build`).
+
 ## "Approved — book it" names the order and takes you to it (2026-09-17 — Wes)
 - Wes, on SR-JOB-0312: "It says that the production supply order is booked
   but it does not give me any other options there. On the tile it says
