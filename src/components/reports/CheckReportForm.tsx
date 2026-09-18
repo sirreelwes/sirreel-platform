@@ -297,6 +297,10 @@ export function CheckReportForm({
     /** The name this pass went under and how many lines it counted. */
     passBy: string | null
     countedThisPass: number
+    /** IN edge: what the sheet says did not come back, and whether the
+     *  billing desk was told. Counts only — the yard does not see rates. */
+    ldShort: { lines: number; pieces: number } | null
+    ldNotified: boolean
   } | null>(null)
 
   const patch = (id: string, next: Partial<Row>) =>
@@ -712,6 +716,8 @@ export function CheckReportForm({
         offSheet: data.offSheet ?? 0,
         passBy: data.passBy ?? null,
         countedThisPass: data.countedThisPass ?? 0,
+        ldShort: data.ldShort ?? null,
+        ldNotified: !!data.ldNotified,
       })
       router.refresh()
     } catch (e) {
@@ -817,6 +823,25 @@ export function CheckReportForm({
                   : 'Everything came back as expected.'}
             </p>
           )}
+          {/* What did not come back, and who now has it. Ana, 2026-09-18:
+              *"it would be ideal if, when a check-in report was finished, it
+              teed up an L&D invoice for billing along with that report."*
+              Filing the sheet IS the hand-off — no prices here, because the
+              floor does not see rates and what a loss is worth is the billing
+              desk's call. Says whether the email actually went: a supervisor
+              who assumes it did will not mention the missing case to anyone. */}
+          {done.ldShort && (
+            <div className="mt-3 rounded-lg bg-chip-warn-bg px-3 py-2.5 text-[14px] text-chip-warn-fg max-w-[56ch] mx-auto">
+              <b>
+                {done.ldShort.pieces} piece{done.ldShort.pieces === 1 ? '' : 's'} did not come back
+              </b>{' '}
+              on {done.ldShort.lines} line{done.ldShort.lines === 1 ? '' : 's'}.{' '}
+              {done.ldNotified
+                ? 'Billing has been emailed and it is queued for an L&D invoice — nothing is billed to the client until they price it.'
+                : 'It is queued for billing to price as L&D. If a case turns up tomorrow, re-open this sheet and re-count the line.'}
+            </div>
+          )}
+
           {/* Filing the inbound sheet is what closes the gear lane —
               say so, because the next question a supervisor has is
               whether anyone still has to mark the job returned. */}

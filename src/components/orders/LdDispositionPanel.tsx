@@ -17,9 +17,33 @@
  * Claim opening on a generated LD invoice is surfaced inside the
  * existing Invoices block — the operator clicks "Open claim" next
  * to the LD invoice row.
+ *
+ * ── Gear, not just vehicles (2026-09-18) ──────────────────────────
+ *
+ * Wes, relaying Ana: *"the only thing I see on the L&D portion is for
+ * vehicle damage."* True, and it made this panel useless for most of
+ * the L&D on this yard, which is gear — a light back broken, three
+ * stingers that never came back at all. That lives on the warehouse's
+ * check-in sheet as `actualQty < expectedQty`, and a DamageItem is
+ * vehicle-scoped (`locationOnVehicle`, inspection → asset), so a short
+ * case has no row to show here and the panel rendered empty.
+ *
+ * So the panel now reads GET /api/orders/[id]/ld-invoices — the
+ * composer's own candidate list, which covers BOTH halves — for its
+ * summary line, and its billing button opens that composer instead of
+ * sweeping damage straight onto an invoice. The damage triage below is
+ * unchanged; it is the half this screen was always good at.
+ *
+ * The old "Generate LD invoice" button is gone deliberately. It POSTed
+ * an empty body, which bills every SEND_TO_LD finding in one click with
+ * nothing reviewed and no gear at all. The composer arrives with
+ * everything UNTICKED and priced from `replacementCost`, which is the
+ * doctrine the billing desk already works to: a short count is evidence,
+ * not a verdict.
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { LdInvoiceModal } from '@/components/collections/LdInvoiceModal'
 
 type Disposition = 'PENDING' | 'BILL_NOW' | 'SEND_TO_LD' | 'WAIVED'
 type DamageType = 'SCRATCH' | 'DENT' | 'CRACK' | 'MISSING_PART' | 'MECHANICAL' | 'INTERIOR' | 'OTHER'
@@ -68,11 +92,21 @@ const SEV_COLOR: Record<Severity, string> = {
   MAJOR:    'text-rose-400',
 }
 
+/** The composer's candidate list, read only for its shape — what is
+ *  billable on this order, from both halves of "loss and damage". */
+interface LdSummary {
+  candidates: Array<{ source: 'CHECK_IN_SHORT' | 'VEHICLE_DAMAGE'; qty: number }>
+  existingLdInvoice: { id: string; invoiceNumber: string; status: string; total: number } | null
+  hasCheckInReport: boolean
+}
+
 export function LdDispositionPanel({
   orderId,
+  orderNumber,
   onChanged,
 }: {
   orderId: string
+  orderNumber: string
   onChanged?: () => void
 }) {
   const [damages, setDamages] = useState<DamageRow[] | null>(null)
@@ -80,6 +114,8 @@ export function LdDispositionPanel({
   const [err, setErr] = useState<string | null>(null)
   const [showAddForm, setShowAddForm] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  const [ld, setLd] = useState<LdSummary | null>(null)
+  const [composerOpen, setComposerOpen] = useState(false)
 
   const refresh = useCallback(async () => {
     const r = await fetch(`/api/orders/${orderId}/return-damage`, { cache: 'no-store' })
@@ -92,6 +128,15 @@ export function LdDispositionPanel({
     setDamages(data.damages || [])
     setAssignments(data.assignments || [])
     setErr(null)
+
+    // The gear half. A failure here is not worth breaking the damage
+    // triage over — the summary line simply goes quiet.
+    try {
+      const l = await fetch(`/api/orders/${orderId}/ld-invoices`, { cache: 'no-store' })
+      setLd(l.ok ? ((await l.json()) as LdSummary) : null)
+    } catch {
+      setLd(null)
+    }
   }, [orderId])
 
   useEffect(() => {
@@ -119,28 +164,6 @@ export function LdDispositionPanel({
     }
   }
 
-  const generateLdInvoice = async () => {
-    if (busy) return
-    setBusy('ld-gen')
-    setErr(null)
-    try {
-      const r = await fetch(`/api/orders/${orderId}/ld-invoices`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
-      })
-      const data = await r.json().catch(() => ({}))
-      if (!r.ok || !data.ok) {
-        setErr(data.error || `HTTP ${r.status}`)
-        return
-      }
-      await refresh()
-      onChanged?.()
-    } finally {
-      setBusy(null)
-    }
-  }
-
   const sendToLdCount = (damages ?? []).filter(
     (d) => d.disposition === 'SEND_TO_LD' && !d.invoiceId,
   ).length
@@ -148,6 +171,14 @@ export function LdDispositionPanel({
   const billNowUnbilled = (damages ?? []).filter(
     (d) => d.disposition === 'BILL_NOW' && !d.invoiceId,
   ).length
+
+  // The gear half, off the check-in sheet — the part this panel used to be
+  // blind to. `qty` is pieces, not lines: "3 stingers" is the number that
+  // matters to whoever has to replace them.
+  const shortCandidates = (ld?.candidates ?? []).filter((c) => c.source === 'CHECK_IN_SHORT')
+  const missingPieces = shortCandidates.reduce((n, c) => n + c.qty, 0)
+  const existingLd = ld?.existingLdInvoice ?? null
+  const nothingToBill = (ld?.candidates.length ?? 0) === 0
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 mb-6">
@@ -165,6 +196,14 @@ export function LdDispositionPanel({
             {sendToLdCount > 0 && (
               <span className="text-orange-300"> · {sendToLdCount} send-to-L&D ready</span>
             )}
+            {/* Gear is most of the L&D here and has no row below — say the
+                number, or the panel looks empty while three lights are gone. */}
+            {shortCandidates.length > 0 && (
+              <span className="text-orange-300">
+                {' '}· {missingPieces} piece{missingPieces === 1 ? '' : 's'} short on the check-in
+                sheet
+              </span>
+            )}
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -174,17 +213,33 @@ export function LdDispositionPanel({
           >
             {showAddForm ? 'Cancel' : '+ Damage finding'}
           </button>
-          {sendToLdCount > 0 && (
-            <button
-              onClick={generateLdInvoice}
-              disabled={busy != null}
-              className="text-xs font-semibold bg-orange-600 hover:bg-orange-500 disabled:bg-zinc-700 disabled:opacity-60 text-white px-3 py-1.5 rounded-lg"
-            >
-              {busy === 'ld-gen' ? 'Generating…' : 'Generate LD invoice'}
-            </button>
-          )}
+          {/* Always offered, even with nothing flagged: a loss the sheet
+              never caught is still a loss, and the composer takes a
+              hand-written line. Ana's case was the opposite of an empty
+              order — she had losses and no door to bill them through. */}
+          <button
+            onClick={() => setComposerOpen(true)}
+            className={`text-xs font-semibold px-3 py-1.5 rounded-lg ${
+              nothingToBill
+                ? 'border border-zinc-700 text-zinc-200 hover:border-zinc-500'
+                : 'bg-orange-600 hover:bg-orange-500 text-white'
+            }`}
+            title="Raise a separate L&D invoice — gear off the check-in sheet as well as vehicle damage. It never holds up the rental invoice."
+          >
+            Bill L&D
+          </button>
         </div>
       </div>
+
+      {/* An L&D invoice already exists: the composer refuses to raise a
+          second, so point at the one that is there rather than letting
+          somebody find that out from a 409. */}
+      {existingLd && (
+        <div className="mb-3 rounded-lg border border-orange-900/60 bg-orange-950/30 text-orange-200 text-xs px-3 py-2">
+          L&D invoice <b>{existingLd.invoiceNumber}</b> ({existingLd.status.toLowerCase()}) is
+          already on this order. Void it before raising another.
+        </div>
+      )}
 
       {err && (
         <div className="mb-3 rounded-lg border border-rose-800 bg-rose-950/50 text-rose-200 text-xs px-3 py-2">
@@ -205,13 +260,38 @@ export function LdDispositionPanel({
         />
       )}
 
+      {composerOpen && (
+        <LdInvoiceModal
+          orderId={orderId}
+          orderNumber={orderNumber}
+          onClose={() => setComposerOpen(false)}
+          onCreated={() => {
+            void refresh()
+            onChanged?.()
+          }}
+        />
+      )}
+
       {damages === null ? (
         <div className="text-xs text-zinc-500">Loading…</div>
       ) : damages.length === 0 ? (
         <div className="text-xs text-zinc-500 border border-dashed border-zinc-800 rounded-lg px-3 py-4 text-center">
-          No damage findings yet. {assignments.length === 0
-            ? <span className="text-zinc-600">— Assign vehicles to specific assets via /scheduling before capturing damage.</span>
-            : null}
+          {/* "No damage findings" is about VEHICLES only. Saying just that
+              over a sheet with three pieces missing reads as all-clear,
+              which is how the gear half stayed invisible. */}
+          No vehicle damage findings.{' '}
+          {shortCandidates.length > 0 ? (
+            <span className="text-orange-300">
+              The check-in sheet is short {missingPieces} piece
+              {missingPieces === 1 ? '' : 's'} — bill it with Bill L&D above.
+            </span>
+          ) : ld && !ld.hasCheckInReport ? (
+            <span className="text-zinc-600">
+              — and no inbound sheet has been typed in, so nothing has been counted yet.
+            </span>
+          ) : assignments.length === 0 ? (
+            <span className="text-zinc-600">— Assign vehicles to specific assets via /scheduling before capturing damage.</span>
+          ) : null}
         </div>
       ) : (
         <div className="space-y-2">

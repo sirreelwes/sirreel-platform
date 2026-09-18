@@ -31,7 +31,7 @@ import {
   type GearSettleResult, type SubmitLineInput,
 } from '@/lib/orders/checkReports'
 import { resendQuoteAfterCheckOut, type ResendOutcome } from '@/lib/orders/resendQuoteOnChange'
-import { diffMissingGear, type InboundLineFacts } from '@/lib/invoices/ldMissingGear'
+import { diffMissingGear, missingOnCheckIn, type InboundLineFacts } from '@/lib/invoices/ldMissingGear'
 import { notifyMissingGear } from '@/lib/invoices/notifyLdReported'
 
 export const dynamic = 'force-dynamic'
@@ -241,6 +241,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   // without anyone writing it up. Filing the sheet IS the button. Awaited
   // (a floated promise dies with the function) and never throws.
   let ldNotified = false
+  /** What the filed sheet says did not come back, for the screen to report
+   *  back to whoever just counted it. Ana, 2026-09-18: *"it would be ideal
+   *  if, when a check-in report was finished, it teed up an L&D invoice for
+   *  billing along with that report."* This is the yard's half of that: the
+   *  count and the confirmation that billing has it. NO PRICES — the
+   *  warehouse does not see rates, and the composer is the billing desk's
+   *  screen. The invoice itself is teed up in the billing queue's L&D lane
+   *  (src/lib/invoices/ldOutstanding.ts), which is where it gets raised. */
+  let ldShort: { lines: number; pieces: number } | null = null
   if (edge === 'IN') {
     const filed = await prisma.orderCheckReportLine.findMany({
       where: { reportId: result.reportId },
@@ -255,10 +264,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         delta: diffMissingGear(priorInbound, filed),
         reportedBy: passName,
       })
+      // The WHOLE shortfall on the sheet, not just this pass's delta — the
+      // supervisor is being told the state of the order, and a second pass
+      // that found nothing new must not read as "nothing is missing".
+      const missing = missingOnCheckIn(filed)
+      if (missing.length > 0) {
+        ldShort = {
+          lines: missing.length,
+          pieces: missing.reduce((n, m) => n + m.missing, 0),
+        }
+      }
     }
   }
 
-  return NextResponse.json({ ok: true, ...result, resend, gear, ldNotified })
+  return NextResponse.json({ ok: true, ...result, resend, gear, ldNotified, ldShort })
 }
 
 /** The agent marking "I've seen what the yard changed." */

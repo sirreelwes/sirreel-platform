@@ -48,6 +48,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
+import { ldOutstanding, type LdOutstandingRow } from '@/lib/invoices/ldOutstanding'
 
 /** How far back the queue reaches. Anything returned longer ago than this is
  *  not a daily-billing problem any more — it is an aging problem, and it has
@@ -138,6 +139,14 @@ export interface BillingQueue {
   tomorrow: BillingQueueRow[]
   /** Snoozed to a future day, shown so a snooze can't swallow an order. */
   snoozed: BillingQueueRow[]
+  /** Loss & damage still to bill — its own lane, on its own terms.
+   *
+   *  Ana, 2026-09-18: she had already sent the rental invoice from this very
+   *  screen and then had no way back to the losses. The rental rows above
+   *  drop the moment their invoice is sent; these deliberately do not, because
+   *  whether the RENTAL went out says nothing about whether the missing gear
+   *  was ever billed. See src/lib/invoices/ldOutstanding.ts. */
+  ld: LdOutstandingRow[]
   stats: {
     dueCount: number
     dueTotal: number
@@ -147,6 +156,8 @@ export interface BillingQueue {
     notBookedCount: number
     /** Due rows whose only evidence is the calendar. */
     dueBackOnlyCount: number
+    /** Orders carrying unbilled L&D, however their rental invoice stands. */
+    ldCount: number
     /** Rows dropped for being older than the lookback. Counted rather than
      *  hidden — a truncated list that gives no sign it was truncated is how
      *  the /jobs list lost 50 rows. */
@@ -191,6 +202,9 @@ const dbDateYmd = (d: Date | null): string | null => (d ? d.toISOString().slice(
 
 export async function billingQueue(): Promise<BillingQueue> {
   const today = pacificToday()
+  // The L&D lane is derived independently — it must not inherit the
+  // "no sent invoice" filter below, which is what hid it from Ana.
+  const ld = await ldOutstanding()
   const cutoffYmd = pacificToday(-BILLING_LOOKBACK_DAYS)
   const cutoff = new Date(`${cutoffYmd}T00:00:00.000Z`)
 
@@ -389,12 +403,14 @@ export async function billingQueue(): Promise<BillingQueue> {
     due,
     tomorrow,
     snoozed,
+    ld,
     stats: {
       dueCount: due.length,
       dueTotal: due.reduce((s, r) => s + r.amount, 0),
       oldestDays: due.length ? Math.max(...due.map((r) => r.overdueDays)) : 0,
       notBookedCount: due.filter((r) => r.blocked === 'NOT_BOOKED').length,
       dueBackOnlyCount: due.filter((r) => r.basis === 'DUE_BACK').length,
+      ldCount: ld.length,
       olderSuppressed,
     },
   }

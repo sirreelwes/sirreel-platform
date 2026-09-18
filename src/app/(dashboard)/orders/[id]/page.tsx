@@ -5977,7 +5977,11 @@ export default function OrderDetailPage() {
           (CLOSED retained — closed-with-open-LD is reachable per the
           non-blocking doctrine). */}
       {['RETURNED', 'LD_CHECK', 'INVOICED', 'CLOSED'].includes(order.status) && (
-        <LdDispositionPanel orderId={orderId} onChanged={() => Promise.all([fetchOrder(), fetchInvoices()])} />
+        <LdDispositionPanel
+          orderId={orderId}
+          orderNumber={order.orderNumber}
+          onChanged={() => Promise.all([fetchOrder(), fetchInvoices()])}
+        />
       )}
 
       {/* Sprint 2A — pre-rental inspections for the linked booking.

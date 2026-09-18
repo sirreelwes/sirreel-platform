@@ -61,11 +61,30 @@ export interface BillingQueueRowView {
   mark: { status: string; snoozedUntil: string | null; reason: string | null } | null
 }
 
+/**
+ * A row in the L&D lane. Deliberately NOT a BillingQueueRowView: it is not
+ * waiting on a rental invoice, has no bill day and no amount — the amount is
+ * whatever Ana prices in the composer. See src/lib/invoices/ldOutstanding.ts.
+ */
+interface LdRowView {
+  orderId: string
+  orderNumber: string
+  jobId: string | null
+  jobName: string | null
+  companyName: string | null
+  shortLines: number
+  missingPieces: number
+  damageFindings: number
+  checkedInAt: string | null
+  rentalInvoiceSent: boolean
+}
+
 interface QueuePayload {
   today: string
   due: BillingQueueRowView[]
   tomorrow: BillingQueueRowView[]
   snoozed: BillingQueueRowView[]
+  ld: LdRowView[]
   stats: {
     dueCount: number
     dueTotal: number
@@ -73,6 +92,7 @@ interface QueuePayload {
     notBookedCount: number
     dueBackOnlyCount: number
     olderSuppressed: number
+    ldCount: number
   }
 }
 
@@ -240,7 +260,89 @@ export function BillingQueuePanel() {
   }
 
   const { due, tomorrow, snoozed, stats } = data
-  const nothing = due.length === 0 && tomorrow.length === 0 && snoozed.length === 0
+  // Older payloads (a cached response mid-deploy) have no L&D lane. An
+  // undefined list must render as "no lane", never crash the whole queue.
+  const ld = data.ld ?? []
+  const nothing =
+    due.length === 0 && tomorrow.length === 0 && snoozed.length === 0 && ld.length === 0
+
+  /**
+   * An L&D row. No amount and no bill day on purpose: what a loss is worth
+   * is what Ana prices in the composer, and printing a replacement-cost
+   * total here would read like a figure somebody had already agreed to.
+   */
+  const ldRow = (r: LdRowView) => (
+    <div key={r.orderId} className="py-2.5">
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="min-w-0">
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <Link
+              href={`/orders/${r.orderId}`}
+              className="font-mono text-[12px] font-semibold text-lt-fg hover:underline"
+            >
+              {r.orderNumber}
+            </Link>
+            {r.jobId && r.jobName && (
+              <Link
+                href={`/jobs/${r.jobId}`}
+                className="text-[13px] font-semibold text-lt-fg hover:underline truncate max-w-[22rem]"
+              >
+                {r.jobName}
+              </Link>
+            )}
+            {r.companyName && (
+              <span className="text-[12px] text-lt-fg2 truncate max-w-[16rem]">
+                {r.companyName}
+              </span>
+            )}
+          </div>
+
+          <div className="text-[11px] text-lt-fg3 mt-0.5">
+            {r.checkedInAt
+              ? `Checked in ${new Date(r.checkedInAt).toLocaleDateString('en-US', {
+                  month: 'numeric',
+                  day: 'numeric',
+                })}`
+              : 'No inbound sheet — vehicle damage only'}
+          </div>
+
+          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+            {r.shortLines > 0 && (
+              <Chip
+                tone="warn"
+                title="What the inbound sheet says did not come back. Evidence, not a verdict — gear turns up on the truck the next morning."
+              >
+                {r.missingPieces} missing on {r.shortLines} line
+                {r.shortLines === 1 ? '' : 's'}
+              </Chip>
+            )}
+            {r.damageFindings > 0 && (
+              <Chip tone="warn" title="Damage findings triaged send-to-L&D and not yet on an invoice">
+                {r.damageFindings} damage finding{r.damageFindings === 1 ? '' : 's'}
+              </Chip>
+            )}
+            {/* The case that sent Ana looking: the rental is settled and
+                the losses are still sitting here. */}
+            {r.rentalInvoiceSent && (
+              <Chip tone="neutral" title="The rental invoice has already gone to the client — this is the rest of it">
+                Rental billed
+              </Chip>
+            )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={() => setLdFor({ orderId: r.orderId, orderNumber: r.orderNumber })}
+            className="px-2.5 py-1 rounded-lg border border-chip-warn-fg/30 bg-chip-warn-bg text-chip-warn-fg hover:brightness-95 text-[11px] font-semibold"
+            title="Bill loss and damage on a separate invoice — it never holds up the rental bill"
+          >
+            Bill L&amp;D
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 
   const row = (r: BillingQueueRowView, lane: 'due' | 'tomorrow' | 'snoozed') => {
     const formOpen = form?.orderId === r.orderId
@@ -571,6 +673,23 @@ export function BillingQueuePanel() {
               </div>
               <div className="divide-y divide-lt-hairline">
                 {snoozed.map((r) => row(r, 'snoozed'))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Loss & damage ────────────────────────────────────────────
+              Its own lane because it settles on its own clock. Ana,
+              2026-09-18: she sent the rental invoice from this screen and
+              the losses went with it — the rows above drop as soon as an
+              invoice is sent, and the L&D composer had no other door.
+              These rows stay until the L&D invoice exists. */}
+          {ld.length > 0 && (
+            <div className="mt-3 border-t border-lt-hairline pt-2">
+              <div className="text-[11px] font-semibold text-lt-fg2 mb-1">
+                Loss &amp; damage to bill ({ld.length})
+              </div>
+              <div className="divide-y divide-lt-hairline">
+                {ld.map((r) => ldRow(r))}
               </div>
             </div>
           )}
