@@ -3,6 +3,7 @@ import { REVIEW_MODEL } from '@/lib/ai/models'
 import { parseAiJson } from '@/lib/ai/extractJson'
 import { evaluateHolderMatch } from '@/lib/coi/holderMatch'
 import { extractPdfFormFields, formatPdfFormFieldsForReview } from '@/lib/coi/pdfFormFields'
+import { pacificYmd } from '@/lib/dates/pacificDay'
 
 /**
  * Shared AI Certificate-of-Insurance review — ONE prompt, every surface.
@@ -54,6 +55,16 @@ export interface CoiAiResponse {
     address?: string | null
   } | null
   policyExpiryDate?: string | null
+  /**
+   * The POLICY EXP date read off the General Liability and Automobile
+   * Liability ROWS specifically. An ACORD 25's rows routinely run on
+   * different dates, and a single "policyExpiryDate" invites the model to
+   * report whichever one it noticed — on Pop Up Mob's certificate that was
+   * Workers Comp (2027), three months after GL and Auto had lapsed. Reading
+   * one named row is reliable; deriving "the earliest" is not.
+   */
+  generalLiabilityExpiry?: string | null
+  autoLiabilityExpiry?: string | null
   riskLevel?: 'low' | 'medium' | 'high' | string
   notes?: string
   /** Pre-checklist reviews only: GL + auto limits confirmed. */
@@ -156,7 +167,17 @@ CRITICAL REQUIREMENTS (cannot be waived — all must pass):
 5. additionalInsured — SirReel named as Additional Insured
 6. lossPayee — SirReel named as Loss Payee
 7. coverageDates — policy period covers the rental period
-8. policyExpiry — policy not expired
+8. policyExpiry — no REQUIRED policy has expired. An ACORD 25 lists several
+   policies and they often run on DIFFERENT dates: General Liability, Automobile
+   Liability, Umbrella and Workers Comp can each expire in a different month.
+   Judge the EARLIEST expiration among the coverages our requirements depend on
+   (General Liability and, when the job takes a vehicle, Automobile Liability and
+   the hired-auto physical damage that sits with it) — NOT the latest date on the
+   page. A certificate whose GL and Auto rows lapsed last quarter is EXPIRED even
+   though its Workers Comp row runs another year. Report that same earliest
+   required-coverage date as policyExpiryDate and in policyExpiry.date, and set
+   expired:true when it is in the past. Say in the note which policy expires
+   first when the rows disagree.
 
 ALERT REQUIREMENTS (admin judgment call — an exception can be approved):
 A. primaryNonContributory — the certificate should state the insured's coverage
@@ -209,7 +230,9 @@ Return ONLY valid JSON (no markdown, no preamble):
     "phone": "(555) 555-5555" | null,
     "address": "Street, City, ST ZIP" | null
   },
-  "policyExpiryDate": "YYYY-MM-DD" | null,
+  "policyExpiryDate": "YYYY-MM-DD (earliest expiry among REQUIRED coverages)" | null,
+  "generalLiabilityExpiry": "YYYY-MM-DD — the POLICY EXP cell on the GENERAL LIABILITY row" | null,
+  "autoLiabilityExpiry": "YYYY-MM-DD — the POLICY EXP cell on the AUTOMOBILE LIABILITY row" | null,
   "certificateHolder": { "pass": true, "found": "the CERTIFICATE HOLDER box, verbatim", "note": "" },
   "generalLiability": {
     "pass": true,
@@ -303,10 +326,44 @@ export function normalizeCoiReview(raw: CoiAiResponse): CoiAiResponse {
     }
   }
 
+  const asDate = (v: unknown): string | null =>
+    typeof v === 'string' && DATE_ONLY.test(v.trim()) ? v.trim() : null
+
+  // The REQUIRED coverages are General Liability and Automobile Liability.
+  // When either row's own date is readable, the earliest of them is when our
+  // protection actually lapses — whatever longer-running row (usually Workers
+  // Comp) happens to sit further down the certificate. Only when neither row
+  // date came back do we fall back to the model's single summary date.
+  const requiredRowDates = [asDate(raw.generalLiabilityExpiry), asDate(raw.autoLiabilityExpiry)].filter(
+    (d): d is string => d !== null,
+  )
+  const summaryExpiry = asDate(raw.policyExpiryDate) || asDate(raw.policyExpiry?.date)
+  const rawExpiry = requiredRowDates.length
+    ? requiredRowDates.reduce((a, b) => (a < b ? a : b))
+    : summaryExpiry
+
+  // WHETHER A DATE HAS PASSED IS NOT THE MODEL'S CALL. It has no reliable
+  // sense of today: Pop Up Mob's certificate was read correctly — it even
+  // quoted "GL and Auto: 06/15/2025 - 06/15/2026" — and still returned
+  // pass:true three months after that lapsed, because the WC row ran to 2027
+  // and nothing compared either date to the calendar. Extraction is the
+  // model's job; the comparison is arithmetic and belongs here.
+  const lapsed = rawExpiry !== null && rawExpiry < pacificYmd()
+  if (lapsed) {
+    const prior = typeof raw.policyExpiry === 'object' && raw.policyExpiry ? raw.policyExpiry : {}
+    out.policyExpiry = {
+      ...prior,
+      pass: false,
+      date: rawExpiry,
+      expired: true,
+      note: `Required coverage expired ${rawExpiry}. ${prior.note || ''}`.trim(),
+    }
+  }
+
   const criticalVerdicts = CRITICAL_CHECK_KEYS.map((k) => itemPass(out[k]))
   const alertVerdicts = ALERT_CHECK_KEYS.map((k) => itemPass(out[k]))
   // An expired policy fails regardless of what `pass` says.
-  const expired = raw.policyExpiry?.expired === true
+  const expired = lapsed || raw.policyExpiry?.expired === true
   const graded = criticalVerdicts.some((v) => v !== undefined)
 
   if (graded) {
@@ -318,11 +375,12 @@ export function normalizeCoiReview(raw: CoiAiResponse): CoiAiResponse {
     out.riskLevel = !out.criticalPass ? 'high' : !out.alertPass ? 'medium' : 'low'
   }
 
-  const expiry =
-    (typeof raw.policyExpiryDate === 'string' && DATE_ONLY.test(raw.policyExpiryDate) && raw.policyExpiryDate) ||
-    (typeof raw.policyExpiry?.date === 'string' && DATE_ONLY.test(raw.policyExpiry.date) && raw.policyExpiry.date) ||
-    null
-  out.policyExpiryDate = expiry
+  out.policyExpiryDate = rawExpiry
+  out.generalLiabilityExpiry = asDate(raw.generalLiabilityExpiry)
+  out.autoLiabilityExpiry = asDate(raw.autoLiabilityExpiry)
+  if (lapsed && !(out.criticalIssues || []).some((i) => /policyExpiry/i.test(i))) {
+    out.criticalIssues = [...(out.criticalIssues || []), `policyExpiry: required coverage expired ${rawExpiry}`]
+  }
 
   out.namedInsured =
     typeof raw.namedInsured === 'string' && raw.namedInsured.trim() ? raw.namedInsured.trim() : null

@@ -23,6 +23,8 @@
 
 import { PDFDocument } from 'pdf-lib'
 import { extractPdfFormFields, formatPdfFormFieldsForReview } from '../../src/lib/coi/pdfFormFields'
+import { normalizeCoiReview } from '../../src/lib/coi/reviewCoi'
+import { pacificYmd } from '../../src/lib/dates/pacificDay'
 
 const failures: string[] = []
 
@@ -114,6 +116,87 @@ async function main(): Promise<void> {
 
   const junk = await extractPdfFormFields(Buffer.from('not a pdf at all', 'utf8'))
   ok(junk.length === 0, 'an unparseable file returns [] rather than throwing — the review must still run')
+
+  console.log('\nExpiry is arithmetic, not a model opinion')
+  // Pop Up Mob, 2026-09-18: GL and Auto ran 06/15/2025-06/15/2026 and the WC
+  // row ran to 02/06/2027. The model quoted both correctly and still returned
+  // pass:true three months after the liability cover lapsed.
+  // certificateHolder is re-judged by evaluateHolderMatch, so it needs a real
+  // SirReel holder or the fixture fails for the wrong reason.
+  const allPass = () => ({
+    certificateHolder: {
+      pass: true,
+      found: 'SirReel Production Vehicles, Inc.\n8500 Lankershim Blvd\nSun Valley, CA 91352',
+    },
+    ...Object.fromEntries(
+      ['generalLiability','autoLiability','autoPhysicalDamage','additionalInsured','lossPayee','coverageDates']
+        .map((k) => [k, { pass: true, found: 'x' }]),
+    ),
+  })
+
+  const lapsed = normalizeCoiReview({
+    ...allPass(),
+    policyExpiry: { pass: true, date: pacificYmd(-1), expired: false },
+    criticalIssues: [],
+  } as never)
+  ok((lapsed.policyExpiry as { pass?: boolean }).pass === false, 'a date in the past FAILS even when the model said pass')
+  ok((lapsed.policyExpiry as { expired?: boolean }).expired === true, 'and is marked expired')
+  ok(lapsed.criticalPass === false, 'criticalPass goes false, so the desk cannot read it as green')
+  ok((lapsed.criticalIssues || []).some((i) => /policyExpiry/.test(i)), 'criticalIssues names it — the list must agree with the booleans')
+  ok(lapsed.riskLevel === 'high', 'and it grades high risk')
+
+  const current = normalizeCoiReview({
+    ...allPass(),
+    policyExpiry: { pass: true, date: pacificYmd(30), expired: false },
+    primaryNonContributory: { pass: true }, waiverOfSubrogation: { pass: true }, umbrella: { pass: true },
+    entertainmentPackage: { pass: true }, workersComp: { pass: true }, cancellationNotice: { pass: true },
+    contractorCoverage: { pass: true },
+    criticalIssues: [],
+  } as never)
+  ok((current.policyExpiry as { pass?: boolean }).pass === true, 'a live policy is left alone')
+  ok(current.criticalPass === true, 'and still passes')
+
+  const today = normalizeCoiReview({
+    ...allPass(),
+    policyExpiry: { pass: true, date: pacificYmd(0), expired: false },
+    criticalIssues: [],
+  } as never)
+  ok((today.policyExpiry as { pass?: boolean }).pass === true, 'a policy expiring TODAY is still in force — no off-by-one')
+
+  console.log('\nThe earliest REQUIRED row decides, not the longest-running one')
+  // The exact Pop Up Mob shape: GL and Auto lapsed 06/15/2026, Workers Comp
+  // runs to 02/06/2027, and the model reported the WC date as the summary.
+  const mixed = normalizeCoiReview({
+    ...allPass(),
+    policyExpiryDate: '2027-02-06',
+    generalLiabilityExpiry: '2026-06-15',
+    autoLiabilityExpiry: '2026-06-15',
+    policyExpiry: { pass: true, date: '2027-02-06', expired: false },
+    criticalIssues: [],
+  } as never)
+  ok(mixed.policyExpiryDate === '2026-06-15', 'the GL/Auto row date wins over the model summary date')
+  ok((mixed.policyExpiry as { pass?: boolean }).pass === false, 'and the lapsed liability cover fails the check')
+
+  const autoLapsedOnly = normalizeCoiReview({
+    ...allPass(),
+    generalLiabilityExpiry: pacificYmd(200),
+    autoLiabilityExpiry: pacificYmd(-5),
+    criticalIssues: [],
+  } as never)
+  ok(autoLapsedOnly.policyExpiryDate === pacificYmd(-5), 'the EARLIER of the two required rows is the effective expiry')
+  ok((autoLapsedOnly.policyExpiry as { pass?: boolean }).pass === false, 'a live GL row does not rescue a lapsed auto row')
+
+  const noRows = normalizeCoiReview({
+    ...allPass(),
+    policyExpiryDate: pacificYmd(60),
+    policyExpiry: { pass: true, date: pacificYmd(60), expired: false },
+    primaryNonContributory: { pass: true }, waiverOfSubrogation: { pass: true }, umbrella: { pass: true },
+    entertainmentPackage: { pass: true }, workersComp: { pass: true }, cancellationNotice: { pass: true },
+    contractorCoverage: { pass: true },
+    criticalIssues: [],
+  } as never)
+  ok(noRows.policyExpiryDate === pacificYmd(60), 'with no row dates it falls back to the summary date')
+  ok(noRows.criticalPass === true, 'and a current certificate still passes')
 
   if (failures.length) {
     console.error(`\n${failures.length} failure(s)`)
