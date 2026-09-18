@@ -14,6 +14,14 @@
  * the DPPA. Nothing here should be presented to staff as "valid" —
  * the UI says "read OK" / "expired", never "valid".
  *
+ * AND IT CAN MISREAD. On 2026-09-16 a Class A CDL good through 07/08/2029,
+ * photographed sideways on top of a check-out sheet, came back expiring
+ * 02/08/2025 with the date of birth's digits in the licence-number field.
+ * Everything downstream therefore treats a read as a PROPOSAL: until a
+ * human has looked, an expiry in the past reads as "check date", not
+ * "expired", and staff can overrule any field
+ * (POST /api/drivers/[id]/license-details). See licenseGate.ts.
+ *
  * On the back barcode: US licences carry a PDF417 barcode encoding the
  * same fields (AAMVA standard). A real barcode DECODER (not a vision
  * model) can read it, which is useful mainly as a tamper cross-check —
@@ -30,7 +38,19 @@ const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
 const LICENSE_PROMPT = `You are reading a US driver's license for a vehicle rental company's driver file.
 
-Read ONLY what is printed on the card. Do not guess or infer missing values — use null for anything you cannot read clearly.
+Read ONLY what is printed on the card. Do not guess or infer missing values — use null for anything you cannot read clearly. A null costs someone thirty seconds of typing; a confident wrong read gets a driver with a valid license turned away at the gate.
+
+How these photos arrive: taken on a phone, often ROTATED 90 or 180 degrees, at an angle, laid on top of other paperwork, with glare across the laminate. Work out the card's orientation first and read it the right way up. Read every value from its printed LABEL, never from where it sits on the card.
+
+Labels to go by:
+- DL (or DLN / LIC NO) — the license number. Not any other number on the card: US licenses also carry an audit/document number, and some states print the date of birth again as a bare 8-digit string under the photo. If the only candidate you can read is the date of birth's digits, the license number is not legible: return null.
+- EXP — expiry. ISS (or the date beside a small "issued") — issue date. DOB — date of birth. Three dates that look alike; confirm each against its own label.
+- CLASS, END (endorsements), RSTR (restrictions).
+
+Cross-checks before you answer — if one fails, read that field again and return null if it is still not legible:
+- Expiry must be AFTER the issue date. An expiry before the issue date means you have misread a digit or crossed two fields.
+- Most US licenses expire on the holder's birthday, so the expiry usually shares its month and day with the date of birth. If yours does not, look again.
+- A license someone is presenting is usually current. An expiry in the past is possible but uncommon — re-read it before reporting one.
 
 Return ONLY valid JSON, no markdown:
 {
@@ -49,7 +69,7 @@ Return ONLY valid JSON, no markdown:
   "restrictions": "",
   "isCommercial": true/false,
   "isRealId": true/false,
-  "notes": "anything that looks off — damage, glare, obscured fields, signs of tampering"
+  "notes": "anything that looks off — damage, glare, obscured fields, rotation, signs of tampering, any cross-check above that you could not satisfy"
 }`
 
 export interface LicenseRead {

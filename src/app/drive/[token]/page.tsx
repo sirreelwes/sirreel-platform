@@ -54,7 +54,7 @@ interface DriveData {
   access: {
     gateCode: string | null
     lockboxCode: string | null
-    locked: { reason: 'incomplete' | 'expired'; missing: string[] } | null
+    locked: { reason: 'incomplete' | 'expired' | 'license-unclear'; missing: string[] } | null
     lockboxApplies: boolean
   }
   loadList: Array<{ id: string; orderNumber: string; description: string; quantity: number }>
@@ -342,12 +342,18 @@ export default function DriverJobPage({ params }: { params: { token: string } })
               <KeyRound size={22} aria-hidden className="mt-0.5 flex-shrink-0 text-amber-400" />
               <div>
                 <p className="text-[15px] font-semibold text-amber-100">
-                  {data.access.locked.reason === 'expired' ? 'We can’t release the codes on an expired license' : 'Gate and lockbox codes unlock once we have your details'}
+                  {data.access.locked.reason === 'expired'
+                    ? 'We can’t release the codes on an expired license'
+                    : data.access.locked.reason === 'license-unclear'
+                      ? 'We need to read your license one more time'
+                      : 'Gate and lockbox codes unlock once we have your details'}
                 </p>
                 <p className="mt-1 text-[14px] leading-relaxed text-zinc-200">
                   {data.access.locked.reason === 'expired'
                     ? 'The license on file has expired. Please call the number below before heading to the yard.'
-                    : `Still needed above: ${data.access.locked.missing.join(', ')}. The gate code${data.access.lockboxApplies ? ' and the lockbox code for the keys' : ''} will appear here the moment that’s done.`}
+                    : data.access.locked.reason === 'license-unclear'
+                      ? 'The expiry date on the photo we have didn’t come through clearly, so the codes are held. Give us a call on the number below — it takes a minute to clear, and you can also re-shoot the front above in better light.'
+                      : `Still needed above: ${data.access.locked.missing.join(', ')}. The gate code${data.access.lockboxApplies ? ' and the lockbox code for the keys' : ''} will appear here the moment that’s done.`}
                 </p>
               </div>
             </div>

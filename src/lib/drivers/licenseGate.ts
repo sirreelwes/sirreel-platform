@@ -29,6 +29,13 @@ export interface LicenseGateResult {
   code: LicenseGateCode
   /** Written for a rep at the counter, not for a log file. */
   message: string
+  /**
+   * EXPIRED on a date nobody has confirmed. The block still stands — a
+   * genuinely expired card must not walk out on a maybe — but the SCREEN
+   * must not call it expired, and the way out is fixing the date rather
+   * than chasing the driver for a licence they already hold.
+   */
+  unconfirmedDate?: boolean
 }
 
 /**
@@ -64,6 +71,22 @@ export function evaluateLicenseGate(
     }
   }
   if (expiredNow(driver, now)) {
+    // Where the expiry came from decides the WORDING, never the block.
+    // Until a human has looked at the images, the date is one read of a
+    // phone photo — and a card shot at an angle, on top of paperwork,
+    // gets misread (2026-09-16: a CDL good to 2029 read as Feb 2025 and
+    // the driver was refused). Staff sign-off is what turns the read
+    // into a fact.
+    if (!driver.licenseVerified) {
+      return {
+        ok: false,
+        code: 'EXPIRED',
+        unconfirmedDate: true,
+        message:
+          'The date we read off this license has already passed — but nobody has checked it yet. ' +
+          'Open the images: if the printed expiry is different, fix the date on the driver, then mark it checked.',
+      }
+    }
     return {
       ok: false,
       code: 'EXPIRED',
@@ -78,4 +101,41 @@ export function evaluateLicenseGate(
     }
   }
   return { ok: true, code: 'OK', message: 'License on file and checked.' }
+}
+
+/**
+ * The licence chip, one definition for every screen that shows one —
+ * the roster, the job page, the Gantt driver strip. Surfaces still own
+ * the states that OUTRANK the licence (picked up, invited, nothing
+ * uploaded); this decides only what the licence itself says.
+ *
+ * "Check date" rather than "Expired" for an unconfirmed read is the
+ * whole point: the chip must not accuse a current licence of being
+ * expired on the strength of an OCR pass nobody has looked at.
+ */
+export type LicenseBadgeTone = 'expired' | 'attention' | 'ok'
+
+export interface LicenseBadge {
+  tone: LicenseBadgeTone
+  label: string
+}
+
+export const LICENSE_BADGE_CLASS: Record<LicenseBadgeTone, string> = {
+  expired: 'bg-rose-100 text-rose-700',
+  attention: 'bg-amber-100 text-amber-700',
+  ok: 'bg-emerald-100 text-emerald-700',
+}
+
+export function licenseBadge(
+  driver: LicenseGateInput,
+  now: Date = new Date(),
+): LicenseBadge {
+  if (expiredNow(driver, now)) {
+    return driver.licenseVerified
+      ? { tone: 'expired', label: 'Expired' }
+      : { tone: 'attention', label: 'Check date' }
+  }
+  return driver.licenseVerified
+    ? { tone: 'ok', label: 'Checked' }
+    : { tone: 'attention', label: 'Needs check' }
 }

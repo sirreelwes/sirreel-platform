@@ -51,6 +51,7 @@ import { isPlaceholderJobName } from '@/lib/jobs/displayName';
 import { TextButton } from '@/components/sms/TextButton';
 import { evaluateInsuredMatch, INSURED_MATCH_LABEL, INSURED_MATCH_TONE_LIGHT } from '@/lib/coi/insuredMatch';
 import { JobDriversSection } from '@/components/jobs/JobDriversSection';
+import { licenseBadge, type LicenseBadgeTone } from '@/lib/drivers/licenseGate';
 import { SelfServeEmailButton } from '@/components/jobs/SelfServeEmailButton';
 import { MarkBookedButton } from '@/components/jobs/MarkBookedButton';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
@@ -1429,22 +1430,30 @@ export default function JobDetailPage() {
 const driverName = (d: any) =>
   `${d?.driver?.firstName ?? ''} ${d?.driver?.lastName ?? ''}`.trim() || d?.emailSentTo || 'Driver'
 
-/** What a rep needs: can this vehicle actually leave with this person. */
+/**
+ * What a rep needs: can this vehicle actually leave with this person.
+ * The licence half comes from licenseGate.ts — "check date" rather than
+ * "expired" until a human has confirmed the date the model read.
+ */
 const driverStateLabel = (d: any): string => {
   const dr = d?.driver
   if (!dr) return 'unknown'
-  if (dr.licenseExpired) return 'licence expired'
-  if (dr.licenseVerified) return 'licence checked'
-  if (dr.licenseFrontUrl || dr.licenseBackUrl) return 'licence needs check'
-  return d?.firstViewedAt ? 'opened, no licence' : 'invited'
+  if (!dr.licenseFrontUrl && !dr.licenseBackUrl) {
+    return d?.firstViewedAt ? 'opened, no licence' : 'invited'
+  }
+  return `licence ${licenseBadge(dr).label.toLowerCase()}`
+}
+
+const DRIVER_TONE: Record<LicenseBadgeTone, string> = {
+  expired: 'text-rose-700',
+  attention: 'text-amber-700',
+  ok: 'text-emerald-700',
 }
 
 const driverTone = (d: any): string => {
   const dr = d?.driver
-  if (dr?.licenseExpired) return 'text-rose-700'
-  if (dr?.licenseVerified) return 'text-emerald-700'
-  if (dr?.licenseFrontUrl || dr?.licenseBackUrl) return 'text-amber-700'
-  return 'text-zinc-600'
+  if (!dr?.licenseFrontUrl && !dr?.licenseBackUrl) return 'text-zinc-600'
+  return DRIVER_TONE[licenseBadge(dr).tone]
 }
 
   const reservedAssets = buildReservedAssets(job.bookings as any)

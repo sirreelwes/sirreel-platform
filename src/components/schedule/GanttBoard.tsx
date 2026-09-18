@@ -18,6 +18,7 @@ import { pacificYmd } from '@/lib/fleet/checkWindow';
 import { holdRankLabel, MAX_HOLD_RANK } from '@/lib/scheduling/holdRanks';
 import { canCreateOrders, getPermissions } from '@/lib/permissions';
 import { readViewAsCookie } from '@/lib/auth/viewAs';
+import { licenseBadge, LICENSE_BADGE_CLASS } from '@/lib/drivers/licenseGate';
 import {
   barColor,
   blindLabel,
@@ -3534,15 +3535,12 @@ function NameDriverBox({ assignmentId }: { assignmentId: string }) {
               <span className="min-w-0 truncate text-gray-800">
                 {d.name}{d.email ? ` · ${d.email}` : ''}
               </span>
+              {/* Licence verdict comes from licenseGate.ts so this strip,
+                  the job page and the roster can never disagree. */}
               <span className={`flex-shrink-0 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
-                d.licenseExpired ? 'bg-rose-100 text-rose-700'
-                  : d.licenseVerified ? 'bg-emerald-100 text-emerald-700'
-                  : d.hasLicense ? 'bg-amber-100 text-amber-700'
-                  : 'bg-gray-200 text-gray-600'
+                d.hasLicense ? LICENSE_BADGE_CLASS[licenseBadge(d).tone] : 'bg-gray-200 text-gray-600'
               }`}>
-                {d.licenseExpired ? 'Expired'
-                  : d.licenseVerified ? 'Checked'
-                  : d.hasLicense ? 'Needs check'
+                {d.hasLicense ? licenseBadge(d).label
                   : d.firstViewedAt ? 'Opened link' : 'Invited'}
               </span>
             </div>

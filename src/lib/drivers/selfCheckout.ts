@@ -32,7 +32,7 @@
 
 import { list } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
-import { evaluateLicenseGate } from '@/lib/drivers/licenseGate'
+import { evaluateLicenseGate, type LicenseGateResult } from '@/lib/drivers/licenseGate'
 import { positionById, DAMAGE_POSITION, normalizePosition, type PhotoPosition } from '@/lib/fleet/photoPositions'
 import { VALID_FUEL, FUEL_LEVEL_ERROR } from '@/lib/fleet/fuelLevels'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
@@ -168,7 +168,7 @@ export function selfCheckoutState(input: {
     optional: duty.optional,
     mileageRequired: duty.mileageRequired,
     walkaroundOnFile: duty.because === 'walkaround-on-file',
-    licenseBlocker: gate.code === 'NO_LICENSE' || gate.code === 'EXPIRED' ? driverFacingLicenseMessage(gate.code) : null,
+    licenseBlocker: gate.code === 'NO_LICENSE' || gate.code === 'EXPIRED' ? driverFacingLicenseMessage(gate) : null,
     licenseUnchecked: gate.code === 'NOT_CHECKED',
     done: input.done,
   }
@@ -183,10 +183,20 @@ export function selfCheckoutState(input: {
   return { ...base, enabled: true, reason: null }
 }
 
-function driverFacingLicenseMessage(code: 'NO_LICENSE' | 'EXPIRED'): string {
-  return code === 'EXPIRED'
-    ? 'The license we have for you has expired. We can’t release the vehicle on it — please call the number below.'
-    : 'Upload both sides of your driver’s license above before checking the vehicle out.'
+/**
+ * Never tell a driver their licence is expired on an unchecked read. The
+ * photo they took is read by a model, and a card shot at an angle gets
+ * misread — telling someone holding a current CDL that it expired last
+ * year is both wrong and the kind of thing they repeat to the producer.
+ * The pickup is still blocked; the ask is a phone call, not a new card.
+ */
+function driverFacingLicenseMessage(gate: LicenseGateResult): string {
+  if (gate.code !== 'EXPIRED') {
+    return 'Upload both sides of your driver’s license above before checking the vehicle out.'
+  }
+  return gate.unconfirmedDate
+    ? 'We couldn’t confirm the expiry date on the license photo we have — please call the number below and we’ll clear it in a minute.'
+    : 'The license we have for you has expired. We can’t release the vehicle on it — please call the number below.'
 }
 
 export class SelfCheckoutError extends Error {
@@ -266,7 +276,7 @@ export async function completeSelfCheckout(input: CompleteSelfCheckoutInput): Pr
 
   const gate = evaluateLicenseGate(da.driver)
   if (gate.code === 'NO_LICENSE' || gate.code === 'EXPIRED') {
-    throw new SelfCheckoutError(driverFacingLicenseMessage(gate.code), 409, { license: gate.code })
+    throw new SelfCheckoutError(driverFacingLicenseMessage(gate), 409, { license: gate.code })
   }
 
   if (input.fuelLevel && !VALID_FUEL.has(input.fuelLevel)) {

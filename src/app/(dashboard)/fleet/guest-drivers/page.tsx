@@ -5,16 +5,23 @@
  * stub with the real thing: who has driven, what licence is on file, and
  * whether a person has actually looked at it.
  *
- * The three states that matter to a rep at the counter, in order of how
- * loudly they read: EXPIRED (the card's printed date has passed), NO
- * LICENCE (nothing on file), and ON FILE but not yet checked by a human.
- * "Verified" here means a staff member opened the images and accepted
- * them — never that a DMV confirmed anything. See readLicense.ts.
+ * The states that matter to a rep at the counter, in order of how loudly
+ * they read: EXPIRED (a date a person has looked at, and it has passed),
+ * CHECK DATE (the extraction read a date in the past but nobody has
+ * confirmed it — a card shot sideways gets misread), NO LICENCE (nothing
+ * on file), and ON FILE but not yet checked by a human. "Verified" here
+ * means a staff member opened the images and accepted them — never that a
+ * DMV confirmed anything. See readLicense.ts.
+ *
+ * Fix details is the way out of a bad read: staff reading the card can
+ * overrule the model, which is the only thing that can clear a current
+ * licence the extraction called expired.
  */
 
 import { useCallback, useEffect, useState } from 'react'
 import { AlertTriangle } from 'lucide-react';
 import { UserPlus } from 'lucide-react'
+import { licenseBadge, LICENSE_BADGE_CLASS } from '@/lib/drivers/licenseGate'
 
 interface DriverRow {
   id: string
@@ -190,7 +197,7 @@ export default function GuestDriversPage() {
                     )}
                   </td>
                   <td className="px-4 py-3 align-top">
-                    <LicenseCell d={d} />
+                    <LicenseCell d={d} onSaved={load} />
                   </td>
                   <td className="px-4 py-3 align-top">
                     {d.hasFront || d.hasBack ? (
@@ -246,24 +253,105 @@ export default function GuestDriversPage() {
   )
 }
 
-function LicenseCell({ d }: { d: DriverRow }) {
+function LicenseCell({ d, onSaved }: { d: DriverRow; onSaved: () => Promise<void> | void }) {
+  const [editing, setEditing] = useState(false)
   if (!d.hasFront && !d.hasBack) {
     return <span className="rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-bold text-gray-500">No license</span>
   }
-  const expired = d.licenseExpired === true
+  const badge = licenseBadge(d)
+  const misread = badge.label === 'Check date'
   return (
     <div>
-      <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${
-        expired ? 'bg-rose-100 text-rose-700'
-          : d.licenseVerified ? 'bg-emerald-100 text-emerald-700'
-          : 'bg-amber-100 text-amber-700'
-      }`}>
-        {expired ? 'Expired' : d.licenseVerified ? 'Checked' : 'Needs check'}
+      <span className={`rounded-full px-2 py-0.5 text-[11px] font-bold ${LICENSE_BADGE_CLASS[badge.tone]}`}>
+        {badge.label}
       </span>
       <div className="mt-1 text-[12px] text-gray-600">
         {d.licenseState || '—'}{d.licenseClass ? ` · Class ${d.licenseClass}` : ''}
         {d.licenseExpiry && <> · exp {fmtDate(d.licenseExpiry)}</>}
       </div>
+      {misread && !editing && (
+        <p className="mt-1 max-w-[240px] text-[11px] leading-snug text-gray-500">
+          Read off the photo, not confirmed. Open the front and compare — a card
+          shot at an angle gets misread.
+        </p>
+      )}
+      {editing ? (
+        <LicenseDetailsForm d={d} onDone={async (changed) => { setEditing(false); if (changed) await onSaved() }} />
+      ) : (
+        <button onClick={() => setEditing(true)}
+          className={`mt-1 text-[11px] font-semibold underline-offset-2 hover:underline ${
+            misread ? 'text-rose-700' : 'text-gray-500'
+          }`}>
+          Fix details
+        </button>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Staff overrule the extraction. Only the fields printed on the card —
+ * this is transcription, not sign-off, so it deliberately does not touch
+ * licenseVerified: whoever fixes the date still has to say the images
+ * are good.
+ */
+function LicenseDetailsForm({ d, onDone }: { d: DriverRow; onDone: (changed: boolean) => void }) {
+  const [state, setState] = useState(d.licenseState ?? '')
+  const [cls, setCls] = useState(d.licenseClass ?? '')
+  // <input type="date"> speaks YYYY-MM-DD; the stored value is UTC midnight.
+  const [expiry, setExpiry] = useState(d.licenseExpiry ? d.licenseExpiry.slice(0, 10) : '')
+  const [number, setNumber] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function save() {
+    setSaving(true); setErr(null)
+    try {
+      const res = await fetch(`/api/drivers/${d.id}/license-details`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          state, licenseClass: cls,
+          expiry: expiry || null,
+          ...(number.trim() ? { licenseNumber: number.trim() } : {}),
+        }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || 'save failed')
+      onDone(true)
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'Could not save that.')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <div className="mt-2 w-[250px] rounded-xl border border-gray-200 bg-gray-50 p-2.5">
+      <div className="flex gap-1.5">
+        <input value={state} onChange={(e) => setState(e.target.value)} placeholder="CA" maxLength={2}
+          aria-label="License state"
+          className="w-14 rounded-lg border border-gray-300 px-2 py-1 text-[12px] uppercase" />
+        <input value={cls} onChange={(e) => setCls(e.target.value)} placeholder="Class" maxLength={3}
+          aria-label="License class"
+          className="w-16 rounded-lg border border-gray-300 px-2 py-1 text-[12px] uppercase" />
+        <input value={expiry} onChange={(e) => setExpiry(e.target.value)} type="date"
+          aria-label="Expiry printed on the card"
+          className="min-w-0 flex-1 rounded-lg border border-gray-300 px-2 py-1 text-[12px]" />
+      </div>
+      <input value={number} onChange={(e) => setNumber(e.target.value)}
+        placeholder="License # (leave blank to keep)" aria-label="License number"
+        className="mt-1.5 w-full rounded-lg border border-gray-300 px-2 py-1 text-[12px] uppercase" />
+      {err && <div className="mt-1.5 text-[11px] text-rose-700">{err}</div>}
+      <div className="mt-2 flex gap-1.5">
+        <button onClick={save} disabled={saving}
+          className="rounded-lg bg-gray-900 px-2.5 py-1 text-[12px] font-semibold text-white disabled:opacity-40">
+          {saving ? 'Saving…' : 'Save'}
+        </button>
+        <button onClick={() => onDone(false)} className="rounded-lg px-2.5 py-1 text-[12px] text-gray-600 hover:bg-gray-100">
+          Cancel
+        </button>
+      </div>
+      <p className="mt-1.5 text-[10px] leading-snug text-gray-500">
+        What the card says. Saving this doesn&rsquo;t mark it checked.
+      </p>
     </div>
   )
 }

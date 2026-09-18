@@ -191,9 +191,18 @@ export async function GET(_req: NextRequest, { params }: { params: Promise<{ tok
   if (!da.driver.lastName) missing.push('your full name')
   if (!da.driver.phone) missing.push('a mobile number')
   if (!licenceOnFile) missing.push('the front of your license')
+  // An expiry nobody has checked locks the codes exactly the same, but
+  // says so differently — see licenseGate.ts: an unconfirmed read is not
+  // an expired licence, it is a photo we could not read with confidence.
   const codesLocked =
     needsDetails || !licenceOnFile || gate.code === 'EXPIRED'
-      ? { reason: gate.code === 'EXPIRED' ? 'expired' as const : 'incomplete' as const, missing }
+      ? {
+          reason:
+            gate.code === 'EXPIRED'
+              ? (gate.unconfirmedDate ? 'license-unclear' as const : 'expired' as const)
+              : 'incomplete' as const,
+          missing,
+        }
       : null
 
   // Real gate code for a named driver. Read late so the cheap failure

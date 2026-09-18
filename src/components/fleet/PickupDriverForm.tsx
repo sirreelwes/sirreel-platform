@@ -72,6 +72,7 @@ export function PickupDriverForm({ checkoutId, inspectionId = null, assignedDriv
   const [last, setLast] = useState('')
   const [addEmail, setAddEmail] = useState('')
   const [addPhone, setAddPhone] = useState('')
+  const [fixExpiry, setFixExpiry] = useState('')
 
   const load = useCallback(async () => {
     const res = await fetch('/api/drivers/list')
@@ -177,6 +178,26 @@ export function PickupDriverForm({ checkoutId, inspectionId = null, assignedDriv
     finally { setBusy(null) }
   }
 
+  /**
+   * A date the extraction got wrong is fixed HERE, by the person holding
+   * the card — chasing a driver for a "current license" they already hold
+   * is the wrong remedy, and the one this screen used to offer.
+   */
+  async function saveExpiry() {
+    if (!selected || !fixExpiry) return
+    setBusy('fix'); setError(null)
+    try {
+      const res = await fetch(`/api/drivers/${selected.id}/license-details`, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ expiry: fixExpiry }),
+      })
+      if (!res.ok) throw new Error((await res.json().catch(() => null))?.error || 'Could not save that date')
+      setFixExpiry('')
+      await load()
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not save that date') }
+    finally { setBusy(null) }
+  }
+
   async function markChecked() {
     if (!selected) return
     setBusy('check'); setError(null)
@@ -279,7 +300,7 @@ export function PickupDriverForm({ checkoutId, inspectionId = null, assignedDriv
                 <button
                   key={d.id}
                   type="button"
-                  onClick={() => { setSelectedId(d.id); setLink(null); setOverrideOpen(false) }}
+                  onClick={() => { setSelectedId(d.id); setLink(null); setOverrideOpen(false); setFixExpiry('') }}
                   className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2.5 text-left transition-colors ${
                     active ? 'bg-amber-600/20 ring-1 ring-amber-500' : 'hover:bg-zinc-700/60'
                   }`}
@@ -295,10 +316,12 @@ export function PickupDriverForm({ checkoutId, inspectionId = null, assignedDriv
                   </span>
                   <span className={`flex-shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${
                     g.ok ? 'bg-emerald-500/15 text-emerald-300'
-                      : g.code === 'EXPIRED' ? 'bg-rose-500/15 text-rose-300'
+                      : g.code === 'EXPIRED' && !g.unconfirmedDate ? 'bg-rose-500/15 text-rose-300'
                       : 'bg-amber-500/15 text-amber-300'
                   }`}>
-                    {g.ok ? 'OK' : g.code === 'EXPIRED' ? 'Expired' : g.code === 'NO_LICENSE' ? 'No licence' : 'Unchecked'}
+                    {g.ok ? 'OK'
+                      : g.code === 'EXPIRED' ? (g.unconfirmedDate ? 'Check date' : 'Expired')
+                      : g.code === 'NO_LICENSE' ? 'No licence' : 'Unchecked'}
                   </span>
                 </button>
               )
@@ -463,7 +486,38 @@ export function PickupDriverForm({ checkoutId, inspectionId = null, assignedDriv
                   </button>
                 </div>
               )}
-              {gate.code === 'EXPIRED' && (
+              {/* An expiry nobody has checked is a READ, not a fact. The card
+                  is in the rep's hand — the fix is to type what it says, not
+                  to send the driver away for a license they already hold. */}
+              {gate.code === 'EXPIRED' && gate.unconfirmedDate && (
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-2">
+                    <a href={`/api/drivers/${selected.id}/license/front`} target="_blank" rel="noopener noreferrer"
+                      className="rounded-lg border border-zinc-600 px-3 py-2 text-xs font-semibold text-zinc-200">View front ↗</a>
+                    {selected.hasBack && (
+                      <a href={`/api/drivers/${selected.id}/license/back`} target="_blank" rel="noopener noreferrer"
+                        className="rounded-lg border border-zinc-600 px-3 py-2 text-xs font-semibold text-zinc-200">View back ↗</a>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-zinc-700 bg-zinc-900 p-3">
+                    <p className="text-xs text-zinc-400">Expiry printed on the card:</p>
+                    <div className="mt-1.5 flex flex-wrap gap-2">
+                      <input type="date" value={fixExpiry} onChange={(e) => setFixExpiry(e.target.value)}
+                        aria-label="Expiry printed on the card"
+                        className="min-w-0 flex-1 rounded-lg border border-zinc-600 bg-zinc-950 px-3 py-2 text-sm text-white" />
+                      <button type="button" onClick={() => void saveExpiry()} disabled={!fixExpiry || busy === 'fix'}
+                        className="rounded-lg bg-amber-600 px-3 py-2 text-xs font-semibold text-white hover:bg-amber-500 disabled:opacity-40">
+                        {busy === 'fix' ? 'Saving…' : 'Save date'}
+                      </button>
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => void sendLink()} disabled={busy === 'link'}
+                    className="w-full rounded-lg border border-zinc-600 px-4 py-2 text-xs font-semibold text-zinc-300 disabled:opacity-40">
+                    {busy === 'link' ? 'Creating…' : 'Or get a link for a clearer photo'}
+                  </button>
+                </div>
+              )}
+              {gate.code === 'EXPIRED' && !gate.unconfirmedDate && (
                 <button type="button" onClick={() => void sendLink()} disabled={busy === 'link'}
                   className="w-full rounded-lg border border-zinc-600 px-4 py-2 text-xs font-semibold text-zinc-300 disabled:opacity-40">
                   {busy === 'link' ? 'Creating…' : 'Not here yet? Get a link for a current license'}

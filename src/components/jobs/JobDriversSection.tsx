@@ -25,6 +25,7 @@
  */
 
 import { useCallback, useEffect, useState } from 'react'
+import { licenseBadge, LICENSE_BADGE_CLASS } from '@/lib/drivers/licenseGate'
 
 interface DriverRow {
   id: string
@@ -423,18 +424,18 @@ export function JobDriversSection({
                   const current = d.status === 'PICKED_UP' && !v.unitReturned
                     && (v.currentDriverId ? dr.id === v.currentDriverId : pickedUp[pickedUp.length - 1]?.id === d.id)
                   const next = handoffs ? pickedUp[pickedUp.findIndex((x) => x.id === d.id) + 1] ?? null : null
+                  // One licence verdict for every screen — licenseGate.ts.
+                  // "Check date" (not "Expired") until a human has looked:
+                  // the date is an OCR read of a phone photo.
+                  const lic = licenseBadge(dr)
                   const tone = d.status === 'PICKED_UP' ? (handoffs && !current ? 'bg-zinc-100 text-zinc-600' : 'bg-violet-100 text-violet-700')
-                    : dr.licenseExpired ? 'bg-rose-100 text-rose-700'
-                    : dr.licenseVerified ? 'bg-emerald-100 text-emerald-700'
-                    : hasImages ? 'bg-amber-100 text-amber-700'
+                    : hasImages ? LICENSE_BADGE_CLASS[lic.tone]
                     : 'bg-zinc-100 text-zinc-700'
                   // PICKED_UP outranks every licence verdict: the truck is
                   // gone, and "Checked" reads like it's still in the yard.
                   const label = d.status === 'PICKED_UP'
                     ? (handoffs ? (current ? 'Appears to have it' : v.unitReturned ? 'Drove it' : 'Handed off') : 'Picked up')
-                    : dr.licenseExpired ? 'Licence expired'
-                    : dr.licenseVerified ? 'Checked'
-                    : hasImages ? 'Needs check'
+                    : hasImages ? (lic.label === 'Expired' ? 'Licence expired' : lic.label)
                     : d.firstViewedAt ? 'Opened, no licence' : 'Invited'
                   return (
                     <div key={d.id} className="flex items-center justify-between gap-2">
