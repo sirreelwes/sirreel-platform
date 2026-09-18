@@ -18,6 +18,7 @@
 import { useState } from 'react'
 import { Check, Loader2, Plus, UserPlus, X } from 'lucide-react'
 import { PORTAL } from '@/lib/brand/portalTokens'
+import { companyPortalRoleLabel } from '@/lib/portal/companyPortalRoles'
 
 export interface PortalPerson {
   accessId: string
@@ -29,13 +30,6 @@ export interface PortalPerson {
   addedByName: string | null
   invitedAt: string | null
   lastOpenedAt: string | null
-}
-
-const ROLE_LABEL: Record<string, string> = {
-  EXECUTIVE: 'Executive',
-  HEAD_OF_PRODUCTION: 'Head of Production',
-  FINANCE: 'Finance',
-  OTHER: 'Team',
 }
 
 interface Draft {
@@ -215,7 +209,7 @@ export function PeopleWithAccess({
               <div className="text-xs text-zinc-500 mt-0.5 truncate">
                 {p.email}
                 {' · '}
-                {p.title || ROLE_LABEL[p.role] || p.role}
+                {p.title || companyPortalRoleLabel(p.role)}
               </div>
             </div>
             <div className="text-[11px] text-zinc-400 text-right shrink-0">

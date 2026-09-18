@@ -17,13 +17,14 @@ import { getServerSession } from 'next-auth'
 import type { CompanyPortalRole } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
+import { COMPANY_PORTAL_ROLE_VALUES } from '@/lib/portal/companyPortalRoles'
 import { requireCompanyTermsEditor } from '@/lib/portal/companyTermsEditors'
 import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
 import { composeCompanyPortalInvite } from '@/lib/portal/composeCompanyInvite'
 
 export const dynamic = 'force-dynamic'
 
-const ROLES: CompanyPortalRole[] = ['EXECUTIVE', 'HEAD_OF_PRODUCTION', 'FINANCE', 'OTHER']
+const ROLES: readonly CompanyPortalRole[] = COMPANY_PORTAL_ROLE_VALUES
 
 function portalBase(req: NextRequest): string {
   const fromEnv = process.env.NEXT_PUBLIC_APP_URL || process.env.PORTAL_BASE_URL

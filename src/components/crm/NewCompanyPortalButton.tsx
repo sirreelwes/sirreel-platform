@@ -14,13 +14,10 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Loader2, Plus, Trash2 } from 'lucide-react'
 import { CompanyPicker } from '@/components/orders/CompanyPicker'
+import { COMPANY_PORTAL_ROLE_OPTIONS } from '@/lib/portal/companyPortalRoles'
 
-const ROLES: { value: string; label: string }[] = [
-  { value: 'HEAD_OF_PRODUCTION', label: 'Head of Production' },
-  { value: 'EXECUTIVE', label: 'Executive' },
-  { value: 'FINANCE', label: 'Finance' },
-  { value: 'OTHER', label: 'Other' },
-]
+/** The one list — see src/lib/portal/companyPortalRoles.ts. */
+const ROLES = COMPANY_PORTAL_ROLE_OPTIONS
 
 export interface DealSource {
   companyId: string

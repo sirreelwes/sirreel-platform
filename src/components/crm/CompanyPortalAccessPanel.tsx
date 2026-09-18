@@ -22,13 +22,10 @@ import { useCallback, useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Check, Eye, FileSignature, Globe, ImageIcon, Loader2, Mail, Plus, Trash2, Upload, X } from 'lucide-react'
 import { CompanyInviteReviewModal } from '@/components/crm/CompanyInviteReviewModal'
+import { COMPANY_PORTAL_ROLE_OPTIONS } from '@/lib/portal/companyPortalRoles'
 
-const ROLES: { value: string; label: string }[] = [
-  { value: 'EXECUTIVE', label: 'Executive' },
-  { value: 'HEAD_OF_PRODUCTION', label: 'Head of Production' },
-  { value: 'FINANCE', label: 'Finance' },
-  { value: 'OTHER', label: 'Other' },
-]
+/** The one list — see src/lib/portal/companyPortalRoles.ts. */
+const ROLES = COMPANY_PORTAL_ROLE_OPTIONS
 
 interface AccessRow {
   id: string
@@ -255,7 +252,7 @@ export function CompanyPortalAccessPanel({
         <div>
           <h2 className="text-base font-semibold text-lt-fg">Account portal access</h2>
           <p className="text-xs text-lt-fg2 mt-0.5 max-w-[62ch] leading-relaxed">
-            Executives and heads of production who can see the whole {companyName} account — every
+            Executive producers and heads of production who can see the whole {companyName} account — every
             show, the invoices, the agreements and the standing discounts. They sign in with their
             own email; this only decides what they may see.
           </p>

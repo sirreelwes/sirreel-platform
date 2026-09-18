@@ -20,13 +20,10 @@
 import type { CompanyPortalRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { normalizeEmail, resolvePersonByEmail } from '@/lib/people/email'
+import { COMPANY_PORTAL_ROLE_VALUES } from '@/lib/portal/companyPortalRoles'
 
-export const COMPANY_PORTAL_ROLES: CompanyPortalRole[] = [
-  'EXECUTIVE',
-  'HEAD_OF_PRODUCTION',
-  'FINANCE',
-  'OTHER',
-]
+/** Re-exported from the registry so existing importers keep working. */
+export const COMPANY_PORTAL_ROLES: CompanyPortalRole[] = [...COMPANY_PORTAL_ROLE_VALUES]
 
 export interface GrantInput {
   email: string

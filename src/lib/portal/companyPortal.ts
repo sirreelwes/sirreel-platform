@@ -31,6 +31,7 @@ import { cookies } from 'next/headers'
 import type { NextRequest } from 'next/server'
 import type { CompanyPortalRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
+import { COMPANY_PORTAL_ROLE_SPECS } from '@/lib/portal/companyPortalRoles'
 import {
   PERSON_SESSION_COOKIE,
   verifyPersonSessionCookieValue,
@@ -188,9 +189,11 @@ export async function getCompanyPortalSessionFromRequest(
   })
 }
 
-export const COMPANY_PORTAL_ROLE_LABEL: Record<CompanyPortalRole, string> = {
-  EXECUTIVE: 'Executive',
-  HEAD_OF_PRODUCTION: 'Head of Production',
-  FINANCE: 'Finance',
-  OTHER: 'Team',
-}
+/**
+ * Client-facing titles, built from the one registry
+ * (src/lib/portal/companyPortalRoles.ts). Kept as a Record because the
+ * callers index it directly; the shape is unchanged.
+ */
+export const COMPANY_PORTAL_ROLE_LABEL = Object.fromEntries(
+  COMPANY_PORTAL_ROLE_SPECS.map((r) => [r.value, r.label]),
+) as Record<CompanyPortalRole, string>

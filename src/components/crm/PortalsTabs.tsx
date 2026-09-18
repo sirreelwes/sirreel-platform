@@ -35,7 +35,7 @@ const PLACEHOLDER: Record<PortalKind, string> = {
 }
 
 const TABS: { key: PortalKind; label: string; icon: typeof Users; hint: string }[] = [
-  { key: 'company', label: 'Production Companies', icon: Building2, hint: 'Executives who see the whole account' },
+  { key: 'company', label: 'Production Companies', icon: Building2, hint: 'Executive producers who see the whole account' },
   { key: 'job', label: 'Jobs', icon: Clapperboard, hint: 'What each show’s team sees, and who' },
   { key: 'client', label: 'Clients', icon: Users, hint: 'People who have signed in' },
   { key: 'partner', label: 'Partners', icon: Handshake, hint: 'Serve our clients alongside us' },
