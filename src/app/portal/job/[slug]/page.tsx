@@ -172,6 +172,8 @@ interface PortalData {
     quotePdfGeneratedAt: string | null;
     dotSheetUrl: string | null;
     dotSheetGeneratedAt: string | null;
+    dotSheetNote: string | null;
+    dotSheetStatus: string;
     agreement: {
       status: string;
       documentType: string;
@@ -1986,14 +1988,17 @@ export default function JobPortalPage() {
               >
                 <PortalPayPanel onStatus={setInvoiceRowState} />
               </QuietRow>
+              {/* The wording for "not yet" comes from the server now
+                  (clientWaitingNote): "once your trucks are picked" is only
+                  true before anything is assigned. With trucks assigned and
+                  the record still short a VIN or a BIT, the sheet is withheld
+                  and the honest line is that it is being prepared — the old
+                  copy told a client to wait for something that had already
+                  happened. */}
               <QuietRow
                 label="DOT information"
-                status={data.paperwork.dotSheetUrl ? 'Available' : 'When vehicles are assigned'}
-                note={
-                  data.paperwork.dotSheetUrl
-                    ? null
-                    : 'Year, make, VIN, plate & latest BIT for your vehicles — for the cab, once your trucks are picked.'
-                }
+                status={data.paperwork.dotSheetStatus}
+                note={data.paperwork.dotSheetUrl ? null : data.paperwork.dotSheetNote}
               >
                 {data.paperwork.dotSheetUrl ? (
                   <a

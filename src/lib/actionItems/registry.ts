@@ -60,6 +60,9 @@
  *     ONE backlog item that links to the pricing wizard (Wes 2026-09-17:
  *     71 rows was the catalog chore, not 71 tasks). Clears when the row
  *     (or its RentalWorks units) is priced.
+ *   - dot-sheet-incomplete (DERIVED) — an order whose vehicles are picked
+ *     but whose DOT record has blanks, so the client's sheet is being
+ *     withheld. The complete case publishes itself and raises nothing.
  *
  * PICKUP WINDOW (rules.ts, Wes 2026-09-17): an item tied to a rental
  * going out carries `dueAt` = the pickup, shows only inside
@@ -130,6 +133,7 @@ import { possibleDuplicateJobProvider } from '@/lib/actionItems/providers/possib
 import { annualRequestedProvider } from '@/lib/actionItems/providers/annualRequested'
 import { dateChangeRequestedProvider } from '@/lib/actionItems/providers/dateChangeRequested'
 import { replacementCostMissingProvider } from '@/lib/actionItems/providers/replacementCostMissing'
+import { dotSheetIncompleteProvider } from '@/lib/actionItems/providers/dotSheetIncomplete'
 import { kitIncompleteProvider } from '@/lib/actionItems/providers/kitIncomplete'
 import { walkiesShortProvider } from '@/lib/actionItems/providers/walkiesShort'
 import { partnerCancelledOffPickListProvider } from '@/lib/actionItems/providers/partnerCancelledOffPickList'
@@ -185,6 +189,7 @@ const PROVIDERS: ActionItemProvider[] = [
   // A catalog row on an upcoming order has no replacement cost, so the
   // order's COI figure for the client's broker is a floor, not a total.
   replacementCostMissingProvider,
+  dotSheetIncompleteProvider,
   kitIncompleteProvider,
   // Committed walkie orders overrun the CP200 pool on some day — HQ says
   // how many to sub (Wes 2026-09-15: the "(Sub)" catalog row is gone).

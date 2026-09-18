@@ -6,6 +6,7 @@ import type { UserRole } from '@prisma/client';
 import { getPermissions } from '@/lib/permissions';
 import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 import { Truck, AlertTriangle, Check } from 'lucide-react';
+import { docExpiryState, VEHICLE_DOC_LABEL } from '@/lib/fleet/vehicleDocs';
 
 type Asset = {
   id: string;
@@ -20,6 +21,10 @@ type Asset = {
   licensePlate: string | null;
   accessCode: string | null;
   latestBitDate: string | null;
+  hasRegistration: boolean;
+  registrationExpiresAt: string | null;
+  hasBitCertificate: boolean;
+  bitCertificateExpiresAt: string | null;
   notes: string | null;
   categoryId: string;
   categoryName: string;
@@ -47,6 +52,45 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string; 
 // The five lifecycle states fleet sets by hand (BOOKED/IN_TRANSIT/WAREHOUSE
 // are operational states driven elsewhere).
 const SETTABLE_STATUSES = ['AVAILABLE', 'MAINTENANCE', 'TOTALED', 'SOLD', 'RETIRED'] as const;
+
+/**
+ * Whether a unit's DOT paperwork is on file, and how close it is to running
+ * out. `expiring` is the SAME 30-day horizon the fleet-expirations cron
+ * alerts on (docExpiryState), so a chip can never be amber on a day no alert
+ * was raised, or grey on a day one was.
+ */
+function DocChip({ label, hasFile, expiresAt }: { label: string; hasFile: boolean; expiresAt: string | null }) {
+  const state = docExpiryState({ hasFile, expiresAt });
+  if (state === 'missing') return <span className="text-rose-400">No {label.toLowerCase()}</span>;
+  const cls =
+    state === 'expired' ? 'text-rose-600 font-semibold'
+    : state === 'expiring' ? 'text-amber-600 font-semibold'
+    : state === 'no-expiry' ? 'text-gray-400'
+    : 'text-emerald-500';
+  const suffix =
+    state === 'expired' ? ' expired'
+    : state === 'no-expiry' ? ''
+    : ` ${String(expiresAt).slice(0, 10)}`;
+  return <span className={cls}>{label}{suffix}</span>;
+}
+
+/** The same reading as DocChip, spelled out for the unit panel. */
+function DocState({ hasFile, expiresAt }: { hasFile: boolean; expiresAt: string | null }) {
+  const state = docExpiryState({ hasFile, expiresAt });
+  const on = expiresAt ? String(expiresAt).slice(0, 10) : null;
+  const text =
+    state === 'missing' ? 'Not on file — clients see nothing to download'
+    : state === 'no-expiry' ? 'On file · no expiry recorded'
+    : state === 'expired' ? `On file · EXPIRED ${on}`
+    : state === 'expiring' ? `On file · expires ${on}`
+    : `On file · good through ${on}`;
+  const cls =
+    state === 'missing' ? 'text-rose-500'
+    : state === 'expired' ? 'text-rose-600 font-semibold'
+    : state === 'expiring' ? 'text-amber-600 font-semibold'
+    : 'text-gray-400';
+  return <div className={`text-[10px] ${cls}`}>{text}</div>;
+}
 
 // Category-generic thumbnail (same gated per-asset proxy the asset summary
 // panel uses — never a raw blob URL). Clean neutral placeholder when the
@@ -159,6 +203,13 @@ function FleetPageInner() {
           </div>
         </div>
         <div className="flex gap-2">
+          {/* The bulk door. The per-unit panel takes one PDF at a time, which
+              for a folder of registrations and BIT scans is a morning of
+              clicking — and therefore a job that does not get done. */}
+          <a href="/fleet/paperwork"
+            className="border border-gray-200 bg-white hover:border-gray-400 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-gray-700 whitespace-nowrap">
+            Upload paperwork
+          </a>
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search units..."
             className="border border-gray-200 rounded-lg px-3 py-1.5 text-[11px] w-44 focus:outline-none focus:border-gray-400" />
@@ -222,6 +273,8 @@ function FleetPageInner() {
                       {a.mileage ? <span>{a.mileage.toLocaleString()} mi</span> : null}
                       {a.licensePlate ? <span className="font-mono">{a.licensePlate}</span> : null}
                       {a.latestBitDate ? <span className="text-emerald-500">BIT {a.latestBitDate.slice(0, 10)}</span> : null}
+                      <DocChip label="Reg" hasFile={a.hasRegistration} expiresAt={a.registrationExpiresAt} />
+                      <DocChip label="Cert" hasFile={a.hasBitCertificate} expiresAt={a.bitCertificateExpiresAt} />
                     </div>
                   </div>
                 </div>
@@ -304,8 +357,24 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
   const [bitDate, setBitDate] = useState('');
   const [bitNotes, setBitNotes] = useState('');
   const [bitFile, setBitFile] = useState<File | null>(null);
+  const [bitExpires, setBitExpires] = useState('');
   const [uploadingBit, setUploadingBit] = useState(false);
   const [bitError, setBitError] = useState<string | null>(null);
+
+  // Registration. Held as local state rather than read off `asset`, so the
+  // panel reflects an upload immediately instead of waiting for the list
+  // refresh behind onSaved().
+  const [hasReg, setHasReg] = useState(asset.hasRegistration);
+  const [regExpiresOn, setRegExpiresOn] = useState<string | null>(asset.registrationExpiresAt);
+  const [regFile, setRegFile] = useState<File | null>(null);
+  const [regExpires, setRegExpires] = useState(asset.registrationExpiresAt?.slice(0, 10) ?? '');
+  const [uploadingReg, setUploadingReg] = useState(false);
+  const [regError, setRegError] = useState<string | null>(null);
+  // The BIT CERTIFICATE pointer follows the newest inspection on file — it is
+  // not uploaded here (see src/lib/fleet/vehicleDocs.ts), so this is display
+  // only, refreshed from the upload response.
+  const [certExpiresOn, setCertExpiresOn] = useState<string | null>(asset.bitCertificateExpiresAt);
+  const [hasCert, setHasCert] = useState(asset.hasBitCertificate);
 
   const loadBits = async () => {
     const r = await fetch(`/api/fleet/${asset.id}/bit`);
@@ -334,11 +403,41 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
     fd.append('file', bitFile);
     fd.append('inspectionDate', bitDate);
     if (bitNotes.trim()) fd.append('notes', bitNotes.trim());
+    if (bitExpires) fd.append('expiresAt', bitExpires);
     const res = await fetch(`/api/fleet/${asset.id}/bit`, { method: 'POST', body: fd });
     setUploadingBit(false);
     if (!res.ok) { const d = await res.json().catch(() => ({})); setBitError(d.error || 'Upload failed'); return; }
-    setBitDate(''); setBitNotes(''); setBitFile(null);
+    const d = await res.json().catch(() => ({}));
+    // Only the newest inspection becomes the unit's current certificate; a
+    // backfill files the history and leaves the pointer where it was, and the
+    // panel has to say so rather than implying the client now sees this one.
+    if (d?.isCurrent) { setHasCert(true); setCertExpiresOn(d.expiresAt ?? null); }
+    setBitDate(''); setBitNotes(''); setBitFile(null); setBitExpires('');
     await loadBits();
+    onSaved();
+  };
+
+  const uploadRegistration = async () => {
+    if (!regFile) { setRegError('Pick a PDF.'); return; }
+    setUploadingReg(true); setRegError(null);
+    const fd = new FormData();
+    fd.append('file', regFile);
+    if (regExpires) fd.append('expiresAt', regExpires);
+    const res = await fetch(`/api/fleet/${asset.id}/documents/registration`, { method: 'POST', body: fd });
+    setUploadingReg(false);
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setRegError(d.error || 'Upload failed'); return; }
+    const d = await res.json().catch(() => ({}));
+    setHasReg(true); setRegExpiresOn(d?.expiresAt ?? null); setRegFile(null);
+    onSaved();
+  };
+
+  const removeRegistration = async () => {
+    if (!confirm(`Remove the registration on file for ${asset.unitName}? Clients on a job with this unit will stop seeing it.`)) return;
+    setUploadingReg(true); setRegError(null);
+    const res = await fetch(`/api/fleet/${asset.id}/documents/registration`, { method: 'DELETE' });
+    setUploadingReg(false);
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setRegError(d.error || 'Remove failed'); return; }
+    setHasReg(false); setRegExpiresOn(null); setRegExpires('');
     onSaved();
   };
 
@@ -384,6 +483,68 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
             </div>
           </section>
 
+          {/* Client-facing DOT paperwork. Until this shipped nothing in HQ
+              ever wrote Asset.registrationUrl, so the portal's "Registration
+              — Not yet on file" was permanent on every job. */}
+          <section className="border-t border-gray-100 pt-4">
+            <div className="text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-1">Paperwork for the cab</div>
+            <p className="text-[11px] text-gray-400 mb-2">
+              Goes to the client&apos;s portal automatically for any job this unit is assigned to — no publish step.
+            </p>
+
+            <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 mb-3">
+              <div className="px-3 py-2 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold text-gray-700">{VEHICLE_DOC_LABEL.registration}</div>
+                  <DocState hasFile={hasReg} expiresAt={regExpiresOn} />
+                </div>
+                <div className="flex items-center gap-2 flex-none">
+                  {hasReg && (
+                    <>
+                      <a href={`/api/fleet/${asset.id}/documents/registration`} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 hover:underline">View PDF</a>
+                      <button onClick={removeRegistration} disabled={uploadingReg} className="text-[11px] text-rose-600 hover:underline disabled:text-gray-300">Remove</button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div className="px-3 py-2 flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-semibold text-gray-700">{VEHICLE_DOC_LABEL['bit-certificate']}</div>
+                  <DocState hasFile={hasCert} expiresAt={certExpiresOn} />
+                </div>
+                <div className="flex items-center gap-2 flex-none">
+                  {hasCert && (
+                    <a href={`/api/fleet/${asset.id}/documents/bit-certificate`} target="_blank" rel="noreferrer" className="text-[11px] text-blue-600 hover:underline">View PDF</a>
+                  )}
+                </div>
+              </div>
+            </div>
+            <p className="text-[10px] text-gray-400 mb-3">
+              The certificate follows the newest BIT inspection below — file one there and it updates here.
+            </p>
+
+            <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-2">
+              <div className="text-[10px] font-semibold text-gray-500">{hasReg ? 'Replace the registration' : 'Add the registration'}</div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>PDF scan</label>
+                  <input type="file" accept="application/pdf" onChange={(e) => setRegFile(e.target.files?.[0] ?? null)} className="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-200 file:text-gray-700 file:text-[11px]" />
+                </div>
+                <div>
+                  <label className={labelCls}>Expires <span className="font-normal normal-case text-gray-400">— optional</span></label>
+                  <input className={fieldCls} type="date" value={regExpires} onChange={(e) => setRegExpires(e.target.value)} />
+                </div>
+              </div>
+              {regError && <p className="text-[11px] text-rose-600">{regError}</p>}
+              <button onClick={uploadRegistration} disabled={uploadingReg || !regFile} className="px-3 py-1.5 bg-gray-900 hover:bg-black disabled:bg-gray-300 text-white text-[12px] font-semibold rounded-lg">
+                {uploadingReg ? 'Uploading…' : hasReg ? 'Replace registration' : 'Upload registration'}
+              </button>
+              <p className="text-[10px] text-gray-400">
+                An expiry date is what puts this unit on the 30-day fleet alert. Leave it blank if the paper doesn&apos;t carry one.
+              </p>
+            </div>
+          </section>
+
           {/* BIT inspections */}
           <section className="border-t border-gray-100 pt-4">
             <div className="text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-2">BIT inspections</div>
@@ -415,6 +576,10 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
               <div className="grid grid-cols-2 gap-3">
                 <div><label className={labelCls}>Inspection date</label><input className={fieldCls} type="date" value={bitDate} onChange={(e) => setBitDate(e.target.value)} /></div>
                 <div><label className={labelCls}>PDF scan</label><input type="file" accept="application/pdf" onChange={(e) => setBitFile(e.target.files?.[0] ?? null)} className="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-200 file:text-gray-700 file:text-[11px]" /></div>
+                <div className="col-span-2">
+                  <label className={labelCls}>Certificate good through <span className="font-normal normal-case text-gray-400">— optional, copy it off the paper</span></label>
+                  <input className={fieldCls} type="date" value={bitExpires} onChange={(e) => setBitExpires(e.target.value)} />
+                </div>
               </div>
               <div><label className={labelCls}>Notes (optional)</label><input className={fieldCls} value={bitNotes} onChange={(e) => setBitNotes(e.target.value)} placeholder="Passed · next due 2026" /></div>
               {bitError && <p className="text-[11px] text-rose-600">{bitError}</p>}

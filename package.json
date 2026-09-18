@@ -184,7 +184,10 @@
     "test:check-window": "tsx tests/fleet/check-window.test.ts",
     "test:desk-charge-payments": "tsx tests/collections/desk-charge-payments.test.ts",
     "test:ld-reported": "tsx tests/collections/ld-reported.test.ts",
-    "test:action-window": "tsx tests/actionItems/action-window.test.ts"
+    "test:action-window": "tsx tests/actionItems/action-window.test.ts",
+    "test:vehicle-docs": "tsx tests/fleet/vehicle-docs.test.ts",
+    "test:dot-sheet-publish": "tsx tests/fleet/dot-sheet-publish.test.ts",
+    "test:paperwork-import": "tsx tests/fleet/paperwork-import.test.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
