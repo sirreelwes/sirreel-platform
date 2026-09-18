@@ -60,9 +60,18 @@ export async function GET(req: NextRequest) {
       // Named explicitly so the response reads as a report rather than a
       // row count: unmatched ICodes are the one thing here a human has
       // to act on.
-      note: report.unmatched
-        ? `${report.unmatched} unit(s) on ${report.unmatchedICodes.length} RW item code(s) have no HQ catalog row — they will not resolve on a scan until matched.`
-        : 'Every unit resolved to an HQ catalog row.',
+      note: report.unmatched || report.stranded
+        ? [
+            report.unmatched
+              ? `${report.unmatched} unit(s) on ${report.unmatchedICodes.length} RW item code(s) have no HQ catalog row`
+              : '',
+            // The quiet one: matched, but to a row nobody can order, so
+            // the barcode still has nowhere to land (2026-09-18).
+            report.stranded
+              ? `${report.stranded} unit(s) on ${report.strandedICodes.length} code(s) resolve to an ARCHIVED row (${report.strandedICodes.join(', ')})`
+              : '',
+          ].filter(Boolean).join(' · ') + ' — they will not resolve on a scan until matched. See scripts/link-barcoded-catalog-rows.ts.'
+        : 'Every unit resolved to an orderable HQ catalog row.',
     })
   } catch (e) {
     if (isRwAuthError(e) || (e as Error)?.name === 'RwNoCredentialError') {
