@@ -124,7 +124,7 @@ export function nextFreeRef(clauses: CanonicalClause[]): string {
  */
 export function crossReferencesHold(
   clauses: CanonicalClause[],
-  refs: string[] = ['1', '2', '4', '5', '6', '7', '8', '9', '10', '11', '16'],
+  refs: string[] = ['1', '2', '4', '5', '6', '7', '8', '9', '10', '11', '14', '16'],
 ): { ok: boolean; mismatched: Array<{ ref: string; ours: string; theirs: string | null }> } {
   const mismatched: Array<{ ref: string; ours: string; theirs: string | null }> = []
   for (const ref of refs) {
@@ -141,13 +141,48 @@ export function crossReferencesHold(
 export const GRADUATION_DAY_2026: NegotiatedAgreement = {
   key: 'graduation-day-2026',
   title: '2026 Negotiated Rental Agreement',
-  version: 'Negotiated 2026-05-15 · SirReel additions 2026-09-15',
+  version: 'Negotiated 2026-05-15 · SirReel additions 2026-09-15 · §32 agreed 2026-09-18',
   clauses: GRADUATION_DAY_2026_CLAUSES,
   lede: GRADUATION_DAY_2026_LEDE,
   appendedClauses: [
     {
       ...canonical('30'),
       ref: nextFreeRef(GRADUATION_DAY_2026_CLAUSES),
+      // §32 AS AGREED — their counsel's 2026-09-17 redline of our appended
+      // clause, plus the three qualifiers Wes sent back on 2026-09-18 and
+      // Marell accepted. An OVERRIDE, never an edit to contractClauses.ts:
+      // canonical('30') is still the baseline every other client renders.
+      //
+      // Theirs (three edits, all here, none elsewhere in the document):
+      //   1. "provided that we shall remain liable for any failure … to
+      //      adhere to Section 4" — we answer for the partner's testing.
+      //   2. "Every obligation each party owes the other … and all of our
+      //      obligations" — the clause runs both ways, not just at them.
+      //   3. "and in any event we remain liable for the acts and omissions
+      //      of such third parties."
+      // Ours (accepted):
+      //   a. "by such third party, or by us," — their first edit read "any
+      //      failure of such third party's or our failure to adhere", which
+      //      does not parse. Grammar only; nothing moved.
+      //   b. "subject to Section 14," — the one that matters. "In any event"
+      //      is what someone argues overrides the limitation of liability;
+      //      this puts their new liability inside the cap both sides already
+      //      agreed to, and does not take the edit back.
+      //   c. "in connection with the Equipment supplied under this Agreement
+      //      during the rental period" — their third edit had no boundary in
+      //      time or subject.
+      //   d. The LCDW sentence, placed in the clause they reopened rather
+      //      than in the addendum they had already accepted: their "all of
+      //      our obligations" would otherwise drag our damage waiver onto a
+      //      partner's trailer, where we would waive the first $1,000 (loss
+      //      of use included) and still owe the partner for it.
+      //
+      // Everything this survives on is the partner's own paper — partner
+      // agreement §6 (condition, testing, repair at their cost) and §11
+      // (they indemnify SirReel AND our clients). That is why the
+      // unsigned-partner gate exists; see sub-rentals/partnerPaperGate.ts.
+      body:
+        'Some Equipment supplied under this Agreement is owned by third parties from whom we rent it, and is supplied to you on the same terms as Equipment we own. Where such Equipment is delivered to you directly by its owner rather than from our premises, the owner’s pre-delivery inspection and delivery record stand in place of our testing under Section 4, provided that we shall remain liable for any failure by such third party, or by us, to adhere to Section 4, and Section 16 is read as our right to rent, possess and re-rent that Equipment rather than to own it. Every obligation each party owes the other under this Agreement with respect to Equipment — including the insurance required by Sections 5 through 11, your responsibility for loss under Section 2, and your indemnity under Section 1, and all of our obligations — applies to that Equipment identically, and each owner of such Equipment is an additional beneficiary of your indemnity under Section 1 and an additional insured and loss payee under the insurance required above, to the same extent we are, and in any event, subject to Section 14, we remain liable for the acts and omissions of such third parties in connection with the Equipment supplied under this Agreement during the rental period. The Limited Collision Damage Waiver Addendum applies only to vehicles owned by us.',
     },
   ],
   companies: ['Graduation Day Productions', 'Party Giraffes'],

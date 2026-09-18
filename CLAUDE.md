@@ -258,16 +258,28 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   per-job election, and its "Executed" row does not print (it renders only
   with `masterSignerName` / `masterSignedAt`).
 
-### §32 is OPEN — do not ask them to sign yet (2026-09-17 redline)
+### §32 is AGREED — 2026-09-18 (Wes: "A as proposed")
 - Graduation Day's counsel (Nicholas Marell) redlined the filed document on
   2026-09-17 — three edits, ALL in **§32 Third-Party Equipment**, the clause
   SirReel appended on 9/15. Clauses 1–31, the Fleet Agreement and the whole
   LCDW Addendum came back unmarked, and their numbering is unchanged so
-  `crossReferencesHold()` still passes. **Wes has not decided whether to
-  counter.** Two counters were raised for him: append ", subject to
-  Section 14" to their third edit ("in any event" is what someone argues
-  overrides the limitation of liability), and fix the garbled English in
-  their first ("any failure of such third party's or our failure to adhere").
+  `crossReferencesHold()` still passes (it now also checks 14, which the
+  agreed §32 cites). Wes sent back three qualifiers on 9/18 and **Marell
+  accepted them**, so the clause is settled: their three edits (we answer for
+  a §4 failure; the clause runs both ways; "in any event we remain liable for
+  the acts and omissions of such third parties") plus ours — **", subject to
+  Section 14,"** (their liability sits inside the limitation both sides
+  agreed to, not outside it), **the scope limiter** ("in connection with the
+  Equipment supplied under this Agreement during the rental period"), a
+  grammar fix on their §4 proviso, and **the LCDW sentence placed in §32
+  rather than in the addendum they had already accepted** — their "all of our
+  obligations" would otherwise drag our damage waiver onto a partner's unit.
+- The agreed body is the override in `GRADUATION_DAY_2026.appendedClauses`,
+  each side's edits attributed in the comment above it; version line reads
+  `· §32 agreed 2026-09-18`. `APPENDED_CLAUSE_DIGEST` was re-verified against
+  that exchange and bumped, and the test now NAMES the three qualifiers, so
+  losing the cap qualifier fails saying which protection went rather than
+  "something changed".
 - **An agreed §32 goes in `GRADUATION_DAY_2026.appendedClauses` as a body
   override — NEVER in `contractClauses.ts`.** `canonical('30')` is the
   baseline Third-Party Equipment clause, and the same body is rendered by
@@ -286,9 +298,17 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   "non-payment" in §21 is a REAL hyphen, and the file lost all front matter
   (no Lessee block, no lede, no version line — the company name appears only
   in the running header). Edit the clause text in the repo and re-render.
-- The coverage stays ON in the meantime: their redline touches one clause,
-  and the alternative puts their coordinators back to signing our baseline
-  per job — strictly worse paper than their negotiated document.
+- The coverage filed on 9/18 stays ON throughout — an OFFER does not disturb
+  it (`offerAnnualForSignature` files `autoCoverJobs: false`), and the
+  signature supersedes it. **The PDF is rendered from the registry at OFFER
+  time**, so §32 must be deployed before anyone presses "Offer annual
+  agreement" or the client is asked to sign the pre-redline clause.
+- **Next: offer and signature, per company.** /crm/[id] → Account portal
+  access → "Offer annual agreement" for Graduation Day Productions AND for
+  Party Giraffes, LLC (separate masters — one signature does not paper the
+  other), then "Review & send invite" to an executive on each. They sign at
+  `/portal/company/[companyId]/sign/annual`, which is also where the LCDW
+  election is made. Marell reviews; he does not sign.
 
 ## Their counsel reviews the agreement in HQ (2026-09-18 — Wes)
 - Wes: "Marell will probably want to see the entire agreement again. I'll
