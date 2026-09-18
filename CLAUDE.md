@@ -310,6 +310,46 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `/portal/company/[companyId]/sign/annual`, which is also where the LCDW
   election is made. Marell reviews; he does not sign.
 
+### Covering is not signed — the third state, on every surface (2026-09-18 — Wes)
+- Wes: "An executive at the company wants to sign these agreements … I need
+  it to be on the Production company portal and I need a way to send it to
+  Haylea." The document was right and the portal was wrong: **three surfaces
+  read `autoCoverJobs` coverage as proof of a signature**, and the masters
+  filed on 9/18 cover with nobody's name on them.
+  - the account portal's terms card (`terms.annual ? … : terms.pendingAnnual ? …`)
+    showed "Annual agreement active · Read the agreement" and **no Sign
+    button** — to the executive who opened the portal to sign;
+  - `composeCompanyPortalInvite` gated the sign link on `!annual && pending`,
+    so the invite to that executive **named no document and carried no
+    link** — the one thing the mail existed to deliver;
+  - `/portal/company/[id]/sign/annual` answered a direct link with "Your
+    account already has a signed annual agreement … Nothing to sign."
+- **`annualSigningState()` in `src/lib/portal/annualSigningRules.ts` is the
+  one rule** — its own pure module because two of the three readers are
+  CLIENT components and cannot import prisma. `companyAnnual.ts` re-exports
+  it. **A PENDING offer is always signable**: somebody pressed "Offer annual
+  agreement" for it, `signAnnual` only ever supersedes masters nobody signed,
+  and next year's agreement offered while this year's executed copy holds is
+  a real case. `executed` (coverage WITH `signedAt`) is the only thing that
+  means nothing to sign, and only with no offer waiting. `coveringUnsigned`
+  is the third state named out loud, and both client surfaces say it in
+  words: the terms are already applying, the signature is still owed.
+  Dates are `Date | string` — the sign page reads JSON, the composer reads
+  rows, and only the presence of `signedAt` decides anything.
+- **The offer wins the portal card** (`terms.annual && !terms.pendingAnnual`),
+  with the coverage stated inside it rather than dropped.
+- **Sending it to a named person is the portal INVITE, and there is no second
+  sender.** The offer sits in the portal and nobody sees a portal they were
+  never invited to, so /crm/[id] → Account portal access now carries a
+  "<title> is waiting for a signature" strip that says so and points at Add
+  people → **Review & send invite**. The invite's annual callout is rendered
+  by the TEMPLATE, not the editable note — a rep trimming the prose cannot
+  delete the sign link (the partner-welcome rule).
+- `npm run test:annual-signing`. The expensive direction is a false "nothing
+  to sign": it is unfalsifiable from the client's side — they see a tidy,
+  confident screen — and it leaves the terms in force with no signature
+  behind them.
+
 ## Their counsel reviews the agreement in HQ (2026-09-18 — Wes)
 - Wes: "Marell will probably want to see the entire agreement again. I'll
   need to send my finished one to him. Ideally, I can just send it in HQ to

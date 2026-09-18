@@ -104,6 +104,16 @@ export function CompanyPortalAccessPanel({
     source: string
   } | null>(null)
 
+  /** An annual OFFERED and waiting for a signature. Kept because the panel
+   *  above it is the only place that can hand the document to a person: the
+   *  offer sits in the portal, and nobody sees a portal they were never
+   *  invited to. */
+  const [pendingAnnual, setPendingAnnual] = useState<{
+    id: string
+    title: string
+    negotiatedKey?: string | null
+  } | null>(null)
+
   const load = useCallback(async () => {
     const [accessRes, annualRes] = await Promise.all([
       fetch(`/api/crm/companies/${companyId}/portal-access`),
@@ -113,6 +123,7 @@ export function CompanyPortalAccessPanel({
     setRows(json.access || [])
     const annual = await annualRes.json().catch(() => ({}))
     setAnnualRequest(annual?.request ?? null)
+    setPendingAnnual(annual?.pending ?? null)
   }, [companyId])
 
   useEffect(() => {
@@ -266,6 +277,24 @@ export function CompanyPortalAccessPanel({
             show, the invoices, the agreements and the standing discounts. They sign in with their
             own email; this only decides what they may see.
           </p>
+          {pendingAnnual && (
+            <div className="mt-2 border border-lt-hairline bg-chip-warn-bg rounded-lg p-3 max-w-[62ch]">
+              <p className="text-xs font-semibold text-chip-warn-fg inline-flex items-center gap-1.5">
+                <FileSignature className="w-3.5 h-3.5 shrink-0" />
+                {pendingAnnual.title} is waiting for a signature
+              </p>
+              <p className="text-xs text-lt-fg2 mt-1 leading-relaxed">
+                {pendingAnnual.negotiatedKey
+                  ? 'Their counsel’s terms, on our paper. '
+                  : ''}
+                It sits in the account portal — and nobody sees a portal they were never invited
+                to. Add the person who will sign it below, then <strong>Review &amp; send
+                invite</strong>: the email names the document and carries the link straight to
+                the signing page. An executive with access can sign; they also make the
+                damage-waiver (LCDW) election for the account.
+              </p>
+            </div>
+          )}
           {annualRequest && (
             <p className="mt-2 inline-flex items-center gap-1.5 text-xs font-semibold text-chip-warn-fg bg-chip-warn-bg border border-lt-hairline rounded px-2 py-1">
               <FileSignature className="w-3.5 h-3.5 shrink-0" />

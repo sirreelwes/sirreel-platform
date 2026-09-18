@@ -104,6 +104,14 @@ export interface PendingAnnual {
   negotiatedKey: string | null
 }
 
+// The "is there something to sign" rule lives in its own pure module — the
+// portal pages that need it are client components and cannot import prisma.
+export {
+  annualSigningState,
+  type AnnualCoverageFacts,
+  type AnnualSigningState,
+} from './annualSigningRules'
+
 /** The unsigned master currently offered to this company, if any. */
 export async function findPendingAnnual(companyId: string): Promise<PendingAnnual | null> {
   const row = await prisma.companyAgreement.findFirst({

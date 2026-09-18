@@ -44,6 +44,7 @@ import type { buildServiceCatalog } from '@/lib/portal/companyServices'
 import type { CompanyPortalPersonRow } from '@/lib/portal/grantCompanyAccess'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 import { PORTAL } from '@/lib/brand/portalTokens'
+import { annualSigningState } from '@/lib/portal/annualSigningRules'
 import { ShareWithTeamsButton } from '@/components/portal/company/ShareWithTeamsButton'
 import { NotificationSettings, type NotificationPrefs } from '@/components/portal/company/NotificationSettings'
 import { PeopleWithAccess } from '@/components/portal/company/PeopleWithAccess'
@@ -207,6 +208,22 @@ export function CompanyPortalView({
   preview = false,
 }: CompanyPortalViewProps) {
   const { terms, active, past, totals } = overview
+
+  // A covering master is NOT a signature. The negotiated masters filed on
+  // 2026-09-18 paper every job with nobody's name on them, so reading
+  // `terms.annual` first hid the Sign button from the one person who came
+  // here to press it. An OFFER wins this card; the coverage is stated in it.
+  const toSign = annualSigningState({
+    coverage: terms.annual
+      ? {
+          title: terms.annual.title,
+          signerName: terms.annual.signerName,
+          signedAt: terms.annual.signedAt,
+          expiryDate: terms.annual.expiryDate,
+        }
+      : null,
+    pending: terms.pendingAnnual,
+  })
   const L = companyPortalLinks(companyId, preview)
   const coiSummary = accountCoiSummary(cois)
   const inert = preview ? { 'aria-disabled': true, title: 'Disabled in preview' } : {}
@@ -419,7 +436,7 @@ export function CompanyPortalView({
           <div className="bg-white border border-zinc-200 rounded-xl overflow-hidden">
             {/* Annual agreement — the headline of the block. */}
             <div className="p-5 border-b border-zinc-100">
-              {terms.annual ? (
+              {terms.annual && !terms.pendingAnnual ? (
                 <div className="flex items-start justify-between gap-4 flex-wrap">
                   <div className="min-w-0">
                     <div className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded">
@@ -467,6 +484,19 @@ export function CompanyPortalView({
                       re-sign the whole thing. You&apos;ll choose the damage-waiver (LCDW) election for
                       the account as part of signing.
                     </p>
+                    {toSign.coveringUnsigned ? (
+                      <p className="text-xs text-zinc-600 mt-1 leading-relaxed max-w-[62ch]">
+                        These terms are already applying to your shows — we filed them so your
+                        coordinators would stop signing a rental agreement per job. Signing puts
+                        your signature on the document itself and sets the damage-waiver election
+                        for the account.
+                      </p>
+                    ) : toSign.executed ? (
+                      <p className="text-xs text-zinc-600 mt-1 leading-relaxed max-w-[62ch]">
+                        Your current agreement runs through {fmtDay(toSign.executed.expiryDate ?? null)}. This
+                        one takes over when it is signed.
+                      </p>
+                    ) : null}
                     <div className="text-xs text-zinc-500 mt-2 font-mono">
                       {fmtDay(terms.pendingAnnual.effectiveDate)} → {fmtDay(terms.pendingAnnual.expiryDate)}
                     </div>
