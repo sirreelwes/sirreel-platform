@@ -18,8 +18,7 @@ import type { CompanyPortalRole } from '@prisma/client'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { requireCompanyTermsEditor } from '@/lib/portal/companyTermsEditors'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
-import { composeCompanyPortalInvite } from '@/lib/portal/composeCompanyInvite'
+import { sendCompanyPortalInvite } from '@/lib/portal/sendCompanyInvite'
 
 export const dynamic = 'force-dynamic'
 
@@ -67,49 +66,23 @@ export async function PATCH(
   }
 
   if (body.sendInvite === true) {
-    // Composed by the same function the preview modal renders from
-    // (composeCompanyInvite.ts), so what the rep read is what goes.
-    // `customBody` is the prose they edited; the shell stays.
+    // One sender, in a lib, so the maintenance task can invite from a phone
+    // too (sendCompanyInvite.ts). It composes from the same function the
+    // preview modal renders — what the rep read is what goes — and stamps
+    // `invitedAt` only after Resend accepts.
     const customBody =
       typeof body.customBody === 'string' && body.customBody.trim()
         ? body.customBody.trim().slice(0, 5000)
         : null
-    const composition = await composeCompanyPortalInvite({
+    const sent = await sendCompanyPortalInvite({
       companyId: access.company.id,
       accessId: access.id,
       base: portalBase(req),
       fallbackRep: { name: user.name ?? null, email: user.email ?? null },
       customBody,
+      byUserId: user.id,
     })
-    if (!composition.ok) {
-      return NextResponse.json({ error: composition.error }, { status: composition.status })
-    }
-    const result = await sendAgreementEmail({
-      to: [composition.to.email],
-      replyTo: composition.replyTo || undefined,
-      subject: composition.subject,
-      html: composition.html,
-      text: composition.text,
-      label: 'company-portal-invite',
-    })
-    if (!result.ok) {
-      return NextResponse.json({ error: result.reason || 'Send failed' }, { status: 502 })
-    }
-    await prisma.companyPortalAccess.update({
-      where: { id: access.id },
-      data: { invitedAt: new Date() },
-    })
-    await prisma.auditLog
-      .create({
-        data: {
-          action: 'company_portal.invite_sent',
-          entityType: 'company',
-          entityId: access.company.id,
-          userId: user.id,
-          newValues: { accessId: access.id, to: composition.to.email, customBody: !!customBody },
-        },
-      })
-      .catch(() => null)
+    if (!sent.ok) return NextResponse.json({ error: sent.error }, { status: sent.status })
     return NextResponse.json({ ok: true, invited: true })
   }
 
