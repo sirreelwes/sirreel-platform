@@ -388,6 +388,42 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   phone, the /admin/maintenance rule), including the invite's edit box — the
   one place a preview can still be edited before it goes.
 
+### Idempotent on the COMPANY was not idempotent on the DOCUMENT (2026-09-18 — Wes)
+- Wes, after running the filing task: "it skipped the rewrite of the
+  contracts because they were already on file … I need this final version
+  uploaded so that I can get it to the Client ASAP." Both masters were filed
+  on the MORNING of 9/18 and §32 was agreed that AFTERNOON, so the run that
+  was meant to put the agreed clause on file answered **"already covered by
+  2026 Negotiated Rental Agreement — skipped (supersede by hand)"** twice —
+  and the PDF a client would have signed still carried our pre-redline
+  clause 30. Both guards asked "is a master covering / is an offer pending?"
+  and never "is it the CURRENT document?"
+- **`renderedFromVersion(note, version)` in fileNegotiatedAgreement.ts is the
+  whole staleness decision** (pure, pinned in
+  `npm run test:negotiated-agreement` including the exact pre-§32 note). Every
+  path that files or offers writes `agreement.version` verbatim into the row's
+  NOTE, so the note is the record of which text is inside that PDF — there is
+  no column and adding one is a laptop job. **Unreadable or absent counts as
+  STALE on purpose:** a needless re-render costs one PDF and converges (the
+  fresh note names the version), while a stale contract passing as current
+  reaches a client.
+- **Both tasks carry a `refresh` param, default YES.** Already on THIS
+  version → left alone, and the headline now says so ("Already on file —
+  nothing to re-file") instead of reading like a failure. Rendered from an
+  OLDER version → re-rendered, and the stale row is **superseded, never
+  deleted**: `autoCoverJobs` off, the reason appended to its note, audited
+  `company_agreement.superseded` / `company_agreement.offer_withdrawn`, its
+  own document and window untouched.
+- **`Company.negotiatedTermsUrl` MOVES to the new file, but only when it
+  pointed at the very file superseded** — the same rule `signAnnual` uses.
+  Standing terms left on a superseded document is how a per-job release hands
+  the client the clause their lawyer redlined.
+- **A SIGNED master is never superseded by either task**, whatever `refresh`
+  says — it is named and skipped. Replacing executed terms is a human's
+  decision, and `signAnnual` is the only path that supersedes on a signature.
+- Rule going forward: **any idempotency guard on a rendered document must key
+  on the document's version, not only on the entity it is filed against.**
+
 ## Their counsel reviews the agreement in HQ (2026-09-18 — Wes)
 - Wes: "Marell will probably want to see the entire agreement again. I'll
   need to send my finished one to him. Ideally, I can just send it in HQ to

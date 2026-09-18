@@ -24,6 +24,8 @@
  *   --effective / --expires YYYY-MM-DD   override the agreed window for a one-off
  *   --alias "Registry Name=Exact DB Name"   repeatable; the agreement carries
  *                                    the confirmed ones already
+ *   --no-refresh                     leave a master rendered from an OLDER
+ *                                    version alone instead of superseding it
  *
  * Exit codes: 0 done · 1 failed · 2 refused with something to fix.
  */
@@ -66,6 +68,7 @@ async function main() {
     effective: arg('effective') ?? null,
     expires: arg('expires') ?? null,
     aliases: aliases(),
+    refresh: !process.argv.includes('--no-refresh'),
   })
 
   console.log()

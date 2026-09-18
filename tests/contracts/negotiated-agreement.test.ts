@@ -25,6 +25,7 @@ import {
   resolveCompanyName,
   agreementFilename,
   standingTermsSummary,
+  renderedFromVersion,
 } from '../../src/lib/contracts/fileNegotiatedAgreement'
 import { negotiatedAgreementForCompany } from '../../src/lib/contracts/negotiatedAgreement'
 import { negotiatedSource, negotiatedKeyFromSource } from '../../src/lib/portal/companyAnnual'
@@ -343,6 +344,38 @@ async function main() {
   for (const probe of [a.title, a.version, 'Fleet Agreement', 'LCDW Addendum', a.appendedClauses[0].title]) {
     check(summary.includes(probe), `standing-terms summary must name "${probe}"`)
   }
+
+  // 12. STALENESS — the bug that let a settled redline sit unfiled.
+  //
+  //     2026-09-18: both masters were filed in the morning; §32 was agreed in
+  //     the afternoon. The filer asked only "is a master covering?" and
+  //     reported "already covered — skipped" for both companies, so the PDF
+  //     the client would have signed still carried our pre-redline clause 30.
+  //     The version string written into each row's note is the only record of
+  //     WHICH text is inside that PDF, and this is the whole decision.
+  const noteFor = (v: string) => `Negotiated with X counsel; rendered from ${a.key}. ${v}.`
+  check(
+    renderedFromVersion(noteFor(a.version), a.version) === true,
+    'a row whose note names the current version reads as current',
+  )
+  check(
+    renderedFromVersion(noteFor('Negotiated 2026-05-15 · SirReel additions 2026-09-15'), a.version) === false,
+    'the PRE-§32 note must read as STALE — this is the exact miss of 2026-09-18',
+  )
+  // Unknown is stale on purpose: a needless re-render costs one PDF and
+  // converges, while a stale contract passing as current reaches a client.
+  check(renderedFromVersion(null, a.version) === false, 'no note at all reads as stale, never as current')
+  check(renderedFromVersion('', a.version) === false, 'an empty note reads as stale')
+  check(
+    renderedFromVersion(noteFor(a.version), '') === false,
+    'an empty version can never certify a row as current',
+  )
+  // A version is a PREFIX of the next one here (§32 was appended to it), so a
+  // substring test must not let the older note satisfy the newer version.
+  check(
+    a.version.startsWith('Negotiated 2026-05-15 · SirReel additions 2026-09-15'),
+    'this test assumes the version line grows by appending — update it if that changes',
+  )
 
   if (failures.length) {
     console.error(`\n${failures.length} assertion(s) failed:`)
