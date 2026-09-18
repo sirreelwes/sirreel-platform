@@ -151,12 +151,14 @@ export async function POST(req: NextRequest, { params }: Params) {
       expectsOrder: true,
       endDate: true,
       company: { select: { id: true, name: true } },
-      job: {
-        select: {
-          id: true, jobCode: true, name: true,
-          orders: { where: { status: { not: 'CANCELLED' } }, select: { id: true } },
-        },
-      },
+      // THIS reservation's orders, not the job's. The gap answers "what is
+      // this booking billed on", and a job can carry an order that belongs
+      // to a different booking on it — 20 of the 32 orderless reservations
+      // on 2026-09-18 were exactly that shape, so counting the job's orders
+      // told the panel everything was fine while the board's triangle
+      // (which counts the booking's) said otherwise.
+      orders: { where: { status: { not: 'CANCELLED' }, archivedAt: null }, select: { id: true } },
+      job: { select: { id: true, jobCode: true, name: true } },
     },
   })
 
@@ -176,7 +178,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       jobId: updated.jobId,
       jobName: updated.jobName,
       expectsOrder: updated.expectsOrder,
-      orderCount: updated.job?.orders.length ?? 0,
+      orderCount: updated.orders.length,
       endDate: updated.endDate,
     }),
   })
