@@ -3914,8 +3914,11 @@ function NewQuotePageInner() {
 
 // Shared grid template for the dept-group "table" — header row, line item
 // rows, and subtotal row all use this so columns align vertically.
-//   QTY · DESCRIPTION · PRICE/DAY · PICKUP · RETURN · DAYS · TOTAL · ACTIONS
-const TABLE_GRID = 'grid-cols-[64px_minmax(280px,1fr)_90px_140px_140px_72px_90px_64px]';
+//   QTY · AVAIL · DESCRIPTION · PRICE/DAY · PICKUP · RETURN · DAYS · TOTAL · ACTIONS
+// AVAIL is narrow and often blank — only catalog-matched warehouse
+// gear can answer it — but it is a COLUMN so a rep can read down it
+// for the one row that is short.
+const TABLE_GRID = 'grid-cols-[64px_52px_minmax(280px,1fr)_90px_140px_140px_72px_90px_64px]';
 
 function DepartmentGroup({
   department, rows, onChange, onDelete, onAdd, onBulkApply, onApplyWeekCap, onAddToCatalog, onCommit, onPickPackage, registerDescriptionRef,
@@ -4100,6 +4103,7 @@ function DepartmentGroup({
           columns are suppressed and the row cells render an em-dash. */}
       <div className={`grid ${TABLE_GRID} gap-2 px-3 py-1.5 bg-lt-card/40 border-b border-lt-hairline text-[10px] uppercase tracking-wider text-lt-fg3 font-bold items-center`}>
         <div>Qty</div>
+        <div className="text-center">Avail</div>
         <div>Description</div>
         <div>{isExpendable ? 'Price' : 'Price/day'}</div>
         <div>{isExpendable ? '' : 'Pickup'}</div>
@@ -4148,6 +4152,7 @@ function DepartmentGroup({
         {derivedLine && (
           <div className={`grid ${TABLE_GRID} gap-2 px-3 py-2 items-center border-t border-dashed border-lt-hairline bg-chip-good-bg/40`}>
             <div className="text-sm tabular-nums text-lt-fg2 text-center">1</div>
+            <div />
             <div className="min-w-0">
               <div className="text-sm text-lt-fg font-medium">{derivedLine.label}</div>
               <div className="text-[11px] text-lt-fg3">{derivedLine.note}</div>
@@ -4177,7 +4182,7 @@ function DepartmentGroup({
 
       {/* Subtotal row */}
       <div className={`grid ${TABLE_GRID} gap-2 px-3 py-2 bg-lt-card/40 border-t border-lt-hairline text-lt-fg2 items-center`}>
-        <div className="col-span-6 font-bold uppercase tracking-wider text-[11px]">Subtotal</div>
+        <div className="col-span-7 font-bold uppercase tracking-wider text-[11px]">Subtotal</div>
         <div className="text-right tabular-nums text-chip-good-fg text-base font-bold">{fmtMoney(subtotal + (derivedLine?.amount ?? 0))}</div>
         <div></div>
       </div>
@@ -4277,25 +4282,28 @@ function LineItemRow({
   return (
     <div className={`px-3 py-2 hover:bg-lt-card/30 ${isMember ? 'bg-violet-50/30 pl-8' : ''}`}>
       <div className={`grid ${TABLE_GRID} gap-2 items-start`}>
-        {/* QTY — primary scan target; bigger digit, no extra height.
-            The stock line under it answers "do we have that many?"
-            while the agent is still typing. */}
-        <div>
-          <IntegerInput
-            value={item.quantity}
-            onChange={(next) => onChange(id, { quantity: next })}
-            onDraftChange={setQtyDraft}
-            min={1}
-            ariaLabel="Quantity"
-            className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-base font-bold tabular-nums text-lt-fg"
+        {/* QTY — primary scan target; bigger digit, no extra height */}
+        <IntegerInput
+          value={item.quantity}
+          onChange={(next) => onChange(id, { quantity: next })}
+          onDraftChange={setQtyDraft}
+          min={1}
+          ariaLabel="Quantity"
+          className="w-full bg-lt-card border border-lt-hairline rounded px-2 py-1 text-base font-bold tabular-nums text-lt-fg"
+        />
+
+        {/* AVAIL — its own column, reading the quantity BEING TYPED so
+            it goes red on the keystroke that passes the shelf rather
+            than on the next Tab. The 3px sits its centre exactly on the
+            box's beside it — measured, not guessed; this grid is
+            items-start, so the cell would otherwise ride at the top. */}
+        <div className="pt-[3px] text-center">
+          <StockChip
+            stock={rowStock?.stock}
+            requested={qtyDraft ?? item.quantity}
+            otherOnThisOrder={rowStock?.otherOnThisOrder ?? 0}
+            label={null}
           />
-          <div className="mt-0.5 text-center">
-            <StockChip
-              stock={rowStock?.stock}
-              requested={qtyDraft ?? item.quantity}
-              otherOnThisOrder={rowStock?.otherOnThisOrder ?? 0}
-            />
-          </div>
         </div>
 
         {/* DESCRIPTION column — combobox + quiet status pill */}

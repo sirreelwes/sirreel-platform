@@ -3229,16 +3229,17 @@ export default function OrderDetailPage() {
         <td className="px-4 py-2 text-center">
           <input type="number" value={editQty} onChange={(e) => setEditQty(e.target.value)}
             className="w-14 px-2 py-1 bg-lt-card border border-lt-hairline rounded text-xs text-lt-fg text-center" />
-          {/* Reads the typed value, not the saved one — the whole point
-              is that it goes red as the agent passes what we have. */}
-          <div className="mt-1 text-center">
-            <StockChip
-              stock={itemStock[(editInvItemId || li.inventoryItem?.id) ?? '']}
-              requested={parseInt(editQty) || 0}
-              otherOnThisOrder={otherQtyOnOrder(li)}
-              subRented={(li.subRentals?.length ?? 0) > 0}
-            />
-          </div>
+        </td>
+        {/* Reads the TYPED quantity, not the saved one — the whole point
+            is that it goes red as the agent passes what we have. */}
+        <td className="px-4 py-2 text-center">
+          <StockChip
+            stock={itemStock[(editInvItemId || li.inventoryItem?.id) ?? '']}
+            requested={parseInt(editQty) || 0}
+            otherOnThisOrder={otherQtyOnOrder(li)}
+            subRented={(li.subRentals?.length ?? 0) > 0}
+            label={null}
+          />
         </td>
         <td className="px-4 py-2 text-center">
           <input type="number" step="0.5" value={editDays} onChange={(e) => setEditDays(e.target.value)}
@@ -3313,16 +3314,15 @@ export default function OrderDetailPage() {
         <td className="px-4 py-3 text-lt-fg2 whitespace-nowrap">
           {fmt(li.rate)}<span className="text-lt-fg3 text-xs">/{li.rateType === "FLAT" ? "flat" : li.rateType === "WEEKLY" ? "wk" : "day"}</span>
         </td>
-        <td className="px-4 py-3 text-center text-lt-fg2">
-          <span className="inline-flex items-baseline gap-1">
-            {li.quantity}
-            <StockChip
-              stock={itemStock[li.inventoryItem?.id ?? '']}
-              requested={li.quantity}
-              otherOnThisOrder={otherQtyOnOrder(li)}
-              subRented={(li.subRentals?.length ?? 0) > 0}
-            />
-          </span>
+        <td className="px-4 py-3 text-center text-lt-fg2">{li.quantity}</td>
+        <td className="px-4 py-3 text-center">
+          <StockChip
+            stock={itemStock[li.inventoryItem?.id ?? '']}
+            requested={li.quantity}
+            otherOnThisOrder={otherQtyOnOrder(li)}
+            subRented={(li.subRentals?.length ?? 0) > 0}
+            label={null}
+          />
         </td>
         <td className="px-4 py-3 text-center text-lt-fg2">
           {(() => {
@@ -4729,6 +4729,13 @@ export default function OrderDetailPage() {
               <th className="px-4 py-2.5 font-medium">Dates</th>
               <th className="px-4 py-2.5 font-medium">Rate</th>
               <th className="px-4 py-2.5 font-medium text-center">Qty</th>
+              {/* What the shelf has free for these dates, in its own
+                  column so a rep can read DOWN it — the shortfall on a
+                  20-line order is one red number in a column of greys,
+                  not something to hunt for inside the Qty cell. Blank
+                  on rows nothing can answer for (vehicles, uncounted
+                  gear): see src/lib/inventory/stock.ts. */}
+              <th className="px-4 py-2.5 font-medium text-center">Avail</th>
               <th className="px-4 py-2.5 font-medium text-center">Days</th>
               <th className="px-4 py-2.5 font-medium text-right">Total</th>
               {/* Actions column always renders so the row-actions
@@ -4742,7 +4749,7 @@ export default function OrderDetailPage() {
           </thead>
           <tbody>
             {order.lineItems.length === 0 ? (
-              <tr><td colSpan={8} className="px-6 py-8 text-center text-lt-fg3">
+              <tr><td colSpan={9} className="px-6 py-8 text-center text-lt-fg3">
                 No line items yet. Click \"+ Add Item\" to start building this order.
               </td></tr>
             ) : (
@@ -4764,7 +4771,7 @@ export default function OrderDetailPage() {
                     const open = bulkDaysDept === section.key;
                     return (
                       <tr className="bg-lt-inner/60 border-y border-lt-hairline">
-                        <td colSpan={5} className="px-6 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-lt-fg2">
+                        <td colSpan={6} className="px-6 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-lt-fg2">
                           {lineItemSectionLabel(section.key)}
                           <span className="ml-2 font-normal normal-case tracking-normal text-lt-fg3">
                             {section.items.length} {section.items.length === 1 ? 'line' : 'lines'}

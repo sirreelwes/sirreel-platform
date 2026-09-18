@@ -42,6 +42,7 @@ export function StockReadout({
   available,
   requested,
   detail,
+  label = 'avail',
   className = '',
 }: {
   /** How many are free. May be negative when already oversold. */
@@ -50,6 +51,13 @@ export function StockReadout({
   requested: number
   /** Tooltip: where the number came from, in the caller's own terms. */
   detail: string
+  /**
+   * The word after the number. Pass null where a column header already
+   * says it — in a table the suffix on every row is noise, but beside a
+   * lone input (the reservation modal, the add-line form) a bare number
+   * is unreadable.
+   */
+  label?: string | null
   className?: string
 }) {
   const over = requested > available
@@ -63,7 +71,7 @@ export function StockReadout({
       } ${className}`}
     >
       {shown}
-      <span className={over ? 'font-normal' : ''}>avail</span>
+      {label && <span className={over ? 'font-normal' : ''}>{label}</span>}
     </span>
   )
 }
@@ -72,6 +80,8 @@ export interface StockChipProps {
   stock: ItemStock | null | undefined
   /** What this line is asking for right now (the value in the input). */
   requested: number
+  /** See StockReadout — null when a column header already says "avail". */
+  label?: string | null
   /** Same item, other lines on THIS order, overlapping these dates. */
   otherOnThisOrder?: number
   /** Partner-fulfilled lines don't come off our shelf — render nothing. */
@@ -84,6 +94,7 @@ export function StockChip({
   requested,
   otherOnThisOrder = 0,
   subRented = false,
+  label = 'avail',
   className = '',
 }: StockChipProps) {
   if (subRented || !stock) return null
@@ -107,6 +118,7 @@ export function StockChip({
       available={available}
       requested={requested}
       detail={detail}
+      label={label}
       className={className}
     />
   )
