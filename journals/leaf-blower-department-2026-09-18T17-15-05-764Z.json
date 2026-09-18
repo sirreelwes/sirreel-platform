@@ -1,0 +1,17 @@
+{
+  "ranAt": "2026-09-18T17:15:05.765Z",
+  "authorisedBy": "Wes, 2026-09-18 — \"move it to PRO_SUPPLIES\"",
+  "itemId": "efedd3a1-9259-4efc-9826-e92c2315167d",
+  "code": "TOO-LEAF-BLOWER-ELECTRIC",
+  "before": {
+    "department": "GE"
+  },
+  "after": {
+    "department": "PRO_SUPPLIES"
+  },
+  "category": {
+    "name": "Tools & Cleaning",
+    "department": "PRO_SUPPLIES"
+  },
+  "existingLinesUntouched": 0
+}
