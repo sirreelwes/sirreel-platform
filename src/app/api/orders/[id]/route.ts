@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { loadOrderReplacementValue } from '@/lib/coi/replacementValue';
 import { loadOrderWarehouseFlags } from "@/lib/orders/warehouseLineFlags";
+import { addedAfterPullForOrder } from "@/lib/orders/addedAfterPull";
 import { deliveryRequirementForOrder } from "@/lib/orders/requiresDelivery";
 import { can } from "@/lib/permissions";
 import { recalcOrderTotals } from "@/lib/orders";
@@ -248,7 +249,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
   // client-facing surface reads it. See lib/orders/warehouseLineFlags.
   const warehouseFlags = await loadOrderWarehouseFlags(id);
 
-  return NextResponse.json({ ...order, deliveryRequirement, quotePdfStale, loadsOn, replacementValue, warehouseFlags });
+  // Gear added after the floor already pulled this order (Wes,
+  // 2026-09-18). The rep who added it is the one who has to know the
+  // warehouse thinks this order is done — see lib/orders/addedAfterPull.
+  const addedSincePull = (await addedAfterPullForOrder(id)).gear;
+
+  return NextResponse.json({
+    ...order, deliveryRequirement, quotePdfStale, loadsOn, replacementValue, warehouseFlags,
+    addedSincePull,
+  });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {

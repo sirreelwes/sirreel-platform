@@ -319,6 +319,9 @@ type Order = {
     releaseNote: string | null;
     releasedBy: { id: string; name: string | null; email: string } | null;
   } | null;
+  /** Gear added after the warehouse filed this order's check-out sheet —
+   *  work the floor does not know about (lib/orders/addedAfterPull.ts). */
+  addedSincePull?: { id: string; description: string; quantity: number }[];
   // Phase 5 commit 1 — booked snapshot anchor. The Generate invoice
   // button is gated on bookedTotal being non-null.
   bookedTotal: string | null;
@@ -1716,7 +1719,7 @@ export default function OrderDetailPage() {
   // booked, or status got rolled back); we surface the server's error.
   const [bookErr, setBookErr] = useState<string | null>(null);
   const [booking, setBooking] = useState(false);
-  const bookIt = async () => {
+  const bookIt = async (confirmUnsignedPartner = false) => {
     if (booking) return;
     setBooking(true);
     setBookErr(null);
@@ -1724,8 +1727,24 @@ export default function OrderDetailPage() {
       const r = await fetch(`/api/orders/${orderId}/book`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(confirmUnsignedPartner ? { confirmUnsignedPartner: true } : {}),
       });
       const data = await r.json().catch(() => ({}));
+      // A partner on this order has nothing signed (Wes 2026-09-18). Their
+      // agreement is what carries the condition and indemnity back to them,
+      // so the server refuses once and names them. The rep cannot produce a
+      // countersignature, so it is an override rather than a wall — and the
+      // override is recorded on the audit row.
+      if (r.status === 409 && data.error === "unsigned partner") {
+        const go = confirm(`${data.reason}\n\nBook it anyway?`);
+        if (go) {
+          setBooking(false);
+          await bookIt(true);
+          return;
+        }
+        setBookErr("Not booked — the partner agreement isn't signed.");
+        return;
+      }
       if (!r.ok || !data.ok) {
         setBookErr(`Book it failed: ${data.error || `HTTP ${r.status}`}`);
         return;
@@ -1753,12 +1772,26 @@ export default function OrderDetailPage() {
     setBooking(true);
     setBookErr(null);
     try {
-      const r = await fetch(`/api/orders/${orderId}/mark-booked`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note: fromDraft ? "booked from draft on the order page" : null }),
-      });
-      const data = await r.json().catch(() => ({}));
+      const post = (confirmUnsignedPartner: boolean) =>
+        fetch(`/api/orders/${orderId}/mark-booked`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            note: fromDraft ? "booked from draft on the order page" : null,
+            ...(confirmUnsignedPartner ? { confirmUnsignedPartner: true } : {}),
+          }),
+        });
+      let r = await post(false);
+      let data = await r.json().catch(() => ({}));
+      // Same unsigned-partner override as bookIt above.
+      if (r.status === 409 && data.error === "unsigned partner") {
+        if (!confirm(`${data.reason}\n\nBook it anyway?`)) {
+          setBookErr("Not booked — the partner agreement isn't signed.");
+          return;
+        }
+        r = await post(true);
+        data = await r.json().catch(() => ({}));
+      }
       if (!r.ok || !data.ok) {
         setBookErr(`Mark booked failed: ${data.reason || data.error || `HTTP ${r.status}`}`);
         return;
@@ -3446,7 +3479,7 @@ export default function OrderDetailPage() {
                 const onClick = isSendQuote
                   ? openSendQuoteReview
                   : isBook
-                    ? bookIt
+                    ? () => bookIt()
                     : isMarkBooked
                       ? markBooked
                       : () => updateStatus(action.next);
@@ -3802,6 +3835,20 @@ export default function OrderDetailPage() {
                   Check-in report
                 </Link>
               </div>
+              {/* The floor has already worked this order and something
+                  has been added to it since. Until the rep sends it over,
+                  nobody in the warehouse knows (Wes, 2026-09-18). */}
+              {(order.addedSincePull?.length ?? 0) > 0 && (
+                <div className="mt-2.5 text-[13px] text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-lg px-3 py-2">
+                  <b>
+                    The warehouse has already pulled this order — {order.addedSincePull!.length} line
+                    {order.addedSincePull!.length === 1 ? '' : 's'} added since:
+                  </b>{' '}
+                  {order.addedSincePull!.map((l) => `${l.quantity} × ${l.description}`).join(', ')}.
+                  Send the pull order again so the floor gets a sheet for{' '}
+                  {order.addedSincePull!.length === 1 ? 'it' : 'them'}.
+                </div>
+              )}
               {sendWarehouseFlash ? (
                 <div className="mt-2.5 text-xs text-chip-good-fg">{sendWarehouseFlash}</div>
               ) : order.pickList?.releasedAt ? (

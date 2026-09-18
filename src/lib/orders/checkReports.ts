@@ -31,6 +31,8 @@ import type {
 } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
+import { addedAfterPull, stillPullable } from '@/lib/orders/addedAfterPull'
+import { isPickableLine } from '@/lib/orders/lineType'
 import { attributeLines, rollupPreppedBy, summarizePasses, type PassSummary } from '@/lib/orders/checkPasses'
 import { recalcOrderTotals } from '@/lib/orders'
 import { settleJobReturnSafe } from '@/lib/fleet/settleJobReturn'
@@ -110,6 +112,9 @@ export interface ReportListRow {
     partial: boolean
     /** How many lines were left off it. */
     offSheet: number
+    /** Gear added to the order after it was filed — a finished sheet
+     *  with new work under it is NOT a finished row. */
+    addedSince: number
   } | null
 }
 
@@ -151,11 +156,14 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
       job: { select: { name: true } },
       company: { select: { name: true } },
       _count: { select: { lineItems: true } },
+      // Ids + types, not just a count: the row has to know which lines
+      // the filed sheet never spoke to (addedAfterPull.ts).
+      lineItems: { select: { id: true, type: true, warehouseAddedAt: true } },
       checkReports: {
         where: { edge },
         select: {
           submittedAt: true, preppedBy: true, changedOrder: true, partial: true,
-          lines: { where: { onSheet: false }, select: { id: true } },
+          lines: { select: { orderLineItemId: true, onSheet: true } },
         },
       },
     },
@@ -164,6 +172,11 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
 
   return orders.map((o) => {
     const d = edge === 'OUT' ? o.startDate : o.endDate
+    const report = o.checkReports[0] ?? null
+    const added = addedAfterPull(
+      o.lineItems,
+      report ? { submittedAt: report.submittedAt, lineIds: report.lines.map((l) => l.orderLineItemId) } : null,
+    ).filter((li) => isPickableLine(li) && stillPullable(o.status))
     return {
       orderId: o.id,
       orderNumber: o.orderNumber,
@@ -176,13 +189,14 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
       // the previous day west of Greenwich.
       ymd: d ? d.toISOString().slice(0, 10) : '',
       lineCount: o._count.lineItems,
-      filed: o.checkReports[0]
+      filed: report
         ? {
-            submittedAt: o.checkReports[0].submittedAt,
-            preppedBy: o.checkReports[0].preppedBy,
-            changedOrder: o.checkReports[0].changedOrder,
-            partial: o.checkReports[0].partial,
-            offSheet: o.checkReports[0].lines.length,
+            submittedAt: report.submittedAt,
+            preppedBy: report.preppedBy,
+            changedOrder: report.changedOrder,
+            partial: report.partial,
+            offSheet: report.lines.filter((l) => !l.onSheet).length,
+            addedSince: added.length,
           }
         : null,
     }
@@ -306,6 +320,11 @@ export interface DraftLine {
   /** False when a previous partial pull left this line off the sheet.
    *  Re-opening the report shows it still waiting rather than counted. */
   onSheet: boolean
+  /** The filed sheet has NO row for this line — it was added to the
+   *  order after the warehouse pulled it, so nobody has touched it. The
+   *  form starts it uncounted, the way a fresh sheet starts every line.
+   *  See lib/orders/addedAfterPull.ts (Wes, 2026-09-18). */
+  addedAfterPull: boolean
   /** Who counted this line on a previous pass, and when (ISO). Null on a
    *  fresh line, an off-sheet line, and a pre-2026-09-15 row with no
    *  name on its report. See checkPasses.ts. */
@@ -343,6 +362,8 @@ export interface ReportDraft {
     sheetPhotoUrl: string | null
     /** Everyone who has counted something on this sheet, first first. */
     passes: PassSummary[]
+    /** Gear added to the order SINCE it was filed — still to pull. */
+    addedSince: number
   } | null
   /** The name box's starting value. EMPTY once a sheet is on file: the
    *  person opening it again is usually somebody else picking up the
@@ -388,9 +409,9 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
       agent: { select: { name: true } },
       lineItems: {
         select: {
-          id: true, description: true, qualifier: true,
+          id: true, description: true, qualifier: true, type: true,
           quantity: true, fulfillmentLane: true, sortOrder: true,
-          inventoryItemId: true,
+          inventoryItemId: true, warehouseAddedAt: true,
           inventoryItem: { select: { description: true, code: true } },
         },
         orderBy: { sortOrder: 'asc' },
@@ -432,6 +453,19 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
     (prior?.lines ?? []).filter((l) => l.orderLineItemId).map((l) => [l.orderLineItemId as string, l]),
   )
 
+  // Lines this sheet has never spoken to. On a filed sheet that means
+  // they were added to the order afterwards — nobody pulled them, and
+  // the form must not pre-fill them as though somebody had.
+  // Gear only: a fee or a discount is not something anybody pulls, and
+  // starting one uncounted would block the sheet from filing over a row
+  // that has no physical answer.
+  const addedIds = new Set(
+    addedAfterPull(
+      order.lineItems,
+      prior ? { submittedAt: prior.submittedAt, lineIds: prior.lines.map((l) => l.orderLineItemId) } : null,
+    ).filter(isPickableLine).map((l) => l.id),
+  )
+
   const ymd = (d: Date | null) => (d ? d.toISOString().slice(0, 10) : null)
 
   // A row filed before lines carried a name reads as its report's — but
@@ -467,6 +501,11 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
           partial: prior.partial,
           sheetPhotoUrl: prior.sheetPhotoUrl,
           passes: summarizePasses(prior.lines.map((l) => ({ ...l, ...byline(l) }))),
+          // The banner tells the floor to go and pull. Once the truck
+          // is back that is no longer an instruction anyone can follow,
+          // so the count stops — the per-line uncounted state stays,
+          // because "nobody counted this" is true either way.
+          addedSince: stillPullable(order.status) ? addedIds.size : 0,
         }
       : null,
     preppedBy: '',
@@ -487,6 +526,7 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         // back still off the sheet, so the second pull starts where the
         // first one stopped instead of re-counting what already went.
         onSheet: p ? p.onSheet : true,
+        addedAfterPull: addedIds.has(li.id),
         ...(p ? byline(p) : { countedBy: null, countedAt: null }),
         substituteFor: p?.substituteFor ?? null,
         note: p?.note ?? null,

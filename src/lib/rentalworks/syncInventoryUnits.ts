@@ -77,6 +77,15 @@ export interface InventoryUnitSyncResult {
   unmatched: number
   /** The distinct unmatched ICodes, so the report names what to fix. */
   unmatchedICodes: string[]
+  /** Units that DID match a catalog row — one nobody can order, because
+   *  it is archived. The quiet half of the same failure: `unmatched`
+   *  reads zero while the barcode still has nowhere to land on a check
+   *  sheet. Three codes were sitting here on 2026-09-18, one of them
+   *  (the misters) since the 2026-09-13 dedupe named it.
+   *  Fix by pointing the ICode at the live row —
+   *  scripts/link-barcoded-catalog-rows.ts. */
+  stranded: number
+  strandedICodes: string[]
   pages: number
   error?: string
 }
@@ -101,7 +110,8 @@ const num = (v: unknown): number | null =>
 export async function syncInventoryUnits(): Promise<InventoryUnitSyncResult> {
   const empty = {
     pulled: 0, written: 0, created: 0, stale: 0,
-    unmatched: 0, unmatchedICodes: [] as string[], pages: 0,
+    unmatched: 0, unmatchedICodes: [] as string[],
+    stranded: 0, strandedICodes: [] as string[], pages: 0,
   }
 
   // ── 1. Pull the whole register into memory first. A partial pull must
@@ -141,16 +151,31 @@ export async function syncInventoryUnits(): Promise<InventoryUnitSyncResult> {
   const icodes = [...new Set(usable.map((u) => str(u.ICode)).filter((c): c is string => !!c))]
   const catalog = await prisma.inventoryItem.findMany({
     where: { rwICode: { in: icodes } },
-    select: { id: true, rwICode: true },
+    select: { id: true, rwICode: true, archivedAt: true },
   })
-  // Several catalog rows can share an ICode (colour variants). First wins
-  // — the join exists to name the PRODUCT for a scan, and the variants
-  // are the same product to a picker.
+  // Several catalog rows can share an ICode (colour variants). An
+  // ORDERABLE row always wins; among equals, first wins — the join
+  // exists to name the PRODUCT for a scan, and the variants are the same
+  // product to a picker.
+  //
+  // The archived clause is not cosmetic. Resolving to an archived row
+  // makes the unit unscannable onto any line anyone can book: nobody can
+  // order that product, so the barcode has nowhere to land. That is how
+  // 43 units ended up stranded on 4 archived rows (2026-09-13), and how
+  // the misters and the Magliner Sr w/ shelf were still stranded on
+  // 2026-09-18. `findMany` has no inherent order, so leaving it to "first
+  // wins" makes which row owns a barcode a coin flip per run.
   const byICode = new Map<string, string>()
-  for (const c of catalog) {
+  for (const c of [...catalog].sort((a, b) => Number(!!a.archivedAt) - Number(!!b.archivedAt))) {
     if (c.rwICode && !byICode.has(c.rwICode)) byICode.set(c.rwICode, c.id)
   }
   const unmatchedICodes = icodes.filter((c) => !byICode.has(c)).sort()
+  // Matched, but to a row nobody can book. Counted separately so a run
+  // cannot report "every unit resolved" while the gear is unscannable.
+  const archivedIds = new Set(catalog.filter((c) => c.archivedAt).map((c) => c.id))
+  const strandedICodes = icodes
+    .filter((c) => { const id = byICode.get(c); return !!id && archivedIds.has(id) })
+    .sort()
 
   // ── 3. Write. Sequential upserts: ~1.8k rows once a night is not worth
   //       the complexity of a batched raw INSERT ... ON CONFLICT, and a
@@ -218,6 +243,17 @@ export async function syncInventoryUnits(): Promise<InventoryUnitSyncResult> {
   }
 
   const stale = [...existing].filter((id) => !seen.has(id)).length
+  const strandedSet = new Set(strandedICodes)
+  const stranded = usable.filter((u) => {
+    const c = str(u.ICode)
+    return !!c && strandedSet.has(c) && !u.Inactive
+  }).length
+  if (strandedICodes.length) {
+    console.warn(
+      `[rw-units] ${stranded} unit(s) on ${strandedICodes.length} ICode(s) resolve to an ARCHIVED catalog row ` +
+      `(${strandedICodes.join(', ')}) — unscannable until the ICode points at a live row.`,
+    )
+  }
 
   return {
     ok: true,
@@ -227,6 +263,8 @@ export async function syncInventoryUnits(): Promise<InventoryUnitSyncResult> {
     stale,
     unmatched,
     unmatchedICodes,
+    stranded,
+    strandedICodes,
     pages,
   }
 }
