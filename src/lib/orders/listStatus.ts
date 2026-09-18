@@ -115,12 +115,18 @@ export function deriveOrderListState(order: OrderListStateInput): OrderListState
  * deliberately absent — those are the cadence runner's to write, not a
  * rep's to claim. MANUAL_CLOSE stays out for the same reason: it says
  * nothing about WHY.
+ *
+ * INSURANCE is its own reason rather than a flavour of SCOPE_CHANGED (Wes
+ * 2026-09-18): the production is still shooting, it just could not produce
+ * a certificate that clears our requirements. Counting those separately is
+ * the only way to see how much the COI desk costs us.
  */
 export const LOST_REASON_CHOICES: { value: LostReason; label: string }[] = [
   { value: 'LOST_TO_COMPETITOR', label: 'Went with another vendor' },
   { value: 'BUDGET',             label: 'Budget' },
   { value: 'TIMING',             label: 'Timing / dates' },
   { value: 'SCOPE_CHANGED',      label: 'Scope changed or production cancelled' },
+  { value: 'INSURANCE',          label: 'Insurance requirements not met' },
   { value: 'OTHER',              label: 'Other' },
 ]
 
@@ -133,5 +139,6 @@ export const LOST_REASON_LABEL: Record<LostReason, string> = {
   BUDGET:               'Budget',
   TIMING:               'Timing / dates',
   SCOPE_CHANGED:        'Scope changed or production cancelled',
+  INSURANCE:            'Insurance requirements not met',
   OTHER:                'Other',
 }

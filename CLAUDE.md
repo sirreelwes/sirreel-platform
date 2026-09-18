@@ -1732,6 +1732,30 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - Still NOT done: nothing chases the client a second time if they ignore it —
   the `card-declined` action item puts it on a rep's list and sends nothing.
 
+## Lost because of insurance — a reason of its own (2026-09-18 — Wes)
+- Wes: "We've lost a couple of jobs because of improper insurance from the
+  Production. I'd like to have this as an option." The Mark-lost picker had
+  five reasons and none of them was true of that job — a rep either picked
+  `SCOPE_CHANGED` (wrong: the show is still shooting, just not on our gear)
+  or `OTHER` (which counts nothing). With the COI desk, the broker directory
+  and the replacement-value work all built on the premise that certificates
+  cost us deals, the one number that would prove it was unrecordable.
+- **`LostReason.INSURANCE`**, label **"Insurance requirements not met"**.
+  `LOST_REASON_CHOICES` / `LOST_REASON_LABEL` in `src/lib/orders/listStatus.ts`
+  are the one list — MarkLostModal and the /orders picker both read it — plus
+  the human-reason allowlists in `/api/jobs/[id]/mark-lost` and
+  `/api/orders/[id]/mark-lost`. Nothing else in the codebase branches on a
+  lost reason.
+- **Enum value by additive SQL, NEVER `db push`, and BEFORE the deploy:**
+  `npx tsx scripts/add-insurance-lost-reason.ts` (one
+  `ALTER TYPE … ADD VALUE IF NOT EXISTS`, idempotent), or the same statement
+  pasted into the Neon console from an iPad. A Prisma client 500s reading an
+  enum value Postgres does not have, and the picker offers it the moment the
+  code is live.
+- NOT done: nothing ties the loss back to the COI record that failed — the
+  reason is a bare classification, and "which requirement did they miss" is
+  still only in the rep's note. No reporting groups losses by reason yet.
+
 ## Ana can correct an invoice from her own desk (2026-09-17 — Ana)
 - Ana: "how do I update an invoice from my side?" She could not. Both ways of
   correcting an invoice existed — **regenerate** (rewrite the figures from

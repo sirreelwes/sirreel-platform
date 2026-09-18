@@ -8032,6 +8032,11 @@ enum LostReason {
   BUDGET
   TIMING
   SCOPE_CHANGED
+  // The production could not meet our insurance requirements (Wes
+  // 2026-09-18: "we've lost a couple of jobs because of improper insurance
+  // from the Production"). Distinct from SCOPE_CHANGED — the show is still
+  // happening, it just isn't happening on our gear.
+  INSURANCE
   OTHER
 }
 

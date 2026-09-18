@@ -21,6 +21,7 @@ const ALLOWED_REASONS = new Set<LostReason>([
   'BUDGET',
   'TIMING',
   'SCOPE_CHANGED',
+  'INSURANCE',
   'OTHER',
 ]);
 
