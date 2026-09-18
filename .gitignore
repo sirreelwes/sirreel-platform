@@ -113,3 +113,7 @@ scripts/*
 !scripts/planyo-unit-alignment.ts
 !scripts/make-og-card.py
 !scripts/brief-email-crosscheck.ts
+!scripts/move-df50-cord.ts
+
+# Claude Code worktrees — nested checkouts, never part of a commit
+.claude/worktrees/

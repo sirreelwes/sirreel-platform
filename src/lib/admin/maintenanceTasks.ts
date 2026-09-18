@@ -84,6 +84,16 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     cliEquivalent: 'npx tsx scripts/seed-df50-fluid-kit.ts',
   },
   {
+    id: 'df50-cord-to-machine',
+    title: 'DF-50: the power cord belongs to the machine',
+    summary: 'Moves the IEC power cord off the hazer fluid and onto all three DF-50 machine rows.',
+    detail:
+      'Wes 2026-09-17: "The IEC POWER CORD EDISON is attached to the DF50 Hazer Fluid 1 Gallon. It should be attached to the DF50 Hazer." A jug of fluid has no socket, so every order that took the fluid pulled a cord with it, and every order that took only the machine — which happens, the DF-50 goes out pre-juiced — got none. The cord goes on all three machine rows, keeping whatever ratio and billing it already had; the wrong link is DEACTIVATED, never deleted, because it carries the order lines it generated and those orders really did go out that way. Undo it by setting that link active again. Running it twice changes nothing. Orders already quoted are not touched.',
+    category: 'seed',
+    writes: 'inventory_kit_pieces (up to 3 created, one per DF-50 machine row; the misplaced link deactivated) · sr_audit_logs',
+    cliEquivalent: 'npx tsx scripts/move-df50-cord.ts',
+  },
+  {
     id: 'seed-vsm-planet-roster',
     title: 'Seed VSM Planet’s photo roster',
     summary: 'Creates the 14 Photo Shoot Rentals units on VSM Planet Rentals, and mints their account link.',
