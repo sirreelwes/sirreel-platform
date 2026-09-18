@@ -90,6 +90,11 @@ interface CompositionOk {
   // Quick Reply only — rep-facing fleet-utilization detail behind the draft's
   // availability tier. Never rendered in the client email itself.
   quickReplyInsight?: QuickReplyInsight;
+  // Card-auth only — why the ask is open, derived server-side from the job's
+  // card (Wes 2026-09-18). DECLINED/EXPIRED mean a card IS on file and this
+  // is asking for a second one; the strip below says so, and the seeded
+  // wording already reflects it.
+  cardAskReason?: 'MISSING' | 'DECLINED' | 'EXPIRED' | 'NONE';
 }
 
 interface QuickReplyInsight {
@@ -765,6 +770,23 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
               Sending again may double-message the client. Use <span className="font-semibold">Send anyway</span> only if this adds something new.
             </div>
           )}
+
+          {/* A card IS on file and it will not charge. Said here because the
+              rep is about to ask a client who already gave us a card, and
+              because the seeded wording differs from the standard ask —
+              somebody re-reading it should know why (Wes 2026-09-18). */}
+          {preview &&
+            (preview.cardAskReason === 'DECLINED' || preview.cardAskReason === 'EXPIRED') && (
+              <div className="text-xs text-amber-200 bg-amber-900/20 border border-amber-800/60 rounded px-3 py-2">
+                <span className="font-bold">
+                  {preview.cardAskReason === 'DECLINED'
+                    ? 'The card on file was declined'
+                    : 'The card on file has expired'}
+                </span>{' '}
+                — this asks for a different one, and says so. The card already on file stays
+                where it is; the client adds a second one in the portal.
+              </div>
+            )}
 
           {preview && (
             <>

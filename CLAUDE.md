@@ -1324,6 +1324,62 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## A declined card has a button now (2026-09-18 — Wes/Jose)
+- Wes: "Jose inputted a card for a client, which was declined, but it says
+  that there's no way for him to ask for a new card. We need a button for
+  that." Two dead ends, in two places, for the same reason: the card ASK is
+  job-scoped and both screens a decline lands on are not.
+  - **The keyed path** (/crm/[id]#cards → "Key in a card the client
+    authorized"). A card that fails the $0 check is deliberately NOT stored,
+    so the 402 was a red sentence with nothing after it — and the ask lives
+    on the job page, which the wallet never named.
+  - **The portal path.** There the unapproved authorization IS stored (the
+    client is mid-form; the rest of their paperwork must not be lost), so
+    the job's Card Authorization tile read "On file · ····4242" over the line
+    "The $0 check was not approved — ask for another card" and offered no
+    control: "Send CC request" renders only in the no-card branch, which is
+    the one branch a declined card is never in.
+- **`cardAskState()` in `src/lib/payments/cardAsk.ts` is the one rule** (pure;
+  `npm run test:card-ask`). MISSING (no card) → "Send CC request"; DECLINED
+  (`validated === false`) and EXPIRED → "Ask for another card", flagged
+  `replacement`. **DECLINED outranks EXPIRED** when a card is both, which it
+  usually is — an expired card also fails the $0 check — and that matches
+  what the tile has said since 2026-09-01. Only an explicit `false` is a
+  decline; the rule keeps "never checked" separate even though today's two
+  readers collapse a null `authRespStat` to false, exactly as the existing
+  "Unvalidated" chip already does.
+- **Nothing sends from the wallet.** `CardAskButton` in CompanyCardsPanel
+  resolves a job and hands the staffer to `/jobs/<id>?card=ask#card-auth`,
+  which opens the SAME review modal every client email goes through — one
+  composer, so the preview, the recipient picker and the confirm cannot
+  drift into a second copy on the CRM page. Job resolution:
+  `?job=` when they walked here from a job tile, else
+  `GET /api/crm/companies/[id]/card-ask-jobs` (`cardAskJobsForCompany` in
+  jobCardOnFile.ts, soonest pickup first, archived/LOST/HOLD out, WRAPPED
+  in because a wrapped job still gets invoiced). **A LIST, never a pick** —
+  with two shows for one production, choosing for the rep is how a card
+  request lands on the wrong job's thread, and the job is what the client
+  reads in the subject. One candidate is a button, several are a choice,
+  none says so plainly rather than dead-ending again.
+- **The email says the right thing.** "Before we can send X out the door, we
+  need a credit card on file" is wrong to the client who typed one in last
+  week — it reads as our mistake and leaves them not knowing theirs was
+  refused. `cardAskClientSentence()` swaps that first sentence;
+  `composeCardAuthEmail` derives the reason SERVER-side off the job's card
+  (booking paperwork first, then the company wallet — the same precedence as
+  `/api/jobs/[id]`), never from a flag the browser passes, so a client can't
+  be told their good card failed. Everything else — the security paragraph,
+  the button, the closer — is unchanged, and MISSING/NONE leave the standard
+  ask byte-for-byte. Deliberately vague about WHY the bank refused it: we
+  don't know and their bank won't tell us. The review modal carries an amber
+  strip saying a card is on file and this asks for a second one.
+- The card already on file **stays** — the client adds another in the portal
+  (Wes 2026-09-03: "we don't wanna remove the first card"), which is what
+  `CcAuthCard`'s "Add another card" has always done.
+- NOT done: nothing chases a replacement that never arrives (no action item
+  for "asked for another card N days ago, still declined"), and a declined
+  charge at the collections desk still has no ask of its own.
+
 ## Ana can correct an invoice from her own desk (2026-09-17 — Ana)
 - Ana: "how do I update an invoice from my side?" She could not. Both ways of
   correcting an invoice existed — **regenerate** (rewrite the figures from
