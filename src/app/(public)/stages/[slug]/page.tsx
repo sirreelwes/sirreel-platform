@@ -3,6 +3,8 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getStage, STUDIO_ADDRESS, STUDIO_AMENITIES } from '@/lib/site/stages'
 import VehicleGallery from '@/components/site/VehicleGallery'
+import { JsonLd } from '@/components/site/JsonLd'
+import { breadcrumbJsonLd, rentalProductJsonLd } from '@/lib/site/structuredData'
 
 /**
  * Public stage detail — /stages/[slug]. Content from src/lib/site/stages.ts.
@@ -23,8 +25,27 @@ export default function StageDetailPage({ params }: { params: { slug: string } }
   const s = getStage(params.slug)
   if (!s || s.href) notFound()
 
+  // Same modelling as the standing sets: a stage is a rental Product of
+  // the one LocalBusiness, not a second venue at the same address. Its
+  // curated specs (sq ft, grid height, cyc) become PropertyValue pairs —
+  // the dimensions are the whole question a location scout is asking.
+  const productNode = rentalProductJsonLd({
+    name: s.name,
+    path: `/stages/${params.slug}`,
+    description: s.description || s.blurb,
+    images: s.gallery ?? (s.photo ? [s.photo] : []),
+    category: 'Stages',
+    specs: s.specs,
+  })
+  const crumbs = breadcrumbJsonLd([
+    { name: 'SirReel', path: '/' },
+    { name: 'Stages', path: '/stages' },
+    { name: s.name, path: `/stages/${params.slug}` },
+  ])
+
   return (
     <div className="max-w-[1480px] mx-auto px-5 py-8 sm:py-12">
+      <JsonLd nodes={[productNode, crumbs]} />
       <Link
         href="/stages"
         className="inline-flex items-center gap-2 rounded-full border border-[#e4dfd4] bg-white px-4 py-2 text-[13px] font-bold text-[#0c0c0d] shadow-sm hover:border-[#0F7A93] hover:bg-[#faf7f0] transition-colors"

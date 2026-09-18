@@ -3,6 +3,7 @@ import { readPrivateBlobBuffer } from '@/lib/claims/streamBlob'
 import { runCoiAiReview } from './reviewCoi'
 import { coiCheckWriteFields, hasCoiChecklist } from './checks'
 import { COI_SCOPE_SELECT, deriveCoiScope } from './jobScope'
+import { brokerFactsFromReview, recordBroker } from './brokerDirectory'
 
 /**
  * Re-run the AI review against a certificate's STORED file and persist the
@@ -40,10 +41,13 @@ export async function rerunCoiAiReview(id: string): Promise<RerunOutcome> {
       policyExpiryDate: true,
       aiResponse: true,
       deletedAt: true,
+      // For the broker directory — which client this certificate is for.
+      companyId: true,
+      company: { select: { id: true } },
       // Vehicle scope, so the stored recommendation matches what the desk is
       // shown: no truck on the job, no auto requirement to flag it for
       // (src/lib/coi/vehicleScope.ts).
-      job: { select: COI_SCOPE_SELECT },
+      job: { select: { companyId: true, ...COI_SCOPE_SELECT } },
     },
   })
   if (!existing || existing.deletedAt) return { ok: false, error: 'not found' }
@@ -75,6 +79,17 @@ export async function rerunCoiAiReview(id: string): Promise<RerunOutcome> {
       // it does not un-approve what a reviewer already approved, and it does
       // not approve on their behalf.
     },
+  })
+
+  // File the broker this certificate names (Wes 2026-09-17: "start keeping a
+  // list of brokers"). The re-run is where a producer box is first READ on
+  // older certificates, so it is the path that back-fills the directory.
+  // Best-effort: a review that succeeded must not fail over a list.
+  await recordBroker({
+    facts: brokerFactsFromReview(ai),
+    source: 'CERTIFICATE',
+    companyId: existing.job?.companyId ?? existing.companyId ?? existing.company?.id ?? null,
+    insuredName: namedInsured,
   })
 
   return {

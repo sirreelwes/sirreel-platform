@@ -37,6 +37,7 @@
 
 import type { AdditiveDdl } from '@/lib/admin/additiveDdl'
 import { JOB_THREAD_TABLES_DDL } from '@/lib/email/jobThreadTableSql'
+import { BROKER_TABLES_DDL } from '@/lib/coi/brokerTableSql'
 
 export type MaintenanceCategory = 'seed' | 'backfill' | 'schema'
 
@@ -150,6 +151,27 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     writes: 'sr_job_threads, sr_job_thread_notes, sr_job_thread_alerts (each created only if absent, with its indexes) · sr_audit_logs',
     cliEquivalent: 'npx tsx scripts/add-job-thread-tables.ts',
     ddl: JOB_THREAD_TABLES_DDL,
+  },
+  {
+    id: 'broker-directory-tables',
+    title: 'Create the broker directory tables',
+    summary: 'Adds the two tables that keep the list of insurance brokers and which client each one acts for.',
+    detail:
+      'Wes 2026-09-17: "Please start keeping a list of brokers." Until these exist a broker is only ever read off the certificate in front of you, so nothing can answer "who is this client\u2019s broker" when the producer box did not read. sr_brokers is one row per broker keyed by EMAIL (the person, the agency, the phone, when we last saw or wrote to them); sr_broker_clients ties a broker to the clients they act for. Once they exist the list fills itself \u2014 every certificate we review records the broker it names, and every review link we send records who we wrote to. Until then everything behaves exactly as it does today and /admin/brokers says this task is needed. Nothing existing is touched; running it twice changes nothing.',
+    category: 'schema',
+    writes: 'sr_brokers, sr_broker_clients (each created only if absent, with its indexes) \u00b7 sr_audit_logs',
+    cliEquivalent: 'npx tsx scripts/add-broker-tables.ts',
+    ddl: BROKER_TABLES_DDL,
+  },
+  {
+    id: 'seed-known-brokers',
+    title: 'File the brokers we already know',
+    summary: 'Puts the hand-named brokers (today: Barbara Wagner) into the directory so it does not start empty.',
+    detail:
+      'The directory fills itself from certificates and from review links we send, which means it only knows brokers we have met SINCE it shipped. This files the ones Wes named by hand first \u2014 today that is Barbara Wagner (barbara@worthingtoninsur.com), the broker on the Mega COI review. Matched on email, so running it twice never duplicates; it fills blanks and never overwrites a name someone has corrected on the page. Her agency is deliberately left blank rather than guessed from her email domain \u2014 it fills in from the producer box of the next certificate she issues. Each broker is tied to a client only when the name hint matches exactly one; an ambiguous or missing match is reported and left alone. Refuses with a fix line if the tables do not exist yet.',
+    category: 'seed',
+    writes: 'sr_brokers, sr_broker_clients \u00b7 sr_audit_logs',
+    cliEquivalent: 'npx tsx scripts/seed-known-brokers.ts [--write]',
   },
 ] as const
 

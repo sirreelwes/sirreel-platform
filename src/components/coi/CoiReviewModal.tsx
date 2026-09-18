@@ -89,6 +89,19 @@ interface CoiReviewData {
   };
   /** Server-built draft addressed to the broker. The link is added on send. */
   brokerDraft: { issues: string[]; message: string };
+  /**
+   * Brokers already on file for THIS client (src/lib/coi/brokerDirectory.ts).
+   * The whole point of keeping the list: the certificate whose producer box
+   * did not read is exactly the one most likely to need correcting, and
+   * before this the desk had nowhere to look.
+   */
+  knownBrokers: {
+    id: string;
+    email: string;
+    name: string | null;
+    agency: string | null;
+    timesContacted: number;
+  }[];
   /** Does the job rent a vehicle? null = no job to read it off. */
   vehiclesOnJob: boolean | null;
   /** What made it true, so the reviewer can see the truck named. */
@@ -273,7 +286,9 @@ export function CoiReviewModal({
       });
       setBrokerOpen((open) => {
         if (!open) {
-          setBrokerTo(d.broker?.email || '');
+          // The certificate's own producer box first; the directory when it
+          // read nothing — which is the case this list exists for.
+          setBrokerTo(d.broker?.email || d.knownBrokers?.[0]?.email || '');
           setBrokerMsg(d.brokerDraft?.message || '');
         }
         return open;
@@ -651,9 +666,13 @@ export function CoiReviewModal({
                   </dl>
                 ) : (
                   <p className="text-[12px] text-zinc-400 leading-relaxed">
-                    {data.broker?.extracted
-                      ? 'The producer box on this certificate did not read — you can still type the broker’s address below.'
-                      : 'This review was filed before we read the producer box. Re-run it to pull the broker off the certificate.'}
+                    {data.knownBrokers?.length
+                      ? `Not read off this certificate — but ${
+                          data.knownBrokers[0].name || data.knownBrokers[0].email
+                        } is on file for this client.`
+                      : data.broker?.extracted
+                        ? 'The producer box on this certificate did not read — you can still type the broker’s address below.'
+                        : 'This review was filed before we read the producer box. Re-run it to pull the broker off the certificate.'}
                   </p>
                 )}
               </div>
@@ -785,6 +804,31 @@ export function CoiReviewModal({
                         Cancel
                       </button>
                     </div>
+                    {data.knownBrokers?.length > 0 && (
+                      <div className="space-y-1">
+                        <span className="text-[11px] text-zinc-400">
+                          On file for this client
+                        </span>
+                        <div className="flex flex-wrap gap-1.5">
+                          {data.knownBrokers.map((kb) => (
+                            <button
+                              key={kb.id}
+                              onClick={() => setBrokerTo(kb.email)}
+                              title={kb.email}
+                              className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ${
+                                brokerTo.trim().toLowerCase() === kb.email
+                                  ? 'border-sky-500 bg-sky-900/40 text-sky-200'
+                                  : 'border-zinc-700 bg-zinc-800 text-zinc-300 hover:border-zinc-500'
+                              }`}
+                            >
+                              {kb.name || kb.email}
+                              {kb.agency ? ` · ${kb.agency}` : ''}
+                              {kb.timesContacted > 0 ? ' ✓' : ''}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                     <input
                       type="email"
                       value={brokerTo}
@@ -838,7 +882,11 @@ export function CoiReviewModal({
                     className="w-full bg-zinc-800 hover:bg-zinc-700 disabled:opacity-50 text-sky-300 text-[13px] font-semibold rounded-lg py-2"
                   >
                     Send the broker a review link
-                    {data.broker?.email ? ` · ${data.broker.email}` : ''}
+                    {data.broker?.email
+                      ? ` · ${data.broker.email}`
+                      : data.knownBrokers?.length
+                        ? ` · ${data.knownBrokers[0].name || data.knownBrokers[0].email}`
+                        : ''}
                   </button>
                 )}
 

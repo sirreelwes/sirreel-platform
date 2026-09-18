@@ -5,6 +5,8 @@ import { getPublicVehicleBySlug } from '@/lib/site/vehicleCatalog'
 import { partnerSection } from '@/lib/site/partnerSections'
 import { contactPrefillHref } from '@/lib/site/publicNav'
 import VehicleGallery from '@/components/site/VehicleGallery'
+import { JsonLd } from '@/components/site/JsonLd'
+import { breadcrumbJsonLd, rentalProductJsonLd } from '@/lib/site/structuredData'
 
 /**
  * Public vehicle detail — /vehicles/[slug]. Reads LIVE from VehicleCategory by
@@ -54,8 +56,28 @@ export default async function VehicleDetailPage({ params }: { params: { slug: st
     { label: 'Lift gate', value: v.specs.liftGateSpec ?? '' },
   ].filter((r) => r.value.trim() !== '')
 
+  // Structured data — the same name, photos, rate and specs the page
+  // renders below, so the markup cannot drift from what a visitor sees.
+  // The rate is already public here (it prints beside the CTA), so the
+  // Offer publishes nothing new; a price-on-quote row emits no Offer.
+  const productNode = rentalProductJsonLd({
+    name: v.name,
+    path: `/vehicles/${params.slug}`,
+    description: v.description || v.tagline || v.subtitle,
+    images: [v.photoUrl, ...v.photos.map((p) => p.src)],
+    category: v.section ? partnerSection(v.section).title : 'Production Vehicles',
+    dailyRate: v.dailyRate,
+    specs: specRows,
+  })
+  const crumbs = breadcrumbJsonLd([
+    { name: 'SirReel', path: '/' },
+    { name: 'Vehicles', path: '/vehicles' },
+    { name: v.name, path: `/vehicles/${params.slug}` },
+  ])
+
   return (
     <div className="max-w-[1480px] mx-auto px-5 py-8 sm:py-12">
+      <JsonLd nodes={[productNode, crumbs]} />
       <Link
         href={backHref}
         className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#8b857a] hover:text-[#0c0c0d] transition-colors"
