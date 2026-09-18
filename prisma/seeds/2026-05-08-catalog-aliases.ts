@@ -55,6 +55,26 @@ const INVENTORY_ALIASES: { codeContains: string; aliases: string[] }[] = [
     ],
   },
   {
+    // The live, orderable first-aid row — its two twins (code '104427'
+    // and code 'First Aid Kit "50 Person"') are archived with 0 units
+    // after the 2026-09-13 duplicate-rwICode cleanup. It is named "1st
+    // Aid Kit" and every client writes "first aid kit", so without these
+    // the two spellings share only the words "aid" and "kit": the plain
+    // form scraped past fallbackMatch's evidence floor on 2/3 coverage
+    // and the hyphenated "first-aid kit" — which tokenizes "first" on
+    // its own — matched NOTHING at all (found 2026-09-18 by
+    // npm run test:catalog-match).
+    //
+    // Spellings only. Nothing adjacent ("medical kit", "burn kit") — an
+    // alias that is not this product's own name prices a client's line
+    // off another row's rate, and the UI does not flag it.
+    codeContains: '1ST-AID-KIT',
+    aliases: [
+      'first aid kit', 'first-aid kit', 'first aid', 'first-aid',
+      '1st aid kit', '1st aid', 'aid kit',
+    ],
+  },
+  {
     codeContains: 'Surveillance Kit',
     aliases: [
       'surveillance', 'surveillances', 'earpiece', 'earpieces',
