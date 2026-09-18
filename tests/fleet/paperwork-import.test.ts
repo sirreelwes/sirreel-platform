@@ -132,6 +132,30 @@ check(
   planPaperworkImport([{ filename: 'BIT 2026-04-30.pdf', isPdf: true, inspectionDate: 'soon' }], UNITS)[0].inspectionDate === '2026-04-30',
 )
 
+console.log('\nexpiry — typed, never inferred')
+const exp = planPaperworkImport(
+  [
+    { filename: 'Cube 27 registration.pdf', isPdf: true, expiresAt: '2027-04-30' },
+    { filename: 'Cube 27 registration.pdf', isPdf: true },
+    // THE trap: the date in a BIT filename is the day it was INSPECTED. Read
+    // as an expiry it would fire a renewal alert on every truck the moment
+    // the folder is imported.
+    { filename: 'Cargo 22 BIT 2026-04-30.pdf', isPdf: true },
+    { filename: 'Cargo 22 BIT 2026-04-30.pdf', isPdf: true, expiresAt: '2028-04-30' },
+    { filename: 'Cube 10 reg.pdf', isPdf: true, expiresAt: 'next year' },
+  ],
+  UNITS,
+)
+check('a typed expiry is kept', exp[0].expiresAt === '2027-04-30')
+check('no expiry typed is null, and STILL ready', exp[1].expiresAt === null && exp[1].ready)
+check(
+  'the filename date becomes the INSPECTION date and never the expiry',
+  exp[2].inspectionDate === '2026-04-30' && exp[2].expiresAt === null,
+)
+check('inspection and expiry are independent', exp[3].inspectionDate === '2026-04-30' && exp[3].expiresAt === '2028-04-30')
+check('a malformed typed expiry is dropped, not stored', exp[4].expiresAt === null && exp[4].ready)
+check('a missing expiry is never a problem on the row', exp.every((r) => !r.problems.includes('needs-date') || r.kind === 'bit-certificate'))
+
 console.log('\nthe one-liner')
 check('counts the stuck ones', planSummary(plan).includes('need'))
 check('says so when nothing is stuck', planSummary(fixed) === '3 files matched — nothing to fix.')

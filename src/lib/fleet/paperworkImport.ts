@@ -165,6 +165,17 @@ export interface PlannedRow {
   kind: VehicleDocKind | null
   /** BIT only: the inspection date, ISO, when the filename gave one. */
   inspectionDate: string | null
+  /**
+   * When the document expires, ISO — what feeds the 30-day fleet alert.
+   *
+   * ALWAYS from the operator, NEVER from the filename. The date in
+   * "Cargo 22 BIT 2026-04-30.pdf" is the day it was INSPECTED; reading it as
+   * the expiry would file a renewal alert that fires the moment the scan is
+   * imported, on every truck at once. Optional by design — a document with no
+   * expiry on file is still the document the client needs in the cab, and
+   * making it required would put the whole folder back behind data entry.
+   */
+  expiresAt: string | null
   problems: RowProblem[]
   /** Nothing missing — this row can be filed as it stands. */
   ready: boolean
@@ -177,6 +188,8 @@ export interface PlanInput {
   unitId?: string | null
   kind?: string | null
   inspectionDate?: string | null
+  /** What the document expires on — typed, never read off the filename. */
+  expiresAt?: string | null
 }
 
 /**
@@ -214,6 +227,9 @@ export function planPaperworkImport(files: readonly PlanInput[], units: readonly
 
     if (!f.isPdf) problems.push('not-pdf')
 
+    // No fallback to findDateInFilename on purpose — see PlannedRow.expiresAt.
+    const expiresAt = f.expiresAt && /^\d{4}-\d{2}-\d{2}$/.test(f.expiresAt) ? f.expiresAt : null
+
     return {
       index,
       filename: f.filename,
@@ -222,6 +238,7 @@ export function planPaperworkImport(files: readonly PlanInput[], units: readonly
       candidates,
       kind,
       inspectionDate,
+      expiresAt,
       problems,
       ready: problems.length === 0 && !!unitId && !!kind,
     }

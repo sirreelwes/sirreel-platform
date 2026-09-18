@@ -30,11 +30,12 @@ type Row = {
   candidates: Unit[];
   kind: 'registration' | 'bit-certificate' | null;
   inspectionDate: string | null;
+  expiresAt: string | null;
   problems: string[];
   ready: boolean;
 };
-type Correction = { index: number; unitId?: string | null; kind?: string | null; inspectionDate?: string | null; skip?: boolean };
-type Filed = { index: number; filename: string; unitName: string; kind: string; isCurrent?: boolean };
+type Correction = { index: number; unitId?: string | null; kind?: string | null; inspectionDate?: string | null; expiresAt?: string | null; skip?: boolean };
+type Filed = { index: number; filename: string; unitName: string; kind: string; isCurrent?: boolean; expiresAt?: string | null };
 type Skipped = { index: number; filename: string; why: string };
 
 const PROBLEM_TEXT: Record<string, string> = {
@@ -54,7 +55,61 @@ function FleetPaperworkInner() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ filed: Filed[]; skipped: Skipped[] } | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [bulkExpiry, setBulkExpiry] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
+
+  /**
+   * A drop can carry loose files OR a folder. Gmail's "Download all
+   * attachments" gives a zip that unzips to a folder, and asking someone to
+   * then select forty files in a picker is the kind of step that sends them
+   * back to doing it one at a time. So directories are walked.
+   *
+   * webkitGetAsEntry is the only way to see INSIDE a dropped folder;
+   * dataTransfer.files is empty for one. Every browser we care about has it,
+   * and the plain file list is the fallback when it is missing.
+   */
+  async function filesFromDrop(dt: DataTransfer): Promise<File[]> {
+    const entries = Array.from(dt.items || [])
+      .map((i) => (typeof i.webkitGetAsEntry === 'function' ? i.webkitGetAsEntry() : null))
+      .filter(Boolean) as FileSystemEntry[];
+    if (entries.length === 0) return Array.from(dt.files ?? []);
+
+    const out: File[] = [];
+    const walk = async (entry: FileSystemEntry): Promise<void> => {
+      if (entry.isFile) {
+        const f = await new Promise<File | null>((res) =>
+          (entry as FileSystemFileEntry).file(res, () => res(null)),
+        );
+        // macOS leaves .DS_Store and ._ resource forks in every folder; they
+        // would each take a row in the table and say "Not a PDF".
+        if (f && !f.name.startsWith('.') && !f.name.startsWith('._')) out.push(f);
+        return;
+      }
+      if (entry.isDirectory) {
+        const reader = (entry as FileSystemDirectoryEntry).createReader();
+        // readEntries returns at most ~100 at a time and must be called until
+        // it comes back empty — a folder of 160 scans truncates otherwise.
+        for (;;) {
+          const batch = await new Promise<FileSystemEntry[]>((res) => reader.readEntries(res, () => res([])));
+          if (batch.length === 0) break;
+          for (const e of batch) await walk(e);
+        }
+      }
+    };
+    for (const e of entries) await walk(e);
+    return out;
+  }
+
+  function accept(list: File[]) {
+    if (list.length === 0) { setError('Nothing in that drop — try the files themselves, or the folder they are in.'); return; }
+    if (list.length > 60) {
+      setError(`${list.length} files at once; the cap is 60. Drop them in a couple of batches.`);
+      return;
+    }
+    setFiles(list);
+    plan(list);
+  }
 
   // The plan pass sends NAMES ONLY. The table re-plans on every dropdown
   // change, and re-uploading 60 scans per correction would make the screen
@@ -98,6 +153,24 @@ function FleetPaperworkInner() {
   const edit = (index: number, patch: Partial<Correction>) =>
     replan({ ...fixes, [index]: { ...(fixes[index] ?? { index }), index, ...patch } });
 
+  /**
+   * Typing eighty expiry dates one at a time is its own reason not to bother,
+   * and a terminal's BIT sweep really does put the same date on a whole batch.
+   * Only fills rows that are BLANK — it can never quietly overwrite a date
+   * somebody already looked up.
+   */
+  function fillBlankExpiries(kind: 'registration' | 'bit-certificate') {
+    if (!bulkExpiry || !rows) return;
+    const next = { ...fixes };
+    let touched = 0;
+    for (const r of rows) {
+      if (r.kind !== kind || r.expiresAt) continue;
+      next[r.index] = { ...(next[r.index] ?? { index: r.index }), index: r.index, expiresAt: bulkExpiry };
+      touched++;
+    }
+    if (touched > 0) replan(next);
+  }
+
   async function commit() {
     setBusy(true); setError(null);
     try {
@@ -126,26 +199,49 @@ function FleetPaperworkInner() {
         <h1 className="text-lg font-bold text-gray-900 mt-1">Upload DOT paperwork</h1>
         <p className="text-[11px] text-gray-500 mt-0.5 max-w-2xl">
           Drop a folder of registrations and BIT inspection scans. Each file is matched to a unit by its
-          name — check the list before filing. Anything filed here reaches the client&apos;s portal for
-          jobs that unit is on.
+          name — check the list before filing. The second date on each row is when the document expires:
+          optional, but it is what drives the 30-day renewal alert. Anything filed here reaches the
+          client&apos;s portal for jobs that unit is on.
         </p>
       </div>
 
-      <div className="rounded-xl border border-gray-200 bg-white p-4 mb-4">
+      <div
+        onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={async (e) => {
+          e.preventDefault();
+          setDragging(false);
+          setError(null);
+          accept(await filesFromDrop(e.dataTransfer));
+        }}
+        className={`rounded-xl border-2 border-dashed p-6 mb-4 text-center transition-colors ${
+          dragging ? 'border-gray-900 bg-gray-50' : 'border-gray-200 bg-white'
+        }`}
+      >
+        <Upload size={20} aria-hidden className="mx-auto text-gray-300" />
+        <div className="text-[13px] font-semibold text-gray-800 mt-2">
+          Drop the scans here — loose files or a whole folder
+        </div>
+        <p className="text-[11px] text-gray-500 mt-1">
+          Save the attachments out of Julian&apos;s email first. Gmail&apos;s &ldquo;Download all
+          attachments&rdquo; gives you a zip — unzip it and drop the folder in.
+        </p>
+        <button
+          onClick={() => inputRef.current?.click()}
+          className="mt-3 border border-gray-200 hover:border-gray-400 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-gray-700"
+        >
+          or choose files…
+        </button>
         <input
           ref={inputRef}
           type="file"
           accept="application/pdf"
           multiple
-          onChange={(e) => {
-            const list = Array.from(e.target.files ?? []);
-            setFiles(list);
-            if (list.length) plan(list);
-          }}
-          className="block w-full text-[12px] text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-gray-900 file:text-white file:text-[12px] file:font-semibold"
+          onChange={(e) => { setError(null); accept(Array.from(e.target.files ?? [])); }}
+          className="hidden"
         />
-        <p className="text-[10px] text-gray-400 mt-2">
-          PDFs only, up to 60 at a time. Names like <span className="font-mono">Cube 27 registration.pdf</span> or{' '}
+        <p className="text-[10px] text-gray-400 mt-3">
+          PDFs, up to 60 at a time. Names like <span className="font-mono">Cube 27 registration.pdf</span> or{' '}
           <span className="font-mono">Cargo 22 BIT 2026-04-30.pdf</span> match on their own; anything else you
           pick from a list.
         </p>
@@ -167,8 +263,9 @@ function FleetPaperworkInner() {
               <li key={f.index}>
                 <span className="font-semibold text-gray-800">{f.unitName}</span> —{' '}
                 {f.kind === 'registration' ? 'registration' : 'BIT inspection'}
+                {f.expiresAt ? <span className="text-gray-400"> · expires {f.expiresAt}</span> : null}
                 {f.kind === 'bit-certificate' && f.isCurrent === false && (
-                  <span className="text-gray-400"> · filed to history, a newer certificate is still current</span>
+                  <span className="text-gray-400"> · filed to history, a newer certificate is still current (any expiry you typed belongs to that one, not this)</span>
                 )}
                 <span className="text-gray-400"> · {f.filename}</span>
               </li>
@@ -187,8 +284,8 @@ function FleetPaperworkInner() {
             </div>
           )}
           <p className="text-[10px] text-gray-400 mt-3">
-            Expiry dates are not read from filenames — open a unit on Fleet to add one. Until then each
-            document reads &ldquo;on file · no expiry recorded&rdquo; and raises no renewal alert.
+            Anything filed without an expiry reads &ldquo;on file · no expiry recorded&rdquo; and raises no
+            renewal alert — add the date on the unit&apos;s panel in Fleet whenever you have it.
           </p>
         </div>
       )}
@@ -197,6 +294,30 @@ function FleetPaperworkInner() {
         <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
           <div className="px-4 py-2.5 border-b border-gray-100 flex items-center justify-between gap-3 flex-wrap">
             <div className="text-[12px] font-semibold text-gray-800">{summary}</div>
+            <div className="flex items-center gap-1.5 flex-wrap">
+              <span className="text-[10px] text-gray-400">Fill blank expiries:</span>
+              <input
+                type="date"
+                value={bulkExpiry}
+                onChange={(e) => setBulkExpiry(e.target.value)}
+                className={sel}
+                aria-label="Expiry date to apply"
+              />
+              <button
+                onClick={() => fillBlankExpiries('registration')}
+                disabled={!bulkExpiry}
+                className="border border-gray-200 hover:border-gray-400 disabled:opacity-40 rounded px-2 py-1 text-[10px] font-semibold text-gray-700"
+              >
+                → registrations
+              </button>
+              <button
+                onClick={() => fillBlankExpiries('bit-certificate')}
+                disabled={!bulkExpiry}
+                className="border border-gray-200 hover:border-gray-400 disabled:opacity-40 rounded px-2 py-1 text-[10px] font-semibold text-gray-700"
+              >
+                → BITs
+              </button>
+            </div>
             <button
               onClick={commit}
               disabled={busy || readyCount === 0}
@@ -219,6 +340,7 @@ function FleetPaperworkInner() {
                         <div className="text-[10px] text-emerald-600 font-semibold mt-0.5 inline-flex items-center gap-1">
                           <Check size={10} aria-hidden />
                           {r.unitName} · {r.kind === 'registration' ? 'Registration' : `BIT ${r.inspectionDate}`}
+                          {r.expiresAt ? ` · expires ${r.expiresAt}` : ' · no expiry'}
                         </div>
                       ) : (
                         <div className="text-[10px] text-amber-700 font-semibold mt-0.5 inline-flex items-center gap-1">
@@ -262,8 +384,24 @@ function FleetPaperworkInner() {
                           type="date"
                           value={r.inspectionDate ?? ''}
                           onChange={(e) => edit(r.index, { inspectionDate: e.target.value || null })}
+                          className={`${sel} ${r.inspectionDate ? '' : 'border-amber-400'}`}
+                          title="Inspected on (required)"
+                        />
+                      )}
+
+                      {/* Optional — a document with no expiry is still the
+                          document the client needs; the blank only costs the
+                          30-day renewal alert. Never guessed from the
+                          filename: the date in a BIT filename is the day it
+                          was inspected, not the day it runs out. */}
+                      {r.kind && (
+                        <input
+                          type="date"
+                          value={r.expiresAt ?? ''}
+                          onChange={(e) => edit(r.index, { expiresAt: e.target.value || null })}
                           className={sel}
-                          title="Inspection date"
+                          title="Expires on (optional — drives the renewal alert)"
+                          placeholder="expires"
                         />
                       )}
 

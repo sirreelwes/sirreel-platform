@@ -39,6 +39,7 @@ interface Correction {
   unitId?: string | null
   kind?: string | null
   inspectionDate?: string | null
+  expiresAt?: string | null
   /** Operator unticked it — leave this file alone. */
   skip?: boolean
 }
@@ -47,6 +48,14 @@ interface Correction {
 interface NamedFile {
   filename: string
   isPdf: boolean
+}
+
+/** A review-table date, or null. The pure planner has already validated the
+ *  shape; this is the last stop before a Date goes to the DB. */
+function isoOrNull(iso: string | null): Date | null {
+  if (!iso || !/^\d{4}-\d{2}-\d{2}$/.test(iso)) return null
+  const d = new Date(`${iso}T00:00:00.000Z`)
+  return Number.isNaN(d.getTime()) ? null : d
 }
 
 export async function POST(req: NextRequest) {
@@ -116,6 +125,7 @@ export async function POST(req: NextRequest) {
       unitId: c?.unitId ?? null,
       kind: c?.kind ?? null,
       inspectionDate: c?.inspectionDate ?? null,
+      expiresAt: c?.expiresAt ?? null,
     }
   })
   const rows = planPaperworkImport(inputs, units)
@@ -125,7 +135,7 @@ export async function POST(req: NextRequest) {
   }
 
   // ── commit ──────────────────────────────────────────────────────────────
-  const filed: { index: number; filename: string; unitName: string; kind: string; isCurrent?: boolean }[] = []
+  const filed: { index: number; filename: string; unitName: string; kind: string; isCurrent?: boolean; expiresAt?: string | null }[] = []
   const skipped: { index: number; filename: string; why: string }[] = []
 
   for (const row of rows) {
@@ -161,11 +171,11 @@ export async function POST(req: NextRequest) {
         })
         await prisma.asset.update({
           where: { id: row.unitId },
-          // A registration read out of a folder rarely carries its expiry in
-          // the filename, and guessing one would feed a wrong fleet alert.
-          // Null leaves the unit reading "on file · no expiry recorded",
-          // which is true, and the panel is where someone adds the date.
-          data: { registrationUrl: fileUrl, registrationExpiresAt: null },
+          // The expiry is whatever the operator typed in the review table, or
+          // null. It is never read off the filename — see PlannedRow.expiresAt
+          // — so a folder imported without dates reads "on file · no expiry
+          // recorded", which is true, and raises no renewal alert.
+          data: { registrationUrl: fileUrl, registrationExpiresAt: isoOrNull(row.expiresAt) },
         })
         await prisma.auditLog.create({
           data: {
@@ -201,16 +211,23 @@ export async function POST(req: NextRequest) {
         if (isCurrent) {
           await prisma.asset.update({
             where: { id: row.unitId },
-            // Same reasoning as the registration: the certificate's own
-            // "good through" is not in the filename, so it stays unset
-            // rather than invented.
-            data: { bitCertificateUrl: fileUrl, bitCertificateExpiresAt: null },
+            data: { bitCertificateUrl: fileUrl, bitCertificateExpiresAt: isoOrNull(row.expiresAt) },
           })
         }
-        filed.push({ index: row.index, filename: row.filename, unitName: row.unitName!, kind: row.kind, isCurrent })
+        filed.push({
+          index: row.index,
+          filename: row.filename,
+          unitName: row.unitName!,
+          kind: row.kind,
+          isCurrent,
+          // A backfilled older certificate is filed to the history but is not
+          // the current one, so its expiry is not the unit's expiry. Reported
+          // so the screen can say the typed date was not kept.
+          expiresAt: isCurrent ? row.expiresAt : null,
+        })
         continue
       }
-      filed.push({ index: row.index, filename: row.filename, unitName: row.unitName!, kind: row.kind })
+      filed.push({ index: row.index, filename: row.filename, unitName: row.unitName!, kind: row.kind, expiresAt: row.expiresAt })
     } catch (err) {
       console.error('[fleet bulk paperwork] failed on', row.filename, err)
       // One bad file must not lose the fifty that worked.
