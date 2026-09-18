@@ -30,6 +30,21 @@
  * billing class: it is a LineItemDepartment too, so a partner unit in it
  * quotes under its own section and subtotal — see partnerUnitDepartment().
  *
+ * PRODUCTION TRUCKS (2026-09-18, Wes: "suppose you drive … we are going to
+ * carry steak beds and 5 ton trucks only") is the third heading-only vehicle
+ * section, and it exists because the other two are both WRONG for a stake
+ * bed. Specialty Vehicles is a billing class with no LCDW and mileage from
+ * the first mile; a stake bed is one of the three classes the rental terms
+ * name as LCDW-ELIGIBLE (see LCDW_ELIGIBILITY_NOTE in components/portal-v2/
+ * terms.ts — "Cube Trucks, Cargo Vans, Stake Bed Trucks"), so filing one
+ * under Specialty Vehicles would quote it against the wrong terms. Cars &
+ * SUVs is a passenger heading. This one is a HEADING ONLY like Cars & SUVs:
+ * nothing in pricing reads it, and the units quote under Vehicles.
+ *
+ * The KEY is generic and the TITLE is not, deliberately — the same lesson
+ * LOCATION_VEHICLES paid for below. Wes has named two truck types today; a
+ * 10-ton or a tractor tomorrow is a title edit, not a two-deploy enum dance.
+ *
  * CARS & SUVS (2026-09-15, Wes: "maybe just cars and suvs") is for California
  * Rent A Car, the first partner whose units are ordinary passenger cars.
  * Specialty Vehicles was the only vehicle section and is also a billing class
@@ -44,6 +59,7 @@
 export type PartnerCatalogSectionKey =
   | 'LOCATION_VEHICLES'
   | 'CARS_SUVS'
+  | 'PRODUCTION_TRUCKS'
   | 'POWER_GENERATORS'
   | 'CABLES_DISTRO'
   | 'HVAC'
@@ -90,6 +106,15 @@ export const PARTNER_SECTIONS: readonly PartnerSectionMeta[] = [
     anchor: 'cars-suvs',
     noun: 'vehicle',
     order: 15,
+  },
+  {
+    key: 'PRODUCTION_TRUCKS',
+    title: 'Stake Beds & 5-Ton Trucks',
+    short: 'Stake beds & 5-tons',
+    blurb: 'Stake bed trucks and 5-ton box trucks for set construction, art department, grip and production hauling — flat decks with removable sides for oversized loads, and enclosed boxes with a lift gate for everything that has to stay dry. Ready for pickup, maintained and road-legal.',
+    anchor: 'trucks',
+    noun: 'truck',
+    order: 17,
   },
   {
     key: 'POWER_GENERATORS',
