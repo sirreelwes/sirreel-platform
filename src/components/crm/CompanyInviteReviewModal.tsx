@@ -181,7 +181,7 @@ export function CompanyInviteReviewModal({
               <textarea
                 value={body}
                 onChange={(e) => setBody(e.target.value)}
-                className="flex-1 min-h-[280px] w-full border border-lt-hairline rounded-lg px-3 py-2 text-sm text-lt-fg bg-lt-inner leading-relaxed resize-none focus:outline-none focus:border-zinc-500"
+                className="flex-1 min-h-[280px] w-full border border-lt-hairline rounded-lg px-3 py-2 text-base sm:text-sm text-lt-fg bg-lt-inner leading-relaxed resize-none focus:outline-none focus:border-zinc-500"
                 spellCheck
               />
               <p className="text-[11px] text-lt-fg3 mt-2 leading-relaxed">

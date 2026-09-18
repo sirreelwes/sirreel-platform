@@ -156,6 +156,54 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     ],
   },
   {
+    id: 'offer-annual-for-signature',
+    title: 'Offer the negotiated annual for signature \u2014 and invite the signer',
+    summary:
+      'Puts the filed negotiated agreement in the client\u2019s account portal for an executive to sign, gives that person portal access, and emails them the link.',
+    detail:
+      'Wes 2026-09-18: "An executive at the company wants to sign these agreements \u2026 I need it on the Production company portal and a way to send it to Haylea." The masters filed on 9/18 COVER every job with nobody\u2019s name on them; this is the offer that collects the signature, and it does all three acts at once so none of it needs a laptop or a wide screen: it offers the agreement in each company\u2019s portal, grants the signer account access as an EXECUTIVE, and emails them the invite \u2014 which names the document and links straight to the signing page. Leave the email blank to file the offers and invite nobody. It is idempotent: an offer already waiting is reused, and a person who already has access is not re-granted. It SKIPS rather than guesses \u2014 a company with nothing filed yet (run the filing task first), one whose agreement is already signed, a name that matches 0 or 2+ company rows, or a name the registry does not map to this agreement (which would render our baseline clauses instead of theirs). Run the dry run first: it names the exact company row, whether an offer already exists, and who would be emailed.',
+    category: 'seed',
+    writes:
+      'sr_company_agreements (one pending, non-covering offer per company) \u00b7 sr_company_portal_access + people (the signer\u2019s access, only if they have none) \u00b7 sr_audit_logs \u00b7 the rendered PDF in the private blob store \u00b7 one invite email per company',
+    cliEquivalent:
+      'npx tsx scripts/offer-annual-for-signature.ts --key graduation-day-2026 --email \u2026 --write (needs vercel env run \u2014 the blob token and the mailer live in the deployed runtime)',
+    params: [
+      // Same picker as the filing task, pinned against the registry by
+      // npm run test:maintenance-tasks.
+      {
+        key: 'key',
+        label: 'Which negotiated agreement',
+        options: ['graduation-day-2026'],
+        defaultValue: 'graduation-day-2026',
+        help: 'Graduation Day Productions and Party Giraffes, LLC \u2014 their redline with \u00a732 as agreed 9/18. Both get their own offer; one signature does not paper the other.',
+      },
+      {
+        key: 'signerEmail',
+        label: 'Who is signing (email)',
+        placeholder: 'haylea@\u2026',
+        help: 'They get account-portal access as an EXECUTIVE and an email with the link. Blank files the offers and sends nothing.',
+      },
+      {
+        key: 'signerName',
+        label: 'Their name',
+        placeholder: 'Haylea',
+        help: 'Used in the greeting, and to create the contact if they are not in HQ yet.',
+      },
+      {
+        key: 'signerTitle',
+        label: 'Their title (optional)',
+        placeholder: 'Head of Production',
+      },
+      {
+        key: 'sendInvite',
+        label: 'Email them the invite',
+        options: ['yes', 'no'],
+        defaultValue: 'yes',
+        help: '"no" grants access without mailing them \u2014 send it later from /crm with a preview you can edit.',
+      },
+    ],
+  },
+  {
     id: 'job-conversation-tables',
     title: 'Create the job Conversation tables',
     summary: 'Adds the three tables the job Conversation needs: internal notes, the "who is answering" claim, and the urgent-note alerts.',

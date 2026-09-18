@@ -129,6 +129,41 @@ eq(
   [],
 )
 
+// The OFFER task carries the same picker, and it matters more here: the
+// offer is rendered from whichever negotiated document the registry maps the
+// company's name to, so a key in this list with no agreement behind it is an
+// offer built from our BASELINE clauses under a client's name.
+const offering = maintenanceTask('offer-annual-for-signature')
+const offerKeys = (offering?.params ?? []).find((p) => p.key === 'key')
+yes('the offer task offers a key picker', (offerKeys?.options?.length ?? 0) > 0)
+eq(
+  'every offered key is a known negotiated agreement (offer task)',
+  (offerKeys?.options ?? []).filter((k) => !NEGOTIATED_AGREEMENTS.some((a) => a.key === k)),
+  [],
+)
+eq(
+  'every negotiated agreement can be offered',
+  NEGOTIATED_AGREEMENTS.map((a) => a.key).filter((k) => !(offerKeys?.options ?? []).includes(k)),
+  [],
+)
+// It writes a PDF, a grant and an EMAIL, so the blank-signer state has to be
+// reachable from the form: an operator who only wants the paper filed must
+// not have to invent an address.
+yes(
+  'the signer email is optional (no default, no option list)',
+  (() => {
+    const p = (offering?.params ?? []).find((x) => x.key === 'signerEmail')
+    return !!p && !p.defaultValue && !p.options
+  })(),
+)
+yes(
+  'and the invite can be withheld',
+  (() => {
+    const p = (offering?.params ?? []).find((x) => x.key === 'sendInvite')
+    return !!p?.options?.includes('no')
+  })(),
+)
+
 // The audit action is a stable string — old rows are read by it.
 eq('audit action', MAINTENANCE_RUN_ACTION, 'admin.maintenance_run')
 

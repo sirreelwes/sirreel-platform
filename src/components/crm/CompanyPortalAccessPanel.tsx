@@ -489,7 +489,7 @@ export function CompanyPortalAccessPanel({
                     )
                   }
                   placeholder="email@production.com"
-                  className="sm:col-span-4 text-sm border border-lt-hairline rounded-lg px-2.5 py-2 bg-lt-card text-lt-fg"
+                  className="sm:col-span-4 text-base sm:text-sm border border-lt-hairline rounded-lg px-2.5 py-2 bg-lt-card text-lt-fg"
                 />
                 <input
                   value={d.name}
@@ -499,7 +499,7 @@ export function CompanyPortalAccessPanel({
                     )
                   }
                   placeholder="Name (optional)"
-                  className="sm:col-span-3 text-sm border border-lt-hairline rounded-lg px-2.5 py-2 bg-lt-card text-lt-fg"
+                  className="sm:col-span-3 text-base sm:text-sm border border-lt-hairline rounded-lg px-2.5 py-2 bg-lt-card text-lt-fg"
                 />
                 <input
                   value={d.title}
@@ -509,7 +509,7 @@ export function CompanyPortalAccessPanel({
                     )
                   }
                   placeholder="Title (optional)"
-                  className="sm:col-span-3 text-sm border border-lt-hairline rounded-lg px-2.5 py-2 bg-lt-card text-lt-fg"
+                  className="sm:col-span-3 text-base sm:text-sm border border-lt-hairline rounded-lg px-2.5 py-2 bg-lt-card text-lt-fg"
                 />
                 <select
                   value={d.role}
@@ -518,7 +518,7 @@ export function CompanyPortalAccessPanel({
                       prev.map((r, j) => (j === i ? { ...r, role: e.target.value } : r)),
                     )
                   }
-                  className="sm:col-span-2 text-sm border border-lt-hairline rounded-lg px-2 py-2 bg-lt-card text-lt-fg"
+                  className="sm:col-span-2 text-base sm:text-sm border border-lt-hairline rounded-lg px-2 py-2 bg-lt-card text-lt-fg"
                 >
                   {ROLES.map((r) => (
                     <option key={r.value} value={r.value}>
