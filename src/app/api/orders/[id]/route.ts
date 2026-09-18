@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { prisma } from "@/lib/prisma";
 import { loadOrderReplacementValue } from '@/lib/coi/replacementValue';
 import { loadOrderWarehouseFlags } from "@/lib/orders/warehouseLineFlags";
+import { openRequestForOrder } from '@/lib/portal/dateChangeRequest';
 import { deliveryRequirementForOrder } from "@/lib/orders/requiresDelivery";
 import { can } from "@/lib/permissions";
 import { recalcOrderTotals } from "@/lib/orders";
@@ -248,7 +249,13 @@ export async function GET(_req: NextRequest, { params }: Params) {
   // client-facing surface reads it. See lib/orders/warehouseLineFlags.
   const warehouseFlags = await loadOrderWarehouseFlags(id);
 
-  return NextResponse.json({ ...order, deliveryRequirement, quotePdfStale, loadsOn, replacementValue, warehouseFlags });
+  // The client asked to move these dates and nobody has answered yet
+  // (Wes 2026-09-18, the L'anza job). Null when there is none, when the
+  // order already carries the dates they asked for, or until the table
+  // exists — see lib/portal/dateChangeRequest.
+  const dateChangeRequest = await openRequestForOrder(id);
+
+  return NextResponse.json({ ...order, deliveryRequirement, quotePdfStale, loadsOn, replacementValue, warehouseFlags, dateChangeRequest });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {

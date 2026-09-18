@@ -9,6 +9,7 @@ import { PortalBankDetails } from '@/components/portal/PortalBankDetails';
 import { PortalDriversSection } from '@/components/portal/PortalDriversSection';
 import { PortalDeliveriesSection } from '@/components/portal/PortalDeliveriesSection';
 import { CoiRequirementsBlock } from '@/components/portal/CoiRequirementsBlock';
+import { DateChangeRequestCard } from '@/components/portal/DateChangeRequestCard';
 import { JobCoiUpload } from '@/components/portal/JobCoiUpload';
 import { JobPortalShell, chromeFromPortalData } from '@/components/portal/JobPortalChrome';
 import { CounterExplanationModal } from '@/components/contracts/CounterExplanationModal';
@@ -97,6 +98,16 @@ interface PortalData {
     blindReturn: boolean;
     blindPickupInstructions: string | null;
     blindReturnInstructions: string | null;
+    /** The dates can still be asked about — false once closed or cancelled. */
+    canRequestDateChange?: boolean;
+    /** The ask already with their rep (Wes 2026-09-18, the L'anza job). */
+    dateChangeRequest?: {
+      requestedAt: string;
+      requestedStartDate: string | null;
+      requestedEndDate: string | null;
+      note: string | null;
+      requestedByName: string | null;
+    } | null;
   };
   job: { id: string; name: string; jobCode: string; productionType: string; status?: string } | null;
   /** Null unless a rep has actually been established for this order — an
@@ -541,6 +552,13 @@ export default function JobPortalPage() {
     } finally {
       setApproving(false);
     }
+  };
+
+  /** Re-read the portal payload. Used after an action that changes what
+   *  the page should say about itself (a filed date-change request). */
+  const refreshData = async () => {
+    const res = await fetch(`/api/portal/job/data?slug=${encodeURIComponent(slug)}`);
+    if (res.ok) setData(await res.json());
   };
 
   const askForAnnual = async () => {
@@ -1132,6 +1150,19 @@ export default function JobPortalPage() {
               <div className="text-sm font-semibold text-zinc-900 mt-1">{fmtDate(data.order.endDate)}</div>
             </div>
           </div>
+          {/* Wes 2026-09-18 (L'anza): "client said they wanted to change the
+              pickup date but couldn't figure out how to do that." Directly
+              under the two dates — the place the thought occurs. A request
+              only: nothing here moves the booking. */}
+          <DateChangeRequestCard
+            currentStart={data.order.startDate}
+            currentEnd={data.order.endDate}
+            canRequest={data.order.canRequestDateChange !== false}
+            openRequest={data.order.dateChangeRequest ?? null}
+            repName={data.agent?.name ?? data.defaultRep?.name ?? null}
+            repPhone={data.agent?.phone ?? data.defaultRep?.phone ?? null}
+            onSubmitted={() => { void refreshData(); }}
+          />
           <div className="border-t border-zinc-100 pt-3 text-[11px] text-zinc-500">
             SirReel Studio Rentals · 8500 Lankershim Blvd, Sun Valley, CA 91352
           </div>

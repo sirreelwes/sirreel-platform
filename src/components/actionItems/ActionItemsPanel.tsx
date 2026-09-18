@@ -64,6 +64,7 @@ const GROUP_META: Record<string, { label: string; hint: string }> = {
   'possible-duplicate-job': { label: 'Possible duplicate job', hint: 'The Planyo import landed beside a job that may be the same production — merge, or dismiss if they are different shows' },
   'partner-coi-missing': { label: 'Partner COI', hint: 'A vehicle partner signed and we hold no certificate' },
   'annual-requested': { label: 'Annual agreement asked for', hint: 'A client asked in their portal to sign once for the year — offer it on the company page' },
+  'date-change-requested': { label: 'Date change asked for', hint: 'A client asked in their portal to move a pickup or return — nothing has moved; answer it with "Change dates…" on the order' },
   'rw-token': { label: 'RentalWorks', hint: 'The RentalWorks credential needs renewing' },
   'partner-cancelled-off-pick-list': { label: 'Not on the pick list', hint: 'A partner’s booking was cancelled and we’re filling the line — the warehouse was never told' },
   'walkies-short': { label: 'Sub walkies', hint: 'Booked orders need more Motorola CP200s than we own on those days — record a sub-rental on the walkie line' },

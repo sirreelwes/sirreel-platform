@@ -130,6 +130,7 @@ export function systemLabel(label: string | null | undefined): string {
   if (l.startsWith('coi-broker-review')) return 'COI review sent to the broker'
   if (l.startsWith('coi-requirements')) return 'COI requirements sent to the broker'
   if (l.startsWith('sub-rental-estimate')) return 'Estimate sent'
+  if (l.startsWith('date-change-request')) return 'Client asked to move the dates'
   return 'Sent by HQ'
 }
 
