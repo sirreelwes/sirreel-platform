@@ -77,7 +77,7 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     title: 'DF-50 hazer: fluid goes out with it',
     summary: 'Links the DF-50 hazer fluid to all three DF-50 catalog rows as a charged kit piece, so adding the hazer to an order adds its fluid.',
     detail:
-      'Wes 2026-09-17: when the DF-50 is picked the fluid should come up at once — it always goes out, it is part of the kit. This does for the DF-50 what the 2026-09-15 script did for the Roscos: one bottle per machine, charged at the fluid\u2019s catalog price, printed on the quote, and skipped when the client listed fluid themselves. The fluid row is found by its name (it was entered with the name as its code, typo included), moved to Expendables if it still bills per day, and the task refuses rather than guesses if it finds no fluid row or more than one it cannot tell apart. Running it twice changes nothing. Orders already quoted are not touched.',
+      'Wes 2026-09-17: when the DF-50 is picked the fluid should come up at once — it always goes out, it is part of the kit. This does for the DF-50 what the 2026-09-15 script did for the Roscos: one bottle per machine, charged at the fluid\u2019s catalog price, printed on the quote, and skipped when the client listed fluid themselves. The fluid is \u201cDF50 Hazer Fluid, 1 Gallon\u201d (code DF50FLUID), on all three machines \u2014 Wes: the only option. It is moved to Expendables if it still bills per day; the older typo\u2019d fluid row is left alone and named in the log. Running it twice changes nothing. Orders already quoted are not touched.',
     category: 'seed',
     writes: 'inventory_kit_pieces (up to 3 rows, one per DF-50 machine row) · inventory_items (the fluid row\u2019s department, only if it is not an expendable yet) · sr_audit_logs',
     cliEquivalent: 'npx tsx scripts/seed-df50-fluid-kit.ts',
@@ -111,13 +111,43 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     cliEquivalent: 'npx tsx scripts/cargo-vans-no-lift-gate.ts',
   },
   {
+    id: 'file-negotiated-agreement',
+    title: 'File a negotiated agreement as the client\u2019s annual master',
+    summary:
+      'Renders the client\u2019s own negotiated redline on SirReel paper and files it as their annual agreement, so every job they book is papered by it.',
+    detail:
+      'Wes 2026-09-18, on Party Giraffes and Graduation Day: "make those negotiated agreements standard for each job as an annual agreement." Their counsel\u2019s redline is already transcribed word-for-word; this renders it for each company and files it TWO ways. As their ANNUAL master it covers every job inside the agreed window \u2014 nothing to sign per job, the portal asks only for the damage-waiver election. As their STANDING terms it becomes the document that goes out whenever an agreement is released for signature anyway, so they are never handed our standard template after their lawyer redlined it. Companies are matched by exact name and it refuses to guess: 0 or 2+ matches are skipped and the near-misses printed. A company already covered by a current master is skipped for a person to supersede by hand, and standing terms already on file are never overwritten. Run the dry run first \u2014 it names the exact company row each name resolved to.',
+    category: 'seed',
+    writes:
+      'sr_company_agreements (one row per company, annual + auto-covering) \u00b7 companies (the standing negotiated terms fields, only where there are none) \u00b7 sr_audit_logs \u00b7 the rendered PDF in the private blob store',
+    cliEquivalent: 'npx tsx scripts/file-negotiated-agreement.ts --key graduation-day-2026 --write',
+    params: [
+      // One option today. The test holds this list against the agreements
+      // registry, so a second negotiated document cannot ship without a
+      // picker entry \u2014 and a typo here fails the build, not the run.
+      {
+        key: 'key',
+        label: 'Which negotiated agreement',
+        options: ['graduation-day-2026'],
+        defaultValue: 'graduation-day-2026',
+        help: 'Graduation Day Productions and Party Giraffes, LLC \u2014 their May redline, effective 5/15 through 12/31.',
+      },
+      {
+        key: 'alias',
+        label: 'Company name overrides',
+        placeholder: 'Party Giraffes=Party Giraffes, LLC',
+        help: 'Only if the dry run says a name did not match. One per line, Registry Name=Exact DB Name \u2014 never comma-separated, because the DB names carry commas. The confirmed ones are already built in.',
+      },
+    ],
+  },
+  {
     id: 'job-conversation-tables',
     title: 'Create the job Conversation tables',
-    summary: 'Adds the two tables the job Conversation needs for internal notes and the "who is answering" claim.',
+    summary: 'Adds the three tables the job Conversation needs: internal notes, the "who is answering" claim, and the urgent-note alerts.',
     detail:
-      'Phase 2 of one-thread-per-job (shipped 2026-09-17) reads and writes two new tables: sr_job_threads (one row per job — who is answering, or which desk it was handed to) and sr_job_thread_notes (internal notes in the conversation, never sent). Until they exist the panel still shows the emails, but posting a note or pressing Hand to Billing answers "the Conversation tables are not in the database yet". This runs the four CREATE … IF NOT EXISTS statements and then lists each table’s columns so you can see it took. No existing table is touched; running it twice changes nothing. Dry run only reads the catalog and says which tables are missing.',
+      'Phase 2 of one-thread-per-job (shipped 2026-09-17) reads and writes three new tables: sr_job_threads (one row per job — who is answering, or which desk it was handed to), sr_job_thread_notes (internal notes in the conversation, never sent) and sr_job_thread_alerts (who an URGENT note texted or emailed, added later the same day — re-run this task once to add it). Until they exist the panel still shows the emails, but posting a note or pressing Hand to Billing answers "the Conversation tables are not in the database yet", and an urgent note cannot record who it reached. This runs the CREATE … IF NOT EXISTS statements and then lists each table’s columns so you can see it took. No existing table is touched; running it twice changes nothing. Dry run only reads the catalog and says which tables are missing.',
     category: 'schema',
-    writes: 'sr_job_threads, sr_job_thread_notes (created if absent, with their two indexes) · sr_audit_logs',
+    writes: 'sr_job_threads, sr_job_thread_notes, sr_job_thread_alerts (each created only if absent, with its indexes) · sr_audit_logs',
     cliEquivalent: 'npx tsx scripts/add-job-thread-tables.ts',
     ddl: JOB_THREAD_TABLES_DDL,
   },

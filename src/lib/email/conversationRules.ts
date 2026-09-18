@@ -48,7 +48,7 @@ export function kindFor(args: { direction: string | null | undefined; fromAddres
 }
 
 /** Send labels (EmailPayload.label) that belong to billing's lane. */
-const BILLING_LABEL_RE = /^(send-invoice|send-pre-invoice|final-invoice|collections|invoice)/i
+const BILLING_LABEL_RE = /^(send-invoice|send-pre-invoice|final-invoice|collections|invoice|payment-info|payment-share)/i
 
 /**
  * Which lane a row sits in. Lanes keep the stream tidy and route the
@@ -100,8 +100,36 @@ export function systemLabel(label: string | null | undefined): string {
   if (l.startsWith('follow-up')) return 'Follow-up'
   if (l.startsWith('portal/invite') || l.startsWith('portal-invite')) return 'Portal invite'
   if (l.startsWith('send-pre-invoice')) return 'Pre-invoice sent'
-  if (l.startsWith('send-invoice') || l.startsWith('final-invoice')) return 'Invoice sent'
+  if (l.startsWith('send-invoice')) return 'Invoice sent'
+  if (l.startsWith('final-invoice')) return 'Final invoice sent'
   if (l.startsWith('cadence/')) return 'Follow-up (automatic)'
+  // 2026-09-17 (Wes: "does that automatically fall within the same email
+  // thread? If it doesn't let's make sure it does") — every client-facing
+  // send on a known job rides the thread now, so each needs a name here.
+  if (l.startsWith('resend-quote-on-change')) return 'Updated quote sent'
+  if (l.startsWith('card-auth-request')) return 'Card authorization sent'
+  if (l.startsWith('card-auth-handoff')) return 'Card authorization handed to a colleague'
+  if (l.startsWith('self-serve')) return 'What happens next'
+  if (l.startsWith('thank-you')) return 'Thank-you sent'
+  if (l.startsWith('orders/agreement/resend-link') || l.startsWith('portal/resend-link')) return 'Portal link re-sent'
+  if (l.startsWith('orders/contacts/invite') || l.startsWith('portal/authorize')) return 'Portal invite'
+  if (l.startsWith('orders/contract-review/accept')) return 'Agreement ready to sign'
+  if (l.startsWith('contract-review/counter-notice')) return 'Counter-proposal sent'
+  if (l.startsWith('agreement/reissue')) return 'Agreement re-issued to sign'
+  if (l.startsWith('portal/agreement/sign')) return 'Rental agreement signed — copy sent'
+  if (l.startsWith('portal/v2/stage-sign')) return 'Stage contract signed — copy sent'
+  if (l.startsWith('stage-ready-to-sign')) return 'Stage contract ready to sign'
+  if (l.startsWith('payment-info')) return 'Payment details sent'
+  if (l.startsWith('payment-share')) return 'Payment details shared'
+  if (l.startsWith('job/after-hours-share')) return 'After-hours link shared'
+  if (l.startsWith('job/after-hours')) return 'After-hours access sent'
+  if (l.startsWith('job/vehicle-pickup')) return 'Vehicle pickup instructions sent'
+  if (l.startsWith('driver/request')) return 'Driver details requested'
+  if (l.startsWith('coi-request-fix')) return 'COI — more needed'
+  if (l.startsWith('coi-approved')) return 'COI approved'
+  if (l.startsWith('coi-broker-review')) return 'COI review sent to the broker'
+  if (l.startsWith('coi-requirements')) return 'COI requirements sent to the broker'
+  if (l.startsWith('sub-rental-estimate')) return 'Estimate sent'
   return 'Sent by HQ'
 }
 
@@ -199,6 +227,94 @@ export function mentionsIn(body: string, staff: { id: string; name: string }[]):
   return out
 }
 
+// ── Who is OFFERED as a tag chip ─────────────────────────────────────
+
+/**
+ * People the note composer does not put on its chip row.
+ *
+ * Wes 2026-09-17: "can you remove the @Grayson and the @Tamra options?
+ * That's something private and we don't need them to be visibly there even
+ * though I love the idea that we can text them directly if need be in the
+ * future."
+ *
+ * So this hides the SUGGESTION, never the capability, and nothing about
+ * their HQ accounts changes. Typing @Greyson in a note still tags him,
+ * still texts his mobile on an urgent note, and still trips the "the
+ * client does not know who that is" warning on a client reply — every one
+ * of those reads the whole staff list through `mentionsIn`, not this one.
+ * The chip row is the only thing that asks.
+ *
+ * An entry matches a FIRST NAME or an EMAIL LOCAL PART, case-insensitively,
+ * so a row reading "Greyson Bailey <greyson@sirreel.com>" is caught either
+ * way; the spelling Wes typed ("Grayson") is carried alongside the one the
+ * account was made under. To hide someone else, add the name a colleague
+ * would type after the @.
+ */
+export const MENTION_UNLISTED: readonly string[] = ['greyson', 'grayson', 'tamra']
+
+/** True when this person belongs on the composer's chip row. */
+export function isTagSuggested(person: { name: string; email?: string | null }): boolean {
+  const first = person.name.trim().toLowerCase().split(/\s+/)[0] ?? ''
+  const local = (person.email ?? '').trim().toLowerCase().split('@')[0] ?? ''
+  return !MENTION_UNLISTED.some((hidden) => hidden === first || hidden === local)
+}
+
+// ── Before a reply goes to the client ────────────────────────────────
+
+/**
+ * Wes 2026-09-17: "Things that are sent to the client need to be
+ * confirmed. I'm a little bit afraid that someone's going to write an
+ * internal note and accidentally send it to the client." The composer's
+ * two tabs sit an inch apart and ⌘↵ worked in both, so a note typed on the
+ * wrong tab was one keystroke from the client's inbox.
+ *
+ * Two things now stand between Send and the wire: a review step in the
+ * panel (To, Cc, From, the whole message, then a second Send), and the
+ * server refusing a send that does not say it was reviewed
+ * (`confirmed: true` on POST /api/jobs/[id]/email). This rule feeds the
+ * review step: the tells that a message was meant for the team, so the
+ * review can say so out loud and offer "Save as a note instead".
+ *
+ * Tells, all read off the text: an @mention of someone on staff (the
+ * client has no idea who @Hugo is), a team-facing opener ("Hey team",
+ * "Hi all", "Team,"), or a staff FIRST NAME used as an address ("Oliver,
+ * can you…"). None of them block — a rep can legitimately write "Hi all"
+ * to a production — they make the review louder.
+ */
+export function internalNoteTells(body: string, staff: { id: string; name: string }[]): string[] {
+  const tells: string[] = []
+  const text = body.trim()
+  if (!text) return tells
+
+  const mentioned = mentionsIn(text, staff)
+  if (mentioned.length > 0) {
+    const names = mentioned
+      .map((id) => staff.find((s) => s.id === id)?.name.split(/\s+/)[0])
+      .filter((n): n is string => !!n)
+    tells.push(`mentions ${names.map((n) => `@${n}`).join(', ')} — the client does not know who that is`)
+  }
+
+  const opener = text.split('\n')[0].trim().toLowerCase().replace(/[!.,:\s]+$/, '')
+  if (/^(hey|hi|hello|yo)?\s*(team|all|everyone|guys|folks)$/.test(opener) || /^(hey|hi|hello)\s+(team|all|everyone|guys|folks)\b/.test(opener)) {
+    tells.push(`opens "${text.split('\n')[0].trim()}" — that reads as a note to the team`)
+  }
+
+  // "Oliver, can you…" / "Hugo — " at the start of a line: a colleague
+  // addressed by first name. Only a FULL-word match at a line start, so
+  // "Ana" inside "Anaheim" and a client who shares a name mid-sentence
+  // do not trip it.
+  const firsts = new Set(staff.map((s) => s.name.trim().split(/\s+/)[0].toLowerCase()).filter((n) => n.length > 2))
+  const addressed = new Set<string>()
+  for (const line of text.split('\n')) {
+    const m = line.trim().match(/^([A-Za-z][A-Za-z'.-]*)\s*[,—:-]/)
+    if (m && firsts.has(m[1].toLowerCase())) addressed.add(m[1])
+  }
+  if (addressed.size > 0) {
+    tells.push(`addresses ${[...addressed].join(', ')} by name — someone on the team`)
+  }
+  return tells
+}
+
 /** Merge emails and notes into one stream, oldest first. Stable on ties (email before note). */
 export function mergeTimeline<E extends { at: Date }, N extends { at: Date }>(
   emails: E[],
@@ -230,4 +346,175 @@ export function awaitingReply(rows: Array<{ kind: ConversationKind; at: Date }>)
   }
   if (lastClient == null) return false
   return lastOurs == null || lastClient > lastOurs
+}
+
+// ── Urgent notes ─────────────────────────────────────────────────────
+//
+// Wes 2026-09-17: "Is there a way to mark something urgent or send text
+// messages? Something that elevates it from an internal chat, which we
+// don't necessarily need text messages for, to 'this needs to be seen
+// right now' by whomever is tagged." A plain note pings nobody. A note
+// sent with the Urgent toggle reaches every tagged person at once: a text
+// to the mobile on file, an email when there is no mobile, and an honest
+// "unreachable" when there is neither. The author is never on the list.
+
+export type AlertChannel = 'SMS' | 'EMAIL' | 'NONE'
+
+export interface UrgentTarget {
+  userId: string
+  name: string
+  channel: AlertChannel
+  /** The number or address the alert goes to; null for NONE. */
+  to: string | null
+}
+
+/**
+ * Who an urgent note reaches and how. Text beats email — a text is what
+ * "right now" means on a phone in a truck. Unknown ids (a user deactivated
+ * since the mention was typed) are dropped rather than guessed at.
+ */
+export function urgentPlan(args: {
+  mentions: string[]
+  authorUserId: string
+  staff: Array<{ id: string; name: string; email?: string | null; phone?: string | null }>
+}): UrgentTarget[] {
+  const byId = new Map(args.staff.map((s) => [s.id, s]))
+  const out: UrgentTarget[] = []
+  const seen = new Set<string>()
+  for (const id of args.mentions) {
+    if (id === args.authorUserId || seen.has(id)) continue
+    const s = byId.get(id)
+    if (!s) continue
+    seen.add(id)
+    const phone = (s.phone ?? '').trim()
+    const email = (s.email ?? '').trim().toLowerCase()
+    if (phone) out.push({ userId: id, name: s.name, channel: 'SMS', to: phone })
+    else if (email) out.push({ userId: id, name: s.name, channel: 'EMAIL', to: email })
+    else out.push({ userId: id, name: s.name, channel: 'NONE', to: null })
+  }
+  return out
+}
+
+/** How much of the note rides in the text. One SMS segment is 160; the
+ *  frame + link + the STOP line sendTracked appends take the rest. */
+export const URGENT_SMS_EXCERPT = 140
+
+/**
+ * The text an urgent note sends. Who, which job, the first line of the
+ * note, the link straight to that job's Conversation tab. `sendTracked`
+ * adds the STOP line itself.
+ */
+export function urgentSmsText(args: { byName: string; jobName: string; jobCode: string; body: string; url: string }): string {
+  const firstName = args.byName.trim().split(/\s+/)[0] || 'HQ'
+  const line = args.body.replace(/\s+/g, ' ').trim()
+  const excerpt = line.length > URGENT_SMS_EXCERPT ? `${line.slice(0, URGENT_SMS_EXCERPT - 1).trimEnd()}…` : line
+  return `URGENT from ${firstName} on ${args.jobName} (${args.jobCode}): ${excerpt} ${args.url}`
+}
+
+/**
+ * One line for the note card and the sender's toast: "texted Ana · emailed
+ * Julian · Chris unreachable (no mobile or email)". A failed send says so —
+ * the sender must not believe a text went out when Twilio refused it.
+ */
+export function alertSummary(alerts: Array<{ name: string; channel: AlertChannel; status: string }>): string {
+  if (alerts.length === 0) return ''
+  const first = (n: string) => n.trim().split(/\s+/)[0] || n
+  return alerts
+    .map((a) => {
+      const ok = a.status === 'SENT'
+      if (a.channel === 'SMS') return ok ? `texted ${first(a.name)}` : `text to ${first(a.name)} failed`
+      if (a.channel === 'EMAIL') return ok ? `emailed ${first(a.name)}` : `email to ${first(a.name)} failed`
+      return `${first(a.name)} unreachable (no mobile or email)`
+    })
+    .join(' · ')
+}
+
+// ── The Chat page: every job conversation you are IN ──────────────────
+//
+// Wes 2026-09-17: "let's create a chat tab on the left menu … all chats,
+// no matter which job, will show up here" — then, at once: "the chats
+// shouldn't be for everyone. It should be for everyone who is included in
+// that chat. In other words if it was directly @billing, it wouldn't show
+// up in Hugo's and vice versa."
+//
+// So the page is NOT a firehose of every conversation. A job reaches your
+// list only for a REASON, and the reason is shown on the row — if you
+// cannot see why a job is in your chat list, the rule is wrong.
+
+export type ChatReason =
+  /** @you in a note on that job. */
+  | 'mentioned'
+  /** You hold the claim — "<you> is answering". */
+  | 'holding'
+  /** You wrote a note there, or sent/received mail on the thread. */
+  | 'wrote'
+  /** You are the agent on the job. */
+  | 'rep'
+  /** It was handed to your desk (Billing today), or landed in its inbox. */
+  | 'desk'
+
+/** Strongest first — the one the row shows, and the tie-break for equal tiers. */
+export const CHAT_REASON_ORDER: readonly ChatReason[] = ['mentioned', 'holding', 'wrote', 'rep', 'desk']
+
+export function strongestReason(reasons: readonly ChatReason[]): ChatReason | null {
+  for (const r of CHAT_REASON_ORDER) if (reasons.includes(r)) return r
+  return null
+}
+
+/** Why this job is in your list, in your words. */
+export function inclusionLabel(reasons: readonly ChatReason[]): string {
+  switch (strongestReason(reasons)) {
+    case 'mentioned': return 'You were tagged'
+    case 'holding': return 'You are answering'
+    case 'wrote': return 'You wrote here'
+    case 'rep': return 'Your job'
+    case 'desk': return 'Billing desk'
+    default: return ''
+  }
+}
+
+/** Ana's desk: the BILLING role, or one of the billing inboxes. */
+export function isBillingDesk(args: { role?: string | null; email?: string | null }): boolean {
+  if ((args.role || '').toUpperCase() === 'BILLING') return true
+  return BILLING_INBOXES.has(bareAddress(args.email))
+}
+
+export interface ChatTierInput {
+  /** An urgent note tagged you and you have not written since. */
+  urgentForMe: boolean
+  /** A note tagged you and you have not written since. */
+  taggedMe: boolean
+  /** The client's newest message is newer than anything we sent. */
+  awaitingReply: boolean
+}
+
+/**
+ * How loudly a row asks for you. Lower sorts first: someone put your name
+ * on it and said it was urgent, then your name, then a waiting client,
+ * then everything else. Deliberately NOT "newest first" overall — a chat
+ * list sorted purely by time buries the one row that named you.
+ */
+export function chatTier(r: ChatTierInput): number {
+  if (r.urgentForMe) return 0
+  if (r.taggedMe) return 1
+  if (r.awaitingReply) return 2
+  return 3
+}
+
+/** Tier first, then newest activity. Pure; the page renders this order. */
+export function sortChatRows<T extends ChatTierInput & { lastAt: Date }>(rows: T[]): T[] {
+  return [...rows].sort((a, b) => {
+    const t = chatTier(a) - chatTier(b)
+    if (t !== 0) return t
+    return b.lastAt.getTime() - a.lastAt.getTime()
+  })
+}
+
+/** One line of the newest message, for the row. Notes and mail both. */
+export const CHAT_PREVIEW_MAX = 160
+
+export function chatPreview(body: string | null | undefined): string {
+  const line = (body || '').replace(/\s+/g, ' ').trim()
+  if (line.length <= CHAT_PREVIEW_MAX) return line
+  return `${line.slice(0, CHAT_PREVIEW_MAX - 1).trimEnd()}…`
 }

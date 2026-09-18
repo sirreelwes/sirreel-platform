@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
+import { BrandMark } from '@/components/shell/BrandMark';
 import { useSession, signOut } from 'next-auth/react';
 import Link from 'next/link';
 import { UserRole } from '@prisma/client';
@@ -227,12 +228,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <aside className="hidden md:flex w-60 flex-shrink-0 bg-[#1a1a1a] text-slate-200 flex-col">
         {/* Brand — the 2023 SirReel icon file as drawn (black on white), on
             its own white tile. The colour-reversed PNG read as a different
-            mark on the dark chrome (Wes). */}
+            mark on the dark chrome (Wes). BrandMark holds the lockup for
+            all three places the shell shows it. */}
         <div className="px-4 py-4 border-b border-white/10">
           <Link href="/" className="flex items-center gap-2.5">
-            <span className="w-9 h-9 flex-shrink-0 rounded-lg bg-white flex items-center justify-center p-1">
-              <img src="/sirreel-s-icon-black.png" alt="" aria-hidden="true" className="w-full h-full object-contain" />
-            </span>
+            <BrandMark className="w-9 h-9 rounded-lg p-1" />
             <div className="leading-tight">
               <div className="font-bold text-[15px] text-white tracking-tight">SirReel</div>
               <div className="text-[8px] font-semibold text-amber-300 tracking-[0.22em] uppercase">SirReel HQ</div>

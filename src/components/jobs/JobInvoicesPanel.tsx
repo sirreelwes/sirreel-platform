@@ -19,6 +19,12 @@
  * can chase it). This one is the HQ invoice: generated, rendered, sent, and
  * paid inside the platform.
  *
+ * Due date + note (2026-09-17, from Ana's "how do I update an invoice from my
+ * side?"). Those two are the invoice's OWN facts — nothing on the order
+ * produces them, so "Update to match order" can never reach them, and until
+ * now nothing else could either. The same edit is on the collections desk;
+ * this is the same route (PATCH /api/invoices/[id]), so the two cannot drift.
+ *
  * Drift is called out here for the same reason the order page calls it out.
  * An invoice is a snapshot and does not follow later edits to the order, so
  * a discount applied after issue leaves the client holding the wrong number
@@ -37,6 +43,8 @@ export interface JobPanelInvoice {
   balanceDue: number
   sentAt: string | null
   dueDate: string | null
+  /** The note printed on the face of the invoice. */
+  notes?: string | null
 }
 
 export interface JobPanelOrder {
@@ -59,6 +67,11 @@ export function JobInvoicesPanel({
 }) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+  /** Which invoice's due-date/note editor is open. One at a time — an open
+   *  form on a row nobody is looking at is how the wrong invoice gets
+   *  edited. */
+  const [editingId, setEditingId] = useState<string | null>(null)
 
   // One row per order. An order with no live invoice still appears, so the
   // gap is visible and the "Generate" button has somewhere to live — that is
@@ -149,6 +162,43 @@ export function JobInvoicesPanel({
     await act(inv.id, `/api/invoices/${inv.id}/send`, null)
   }
 
+  /**
+   * The invoice's own facts: the due date it is aged from and the note that
+   * prints on it. Not derivable from the order, so no amount of "Update to
+   * match order" reaches them. Same route as the collections desk.
+   */
+  const saveInvoiceFields = async (
+    inv: JobPanelInvoice,
+    fields: { dueDate: string | null; notes: string },
+  ) => {
+    setBusyId(inv.id)
+    setError(null)
+    setNote(null)
+    try {
+      const res = await fetch(`/api/invoices/${inv.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(fields),
+      })
+      const data = await res.json().catch(() => ({}))
+      if (!res.ok || data.ok === false) {
+        setError(data.reason || data.error || `Failed (HTTP ${res.status})`)
+        return
+      }
+      setEditingId(null)
+      setNote(
+        `${data.invoiceNumber} updated — ${data.summary}.` +
+          (data.warning ? ` ${data.warning}` : '') +
+          (data.wasSent && !data.warning ? ' The client has the previous copy.' : ''),
+      )
+      await onChanged()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Request failed')
+    } finally {
+      setBusyId(null)
+    }
+  }
+
   return (
     <div className="bg-white border border-zinc-200 rounded-xl p-5 mb-4">
       <div className="flex items-baseline justify-between gap-3 mb-3">
@@ -161,6 +211,15 @@ export function JobInvoicesPanel({
       {error && (
         <div className="mb-3 rounded border border-red-300 bg-red-50 px-3 py-2 text-[12px] text-red-700">
           {error}
+        </div>
+      )}
+
+      {note && (
+        <div className="mb-3 flex items-start gap-3 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-800">
+          <span className="flex-1">{note}</span>
+          <button onClick={() => setNote(null)} className="text-emerald-700 hover:text-emerald-950">
+            Dismiss
+          </button>
         </div>
       )}
 
@@ -257,6 +316,18 @@ export function JobInvoicesPanel({
                       </button>
                     )}
                     <button
+                      onClick={() => setEditingId(editingId === inv.id ? null : inv.id)}
+                      aria-expanded={editingId === inv.id}
+                      title="The due date it is aged from, and the note printed on it"
+                      className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold border disabled:opacity-50 ${
+                        editingId === inv.id
+                          ? 'border-zinc-500 bg-zinc-100 text-zinc-900'
+                          : 'border-zinc-300 text-zinc-700 hover:bg-zinc-100'
+                      }`}
+                    >
+                      Due date &amp; note
+                    </button>
+                    <button
                       onClick={() => void sendInvoice(inv)}
                       disabled={busyId === inv.id}
                       className={`px-3 py-1.5 rounded-lg disabled:opacity-50 text-[12px] font-bold ${
@@ -280,6 +351,16 @@ export function JobInvoicesPanel({
                       Void
                     </button>
                   </div>
+
+                  {editingId === inv.id && (
+                    <InvoiceFieldsEditor
+                      key={inv.id}
+                      inv={inv}
+                      busy={busyId === inv.id}
+                      onSave={(fields) => void saveInvoiceFields(inv, fields)}
+                      onCancel={() => setEditingId(null)}
+                    />
+                  )}
                 </div>
               )
             })}
@@ -296,6 +377,82 @@ export function JobInvoicesPanel({
             )}
           </div>
         ))}
+      </div>
+    </div>
+  )
+}
+
+/**
+ * Due date + printed note for one invoice.
+ *
+ * Deliberately two fields and nothing else. The figures belong to the order
+ * and come through "Update to match order"; an invoice whose total can be
+ * typed over reconciles to nothing.
+ */
+function InvoiceFieldsEditor({
+  inv,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  inv: JobPanelInvoice
+  busy: boolean
+  onSave: (fields: { dueDate: string | null; notes: string }) => void
+  onCancel: () => void
+}) {
+  // `dueDate` arrives as an ISO date (or datetime) string; the input wants
+  // the bare day.
+  const startDue = inv.dueDate ? inv.dueDate.slice(0, 10) : ''
+  const startNote = inv.notes ?? ''
+  const [due, setDue] = useState(startDue)
+  const [text, setText] = useState(startNote)
+  const dirty = due !== startDue || text.trim() !== startNote.trim()
+
+  return (
+    <div className="mt-2 rounded-lg border border-zinc-300 bg-white p-3 space-y-2">
+      <div className="grid grid-cols-1 sm:grid-cols-[minmax(0,180px)_1fr] gap-2">
+        <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+          Due date
+          <input
+            type="date"
+            value={due}
+            onChange={(e) => setDue(e.target.value)}
+            className="bg-white border border-zinc-300 rounded-md px-2 py-1.5 text-sm font-normal normal-case tracking-normal text-zinc-900 outline-none focus:border-amber-600"
+          />
+          <span className="font-normal normal-case tracking-normal text-[11px] text-zinc-600">
+            Due on receipt unless terms were agreed. Every aging figure counts from here.
+          </span>
+        </label>
+        <label className="flex flex-col gap-1 text-[10px] font-semibold uppercase tracking-wider text-zinc-600">
+          Note printed on the invoice
+          <textarea
+            value={text}
+            rows={3}
+            maxLength={2000}
+            onChange={(e) => setText(e.target.value)}
+            placeholder="PO number, remit instruction, what was corrected…"
+            className="bg-white border border-zinc-300 rounded-md px-2 py-1.5 text-sm font-normal normal-case tracking-normal text-zinc-900 placeholder:text-zinc-500 outline-none focus:border-amber-600 resize-y"
+          />
+          <span className="font-normal normal-case tracking-normal text-[11px] text-zinc-600">
+            The client reads this. It replaces whatever is on there now.
+          </span>
+        </label>
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        <button
+          onClick={onCancel}
+          className="px-3 py-1.5 rounded-lg text-[12px] font-semibold text-zinc-600 hover:text-zinc-900"
+        >
+          Cancel
+        </button>
+        <button
+          onClick={() => onSave({ dueDate: due || null, notes: text })}
+          disabled={!dirty || busy}
+          title={dirty ? undefined : 'Change the due date or the note first'}
+          className="px-3 py-1.5 rounded-lg text-[12px] font-bold bg-amber-600 hover:bg-amber-500 text-white disabled:bg-zinc-200 disabled:text-zinc-500 disabled:cursor-not-allowed"
+        >
+          {busy ? 'Saving…' : 'Save'}
+        </button>
       </div>
     </div>
   )

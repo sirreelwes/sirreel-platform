@@ -4,7 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { ensureBaselineRentalDocumentToSign } from '@/lib/orders/signedAgreement'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
 import { portalJobUrl } from '@/lib/portal/portalUrl'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { pickCanonicalRecipient } from '@/lib/email/recipients'
 
 export const dynamic = 'force-dynamic'
@@ -66,6 +66,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     select: {
       id: true,
       orderNumber: true,
+      jobId: true,
       portalSlug: true,
       companyId: true,
       company: {
@@ -213,7 +214,9 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         const firstName = (picked.name || '').split(' ')[0] || 'there'
         const projectName = order.job?.name || order.orderNumber
         const companyLine = co?.name ? ` under <b>${escapeHtml(co.name)}</b>` : ''
-        const res = await sendAgreementEmail({
+        const res = await sendOnJobThread({
+          jobId: order.jobId,
+          staffEmail: session.user.email,
           label: `agreement/reissue:${order.orderNumber}`,
           to: [picked.email],
           // "Reach out to <rep>" — so a plain Reply must actually reach

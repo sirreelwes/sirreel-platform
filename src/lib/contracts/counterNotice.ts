@@ -19,7 +19,7 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { agentReplyTo, withTeamCc } from '@/lib/email/teamVisibility'
 import { pickCanonicalRecipient } from '@/lib/email/recipients'
 import { refreshOrIssueJobMagicLink } from '@/lib/portal/jobMagicLink'
@@ -85,7 +85,9 @@ export async function notifyClientOfCounter(args: { reviewId: string; senderUser
     senderName: sender?.name ?? null,
   })
   const cc = await withTeamCc([], to.email)
-  const result = await sendAgreementEmail({
+  const result = await sendOnJobThread({
+    jobId: review.jobId,
+    staffEmail: sender?.email ?? null,
     to: [to.email],
     cc: cc.length ? cc : undefined,
     replyTo: agentReplyTo(sender?.email) ?? undefined,

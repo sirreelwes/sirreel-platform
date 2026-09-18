@@ -26,6 +26,7 @@
  */
 
 import { useEffect, useState } from 'react';
+import { BrandMark } from '@/components/shell/BrandMark';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { UserRole } from '@prisma/client';
@@ -95,9 +96,7 @@ export function MobileNav({
         </button>
 
         <Link href="/" className="flex items-center gap-2 min-w-0">
-          <span className="w-7 h-7 flex-shrink-0 rounded-md bg-white flex items-center justify-center p-[3px]">
-            <img src="/sirreel-s-icon-black.png" alt="" aria-hidden="true" className="w-full h-full object-contain" />
-          </span>
+          <BrandMark className="w-7 h-7 rounded-md p-[3px]" />
           <span className="font-bold text-[14px] tracking-tight truncate">SirReel HQ</span>
         </Link>
 
@@ -122,9 +121,7 @@ export function MobileNav({
             aria-label="Navigation"
           >
             <div className="flex items-center gap-2.5 px-4 h-14 flex-shrink-0 border-b border-white/10">
-              <span className="w-8 h-8 flex-shrink-0 rounded-lg bg-white flex items-center justify-center p-1">
-                <img src="/sirreel-s-icon-black.png" alt="" aria-hidden="true" className="w-full h-full object-contain" />
-              </span>
+              <BrandMark className="w-8 h-8 rounded-lg p-1" />
               <div className="leading-tight flex-1 min-w-0">
                 <div className="font-bold text-[15px] text-white tracking-tight">SirReel</div>
                 <div className="text-[8px] font-semibold text-amber-300 tracking-[0.22em] uppercase">SirReel HQ</div>

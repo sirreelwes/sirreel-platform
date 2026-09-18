@@ -4,7 +4,7 @@
  *
  * Run: npm run test:df50-fluid
  */
-import { DF50_HAZER_CODES, chemistryOf, isDf50FluidRow, isDf50MachineRow, pairFluidsToMachines } from '@/lib/inventory/df50Fluid'
+import { DF50_FLUID_CODE, DF50_HAZER_CODES, chooseDf50Fluid, isDf50FluidRow, isDf50MachineRow } from '@/lib/inventory/df50Fluid'
 import { KIT_CHECKLISTS } from '@/lib/warehouse/kitChecklists'
 
 let fail = 0
@@ -30,32 +30,21 @@ yes('Rosco fluid is not DF-50 fluid', !isDf50FluidRow({ code: 'RVHAZER', descrip
 yes('a fluid is not a machine', !isDf50MachineRow(fuid))
 yes('the machines are machines', [efx, water, oil].every(isDf50MachineRow))
 
-// Chemistry off the name.
-eq('water', chemistryOf(water), 'water')
-eq('oil', chemistryOf(oil), 'oil')
-eq('unsaid', chemistryOf(efx), null)
+// The catalog as the first live run found it (Wes\'s screenshot,
+// 2026-09-17): TWO fluid rows. The gallon is pinned; the typo'd row loses.
+const gallon = { code: 'DF50FLUID', description: 'DF50 Hazer Fluid, 1 Gallon' }
+const both = chooseDf50Fluid([efx, water, oil, fuid, gallon])
+eq('two fluid rows: the gallon is chosen', both.fluid?.code, DF50_FLUID_CODE)
+yes('…and the log says it was pinned', /pinned/.test(both.reason))
+eq('the code match ignores case and padding', chooseDf50Fluid([{ code: ' df50fluid ', description: null }]).fluid?.code, ' df50fluid ')
 
-// One fluid row → every machine (today's catalog).
-const one = pairFluidsToMachines([efx, water, oil], [fuid])
-eq('one fluid: all three linked', one.map((p) => p.piece?.code), [fuid.code, fuid.code, fuid.code])
-
-// Two fluids by chemistry → matched by name; the unsaid EFX row is refused
-// rather than guessed.
-const wf = { code: 'DF50W', description: 'DF-50 Fluid, Water Based' }
-const of = { code: 'DF50O', description: 'DF-50 Fluid, Oil Based' }
-const two = pairFluidsToMachines([efx, water, oil], [wf, of])
-eq('two fluids: water machine gets water fluid', two[1].piece?.code, 'DF50W')
-eq('two fluids: oil machine gets oil fluid', two[2].piece?.code, 'DF50O')
-eq('two fluids: unsaid machine is refused', two[0].piece, null)
-yes('two fluids: the refusal names the rows', /DF50W/.test(two[0].reason ?? '') && /DF50O/.test(two[0].reason ?? ''))
-
-// A chemistry machine against a generic fluid plus one that says the OTHER
-// chemistry: the generic one is the only sane pick.
-const three = pairFluidsToMachines([water], [fuid, of])
-eq('water machine, generic + oil fluids: generic', three[0].piece?.code, fuid.code)
-
-// No fluid at all.
-eq('no fluid: refused with a reason', pairFluidsToMachines([efx], [])[0].reason, 'no DF-50 fluid row in the catalog')
+// The pin is gone: one fluid-named row is taken, two are refused.
+eq('no pin, one named row: taken', chooseDf50Fluid([efx, fuid]).fluid?.code, fuid.code)
+const twoNamed = chooseDf50Fluid([efx, fuid, { code: 'X', description: 'DF-50 Fluid, quart' }])
+eq('no pin, two named rows: nothing chosen', twoNamed.fluid, null)
+yes('…and the refusal names both', /DF50 Hazer Fuid/.test(twoNamed.reason) && /quart/.test(twoNamed.reason))
+eq('nothing at all', chooseDf50Fluid([efx, water, oil]).fluid, null)
+yes('machines never count as the fluid', !/104417/.test(chooseDf50Fluid([efx, water, oil]).reason))
 
 // The machine list is the pick-list check's list — one place, not two.
 const check = KIT_CHECKLISTS.find((k) => k.label.startsWith('DF-50'))

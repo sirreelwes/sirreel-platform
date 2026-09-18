@@ -36,6 +36,12 @@ export interface SelfCheckoutView {
   done: { at: string; mileage: number | null; fuelLevel: string | null; photoCount: number } | null
   required: PhotoPosition[]
   optional: PhotoPosition[]
+  /** A mileage number or odometer photo is demanded. False once the yard
+   *  has already recorded one. */
+  mileageRequired?: boolean
+  /** SirReel walked this vehicle around before the driver got here, so
+   *  nothing is demanded of them but the check-out itself. */
+  walkaroundOnFile?: boolean
   licenseBlocker: string | null
   licenseUnchecked: boolean
 }
@@ -75,7 +81,7 @@ export function DriverSelfCheckoutCard({
   const blockers: string[] = []
   if (!licenceDone) blockers.push('your license (both sides, above)')
   if (missingSides.length) blockers.push(missingSides.map((s) => s.label.toLowerCase()).join(', '))
-  if (!mileageOk && !hasOdo) blockers.push('mileage or an odometer photo')
+  if (state.mileageRequired !== false && !mileageOk && !hasOdo) blockers.push('mileage or an odometer photo')
   const ready = blockers.length === 0 && !uploading && !state.licenseBlocker
 
   async function submit() {
@@ -169,6 +175,19 @@ export function DriverSelfCheckoutCard({
         </p>
       )}
 
+      {/* The yard checked this vehicle out already, so the driver is asked
+          for nothing but the check-out itself (Julian 2026-09-17). Photos
+          stay OFFERED — a driver who finds fresh damage in the yard must
+          always be able to shoot it, and that is the one case where their
+          picture is the valuable one. */}
+      {state.walkaroundOnFile && (
+        <p className="mt-2.5 rounded-xl border border-zinc-700 bg-zinc-800/60 px-3.5 py-2.5 text-[13px] text-zinc-300">
+          SirReel already photographed and checked this vehicle out — you don&rsquo;t need to take any
+          pictures. Open the checkout sheet above to see how it was recorded, and only add a photo
+          below if you find something that does not match.
+        </p>
+      )}
+
       <div className="mt-4">
         <GuidedPhotoCapture
           bookingAssignmentId={bookingAssignmentId}
@@ -176,7 +195,7 @@ export function DriverSelfCheckoutCard({
           uploadEndpoint={`/api/drive/${token}/checkout/photo`}
           requiredPositions={state.required}
           optionalPositions={state.optional}
-          title="Photos"
+          title={state.walkaroundOnFile ? 'Photos — only if something looks off' : 'Photos'}
         />
       </div>
 

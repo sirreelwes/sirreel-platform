@@ -18,6 +18,7 @@ import { usePathname, useSearchParams } from 'next/navigation'
 import { JobsListProvider } from '@/components/jobs/JobsListProvider'
 import { JobsSidebar } from '@/components/jobs/JobsSidebar'
 import { JobsToolbar } from '@/components/jobs/JobsToolbar'
+import { JobChatProvider, JobChatPane } from '@/components/jobs/JobChatDock'
 
 function JobsSplit({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
@@ -31,6 +32,11 @@ function JobsSplit({ children }: { children: React.ReactNode }) {
 
   return (
     <JobsListProvider>
+    {/* The Conversation dock is mounted HERE, not by the job page, so the
+        chat window survives walking from one job to the next — that is
+        what makes "minimise and leave it open on top of the other jobs"
+        mean anything (Wes 2026-09-17). */}
+    <JobChatProvider>
       {/* Column: the full-width command bar (title + search + filters +
           Incoming + legend — Wes 2026-08-28) above the list|detail
           split. Both the bar and the rail read the same list context,
@@ -42,8 +48,10 @@ function JobsSplit({ children }: { children: React.ReactNode }) {
           <div className={`${selected ? 'block' : 'hidden md:block'} flex-1 min-w-0 overflow-y-auto bg-zinc-100 p-4`}>
             {children}
           </div>
+          <JobChatPane />
         </div>
       </div>
+    </JobChatProvider>
     </JobsListProvider>
   )
 }

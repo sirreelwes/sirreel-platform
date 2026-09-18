@@ -34,7 +34,7 @@ import { notifyJobsChanged } from '@/components/jobs/JobsListProvider';
  * CompanyAgreement.autoCoverJobs — see src/lib/orders/annualCoverage.ts.
  */
 const SHOW_AGREEMENT_ON_FILE = true;
-import { JobConversation, ConversationTabs } from '@/components/jobs/JobConversation';
+import { useJobChat } from '@/components/jobs/JobChatDock';
 import { JobQuickActions } from '@/components/jobs/JobQuickActions';
 import { JobWelcomeButton } from '@/components/jobs/JobWelcomeButton';
 import { AddAssetButton } from '@/components/jobs/AddAssetButton';
@@ -56,6 +56,7 @@ import { MarkBookedButton } from '@/components/jobs/MarkBookedButton';
 import { AssignUnitsModal } from '@/components/scheduling/AssignUnitsModal';
 import { JobBookingsSection } from '@/components/jobs/JobBookingsSection';
 import { JobSubRentalsSection } from '@/components/jobs/JobSubRentalsSection';
+import { orderHrefFromJob } from '@/lib/nav/orderBackTarget';
 import { JobAfterHoursPanel } from '@/components/jobs/JobAfterHoursPanel';
 import { JobVehiclePickupPanel } from '@/components/jobs/JobVehiclePickupPanel';
 import { LinkJobAgreementModal } from '@/components/agreements/LinkJobAgreementModal';
@@ -527,24 +528,23 @@ export default function JobDetailPage() {
   const canSeeMoney = useMoneyVisible();
   const params = useParams();
   const router = useRouter();
-  // One-thread-per-job (Phase 2): the Conversation is a pinned rail at
-  // 1280px+ and a Details | Conversation tab below that. `?tab=conversation`
-  // is the deep link a notification lands on (same pattern as
-  // /jobs?panel=incoming). The panel is mounted ONCE and shown/hidden by
-  // class, so it loads once and its "client replied" dot reaches the tab.
+  // One-thread-per-job (Phase 2): the Conversation lives in a dock owned by
+  // the /jobs LAYOUT, so it survives walking from one job to the next and
+  // can be minimised or closed (Wes 2026-09-17). This page only says which
+  // job is on screen; the dock decides whether the window follows.
+  // `?tab=conversation` is the deep link a notification lands on (the
+  // Hand-to-Billing email, an urgent note's text) — it opens the window.
   const searchParams = useSearchParams();
-  const tab: 'details' | 'conversation' = searchParams?.get('tab') === 'conversation' ? 'conversation' : 'details';
-  const setTab = useCallback(
-    (t: 'details' | 'conversation') => {
-      const q = new URLSearchParams(searchParams?.toString() ?? '');
-      if (t === 'conversation') q.set('tab', 'conversation');
-      else q.delete('tab');
-      router.replace(`${window.location.pathname}${q.toString() ? `?${q.toString()}` : ''}`, { scroll: false });
-    },
-    [router, searchParams],
-  );
-  const [convoAwaiting, setConvoAwaiting] = useState(false);
-  const onConvoSummary = useCallback((sum: { awaitingReply: boolean }) => setConvoAwaiting(sum.awaitingReply), []);
+  const wantsConversation = searchParams?.get('tab') === 'conversation';
+  const chat = useJobChat();
+  // `?book=1` — where the tile's "Approved — book it" chip lands. The chip
+  // used to be plain text inside the row's link, so pressing it dropped a
+  // rep at the top of a long page with nothing saying WHICH order it meant
+  // (Wes 2026-09-17). Now it opens the approved orders and puts the
+  // book-it prompt on screen. Once per landing: a rep who scrolls away is
+  // not yanked back on the next re-render.
+  const bookDeepLink = searchParams?.get('book') === '1';
+  const bookLandedRef = useRef(false);
   const id = params?.id as string;
 
   const [job, setJob] = useState<JobDetail | null>(null);
@@ -679,6 +679,48 @@ export default function JobDetailPage() {
       next.has(oid) ? next.delete(oid) : next.add(oid);
       return next;
     });
+
+  // Tell the dock which job is on screen. While nobody has minimised or
+  // closed the window it follows this, which keeps the always-on column
+  // the rail used to be; once it is pinned, this is only what the
+  // "you're on another job" strip reads.
+  const chatSetHere = chat.setHere;
+  useEffect(() => {
+    if (!job) return;
+    chatSetHere({ id: job.id, jobCode: job.jobCode, name: job.name, company: job.company?.name ?? null });
+    return () => chatSetHere(null);
+  }, [job, chatSetHere]);
+
+  // `?tab=conversation` — the Hand-to-Billing email and an urgent note's
+  // text land here. Open the window even if it was closed; once per
+  // landing, so pressing Close does not fight the deep link.
+  const chatOpenFor = chat.openFor;
+  const convoDeepLinkRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!wantsConversation || !job || convoDeepLinkRef.current === job.id) return;
+    convoDeepLinkRef.current = job.id;
+    chatOpenFor({ id: job.id, jobCode: job.jobCode, name: job.name, company: job.company?.name ?? null });
+    setTimeout(() => window.dispatchEvent(new CustomEvent('job-conversation:focus')), 120);
+  }, [wantsConversation, job, chatOpenFor]);
+
+  // Land the `?book=1` deep link: open every approved-unbooked order and
+  // scroll the prompt into view. Runs after the job is in state, so the
+  // #book-it node it looks for has rendered.
+  useEffect(() => {
+    if (!bookDeepLink || !job || bookLandedRef.current) return;
+    const approved = job.orders.filter((o) => o.status === 'APPROVED');
+    if (approved.length === 0) return;
+    bookLandedRef.current = true;
+    setExpandedOrders((prev) => {
+      const next = new Set(prev);
+      for (const o of approved) next.add(o.id);
+      return next;
+    });
+    const raf = requestAnimationFrame(() => {
+      document.getElementById('book-it')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [bookDeepLink, job]);
 
   // Add-contact form on the Contacts card. Contacts previously attached only
   // through order flows; since the payment-options email routes by them
@@ -1012,6 +1054,21 @@ export default function JobDetailPage() {
   // Phase 7 Pass A — at-a-glance engagement rollup. All derived from
   // the expanded payload; no extra API call.
   const liveOrders = job.orders.filter((o) => o.status !== 'CANCELLED');
+  // APPROVED AND NOT BOOKED — the one state where the ball is entirely in
+  // our court and the next move is a single press.
+  //
+  // Wes 2026-09-17, on SR-JOB-0312: "It says that the production supply
+  // order is booked but it does not give me any other options there. On
+  // the tile it says that I need to book it." Both were right about
+  // different orders. The header badge is `rollupCadence`, which maps
+  // APPROVED and BOOKED to the same 'booked' state (lib/jobs/cadence.ts)
+  // — deliberately, because a new CadenceState would re-tier the board's
+  // colours, legend and sort — so on a job carrying one booked order and
+  // one approved one the header reads BOOKED and prompts nothing, while
+  // the tile's `approvedUnbooked` count says book it. The badge is not
+  // changing; this prompt is the qualifier beside it, and it NAMES the
+  // order, which is what the tile could never say.
+  const approvedUnbooked = liveOrders.filter((o) => o.status === 'APPROVED');
   // A job has no dates of its own — see lib/jobs/dateRange. Show the span
   // its ORDERS cover instead of a separately-typed job range that drifts.
   // NOT displayed — a job has no dates of its own and HQ no longer shows a
@@ -1546,9 +1603,7 @@ const driverTone = (d: any): string => {
   const foldedChips = FOLD_META.filter((m) => sectionEmpty[m.key] && !openSections.has(m.key));
 
   return (
-    <div className="mx-auto max-w-5xl xl:max-w-[1480px] xl:grid xl:grid-cols-[minmax(0,1fr)_400px] xl:gap-4 xl:items-start">
-      <ConversationTabs tab={tab} onChange={setTab} awaiting={convoAwaiting} />
-      <div className={`max-w-5xl mx-auto space-y-3 text-[15px] min-w-0 ${tab === 'conversation' ? 'hidden xl:block' : ''}`}>
+    <div className="max-w-5xl mx-auto space-y-3 text-[15px] min-w-0">
       {toast && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 bg-zinc-100 border border-zinc-300 text-zinc-900 text-[15px] px-4 py-2 rounded-lg shadow-xl">
           {toast}
@@ -1755,16 +1810,20 @@ const driverTone = (d: any): string => {
                 )}
               </div>
             )}
+              {/* The one way back to a window that was closed. */}
               <button
                 type="button"
                 onClick={() => {
-                  setTab('conversation');
+                  chat.openFor({ id: job.id, jobCode: job.jobCode, name: job.name, company: job.company?.name ?? null });
                   setTimeout(() => window.dispatchEvent(new CustomEvent('job-conversation:focus')), 60);
                 }}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 text-[12px] font-semibold rounded-lg border border-lt-hairline bg-lt-card text-lt-fg2 hover:text-lt-fg"
                 title="Write to the client on this job's one thread"
               >
                 <Mail size={13} aria-hidden /> Conversation
+                {chat.target?.id === job.id && chat.awaiting && (
+                  <span className="w-2 h-2 rounded-full bg-amber-600" aria-label="client replied" />
+                )}
               </button>
             </div>
             {/* In-Job creation — the ONLY place quotes/reservations are
@@ -1788,6 +1847,44 @@ const driverTone = (d: any): string => {
                   nothing has welcomed them; quiet once sent. */}
               <JobWelcomeButton jobId={job.id} onSent={load} />
             </div>
+
+            {/* APPROVED, NOT BOOKED — named, with the press beside it.
+                The header badge cannot say this (see `approvedUnbooked`
+                above), so it is said here, in the row that already
+                carries the other "this is due" actions. One line per
+                order: a job can carry more than one, and "which order?"
+                was the whole complaint. */}
+            {approvedUnbooked.length > 0 && (
+              <div
+                id="book-it"
+                className="mt-3 scroll-mt-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5"
+              >
+                <div className="text-[12px] font-semibold text-amber-900">
+                  {approvedUnbooked.length === 1
+                    ? 'One order is approved but not booked yet'
+                    : `${approvedUnbooked.length} orders are approved but not booked yet`}
+                </div>
+                <div className="mt-0.5 text-[12px] text-amber-900/80">
+                  The client said yes. Booking firms the held units and routes the lines to the floor.
+                </div>
+                <div className="mt-2 space-y-2">
+                  {approvedUnbooked.map((o) => (
+                    <div key={o.id} className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-[13px] font-semibold text-amber-900">{o.orderNumber}</span>
+                      <span className="text-[12px] text-amber-900/80">
+                        {orderContentSummary(o.lineItems) ?? 'No line items yet'}
+                      </span>
+                      <MarkBookedButton
+                        orderId={o.id}
+                        orderNumber={o.orderNumber}
+                        orderStatus={o.status}
+                        onDone={load}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
             {job.fromInquiry && (
               <div className="mt-1 flex items-center gap-1.5 text-[12px] text-zinc-700">
                 <span>Originated from</span>
@@ -2441,7 +2538,7 @@ const driverTone = (d: any): string => {
                       <span className="font-mono text-[13px] text-zinc-800 mt-0.5 whitespace-nowrap">{fmtMoney(o.total)}</span>
                     )}
                     <Link
-                      href={`/orders/${o.id}`}
+                      href={orderHrefFromJob(o.id)}
                       onClick={(e) => e.stopPropagation()}
                       className="ml-2 shrink-0 rounded-md border border-amber-300 bg-amber-50 px-2.5 py-1 text-[12px] font-bold text-amber-700 hover:bg-amber-100 hover:border-amber-400 transition-colors"
                     >
@@ -2705,7 +2802,7 @@ const driverTone = (d: any): string => {
                         ordinary chip is how three vans went out tomorrow
                         under a cancelled S260915-004. Say which. */}
                     <Link
-                      href={`/orders/${a.attachedOrder.id}`}
+                      href={orderHrefFromJob(a.attachedOrder.id)}
                       className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono font-semibold ${
                         DEAD_ORDER_STATUSES.has(a.attachedOrder.status)
                           ? 'border border-rose-200 bg-rose-50 text-rose-700 line-through decoration-rose-400 hover:bg-rose-100'
@@ -2951,7 +3048,7 @@ const driverTone = (d: any): string => {
                 <div key={order.id} className="border-l-2 border-amber-200 pl-3">
                   <div className="flex items-center gap-2 mb-1.5 text-[12px]">
                     <Link
-                      href={`/orders/${order.id}`}
+                      href={orderHrefFromJob(order.id)}
                       className="font-mono text-zinc-700 hover:text-amber-600"
                     >
                       {order.orderNumber}
@@ -4022,14 +4119,6 @@ const driverTone = (d: any): string => {
           }}
         />
       )}
-    </div>
-      <aside className={`min-w-0 ${tab === 'conversation' ? '' : 'hidden xl:block'} xl:sticky xl:top-4`}>
-        <JobConversation
-          jobId={job.id}
-          onSummary={onConvoSummary}
-          className="h-[calc(100vh-7rem)] min-h-[480px] xl:h-[calc(100vh-2.5rem)]"
-        />
-      </aside>
     </div>
   );
 }

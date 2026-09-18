@@ -40,6 +40,7 @@ import { findAssetConflictsForRange } from '@/lib/scheduling/assetConflicts'
 import { recalcOrderTotals } from '@/lib/orders'
 import { rebaselineCadenceForOrder } from '@/lib/cadence/scheduler'
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
+import { syncReservationToLineDates } from '@/lib/scheduling/followLineDates'
 
 export const dynamic = 'force-dynamic'
 
@@ -255,11 +256,36 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   await syncOrderWindowSafe(id)
 
+  // The reservation follows (Wes 2026-09-17, Someday Studios). This route
+  // used to read the booking's units for the conflict list above and then
+  // write nothing on the booking side, so the order moved and the board
+  // did not. The rep saw every asset conflict up front and, when there
+  // were any, ticked through them — so a unit moves onto its new days
+  // even where they are booked elsewhere (`allowConflicts`), and the
+  // audit row says so. Non-fatal: the dates are already written.
+  const byId = new Map(order.lineItems.map((li) => [li.id, li]))
+  const followed = await syncReservationToLineDates({
+    orderId: id,
+    changes: preview.projectedItems
+      .filter((p) => p.classification !== 'custom_kept')
+      .map((p) => {
+        const before = byId.get(p.id)
+        return before
+          ? { lineId: p.id, from: { start: before.pickupDate, end: before.returnDate }, to: { start: p.pickupDate, end: p.returnDate } }
+          : null
+      })
+      .filter((c): c is NonNullable<typeof c> => c !== null),
+    allowConflicts: conflicts.length > 0 && !!body.overrideConflicts,
+    actor: { userId: user.id },
+  })
+  if (followed.error) console.error('[orders/dates/apply] reservation did not follow:', followed.error)
+
   return NextResponse.json({
     ok: true,
     newRange: { startDate: newStart.toISOString(), endDate: newEnd.toISOString() },
     itemsUpdated: preview.projectedItems.filter((p) => p.classification !== 'custom_kept').length,
     delta: preview.delta,
     postBooking: !PRE_BOOK_STATUSES.has(order.status),
+    assignmentsFollowed: followed,
   })
 }

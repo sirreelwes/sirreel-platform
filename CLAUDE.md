@@ -171,6 +171,115 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - The client COI drop link now runs the AI review on arrival (it used to store
   the PDF with no analysis at all).
 
+## A negotiated agreement becomes the client's annual (2026-09-18 — Wes)
+- Wes: "for party giraffe and graduation day, I need to make those negotiated
+  agreements standard for each job as an annual agreement." Their counsel's
+  redline was already transcribed (`negotiated/graduationDay2026.ts`, verbatim
+  — read `negotiatedAgreement.ts` before touching a word of it) and had a
+  filing script since 2026-09-15. Nothing had run it: the write needs the
+  production DB **and** `BLOB_READ_WRITE_TOKEN`, which is deliberately not in
+  `.env.local`, so the only thing in the way was a laptop.
+- **`src/lib/contracts/fileNegotiatedAgreement.ts` is the work**, with the
+  two entry points: `scripts/file-negotiated-agreement.ts` (argv + journal +
+  exit code, nothing else) and /admin/maintenance →
+  `file-negotiated-agreement`. The web path is the one place the blob token
+  simply IS — a phone run needs no `vercel env run`. Add behaviour to the
+  lib or the phone loses it.
+- **It files the document TWICE, for two different questions**, because
+  Wes's sentence names both mechanisms: `CompanyAgreement.autoCoverJobs` (the
+  ANNUAL master — every job inside the window is papered by it and the portal
+  asks only for the LCDW election, `annualCoverage.ts`) and
+  `Company.negotiatedTermsUrl` (the STANDING document — what goes out
+  whenever an agreement IS released for signature,
+  `ensureSignedAgreementForOrder`). Coverage outranks standing terms, so only
+  the first is felt while it holds; the second is what stops the day the
+  window lapses (2026-12-31 here) from handing that client our baseline
+  template after their lawyer redlined it. One PDF, both pointers.
+- `standingLcdwDecision` stays NULL on purpose — their counsel settled the
+  terms, nobody elected the damage waiver, and a null standing answer is
+  exactly what makes the portal ask per job.
+- **What it refuses, rather than guessing:** companies are matched on EXACT
+  name (0 or 2+ → skipped, near-misses printed as pasteable aliases); a
+  company already carrying a CURRENT auto-covering master is skipped for a
+  person to supersede by hand; standing terms already on file are never
+  overwritten (the annual is still filed and the log says so); no expiry date
+  is a refusal, because a master that never lapses never hands the signing
+  ask back. Dry run is the default on both paths and still renders the PDF.
+- `Party Giraffes` → **`Party Giraffes, LLC`** is a confirmed
+  `companyAliases` entry on the agreement, so nothing is typed on a phone.
+  Matching stays exact anyway: "Party Giraffes" also near-matches "Giraffe
+  Air LLC DBA Studio Sands", which is somebody else. An `alias` param
+  overrides it when the dry run says a name did not match — one per LINE or
+  semicolon, never comma-separated, because the values carry commas.
+- Coverage is read live, so jobs already open for these companies are covered
+  on their next read; no backfill. **Not run yet** — this session had no
+  production access. `npm run test:negotiated-agreement`,
+  `npm run test:maintenance-tasks`.
+
+## The broker gets the review, not a forwarded paragraph (2026-09-17 — Wes)
+- Wes: "Is there a way to extract the broker from a COI and add an option to
+  send a link to them when we need an updated COI or something isn't passing
+  our test? The link would open a read only review showing the broker what we
+  are rejecting or requesting be fixed." Every correction used to go client →
+  broker → client, with our requirement text re-explained at each hop.
+- **The broker is read off the document, not stored.** `COI_PROMPT` now
+  extracts the ACORD 25 **PRODUCER** box (agency, contact name, email, phone,
+  address) beside `namedInsured`; it lives in `CoiCheck.aiResponse.producer`
+  and is read on demand by `readCoiBroker()` in `src/lib/coi/broker.ts`.
+  **No column, no migration** — same reasoning as the named insured: a raw
+  FACT off the certificate that a re-run corrects. Placeholder-scrubbing
+  ("N/A", "same as insured") and e-mail validation live in the READER, not in
+  what we store; an invented broker is a correction request sent to a
+  stranger with the client's name in it.
+- **"Never asked" ≠ "blank box."** A review filed before today has no
+  `producer` key at all and the desk says "re-run it to pull the broker off
+  the certificate" — the same distinction `aiHasInsuredName` carries. Today's
+  `normalizeCoiReview` always stamps the key, so an empty producer box on a
+  fresh review reads as asked-and-blank.
+- **`POST /api/coi/review/[id]` action `EMAIL_BROKER`** — the fourth option
+  beside Approve / Reject / Request fix from client. Same posture as
+  REQUEST_FIX: the email IS the act (a send failure changes nothing), the row
+  parks in COUNTERED, Reply-To is the reviewer. Differences: the recipient
+  defaults to the producer block, the **client is Cc'd by default** (nobody's
+  broker is approached behind their coordinator's back), and **the review
+  LINK is appended by the route, never by the editable draft** — the partner-
+  welcome rule, so a reviewer trimming a paragraph cannot delete the thing the
+  email exists to deliver. Audited `coi.broker_review_sent` (who it went to,
+  never the body — that is on the job's thread). Label `coi-broker-review`
+  rides `sendOnJobThread`, so the broker's reply files to the job.
+- **The link opens `/coi/broker/[token]`** — read-only in the strong sense:
+  no form, no POST, no session. `signCoiBrokerToken` reuses the COI-upload
+  HMAC envelope with a **domain separator** (`coi-broker-review.v1`) so an
+  upload token can never be replayed as a review token, and the payload is
+  ONE `coiId` — a forwarded link never widens. 45-day TTL.
+- **`buildBrokerReviewPacket()` IS the disclosure envelope**, and the page
+  renders nothing it does not return. IN: the requirements, the verdict per
+  requirement, what THEIR certificate shows, the insured, the job name, the
+  replacement-value sentence, where to send the corrected one (the existing
+  client drop link). OUT: the reviewer's internal note, the per-check model
+  prose (it names requirements this job may not have — the 2026-09-09 leak),
+  the risk level, the stored PDF, the order, any rate, any contact but ours.
+- Verdicts are **recomputed on every view**, not frozen at send: a broker who
+  opens the link after the desk approved reads "nothing further needed", and
+  a production company fixed in HQ clears the named-insured line here too.
+  A gear-only job's auto rows stay NA, so we never ask a broker for coverage
+  this job does not need.
+- **The sample certificate rides along** (Wes 2026-09-17: "we may want to
+  also add a copy of our sample COI to broker") — the same ACORD the portal
+  and the Forms menu offer, `SAMPLE_COI_PATH` in requirements.ts, absolute on
+  the marketing origin so it resolves from any host or inbox. **Gated on
+  `SiteSetting.formCoiUrl` being set on BOTH surfaces**: `/api/public/forms/
+  [slot]` 404s until an admin uploads the PDF, so the page offers nothing
+  rather than a dead link and `brokerReviewLinkLines({ hasSample })` names it
+  in the email only when one is on file. A broker matching a document beats a
+  broker matching a paragraph; a broker clicking a 404 costs the round trip
+  this feature exists to save.
+- `COI_INBOX` ('rentals@') moved into `requirements.ts` — the portal's broker
+  email and this page name one mailbox. `npm run test:coi-broker`.
+- NOT done: nothing yet nudges when a broker has had the link for days with
+  no new certificate, and the broker is not offered anywhere outside the
+  review desk (no chip on the job page, no company-level broker on file).
+
 ## After-hours VEHICLE pickup email (2026-09-10)
 - Wes: "an easy button for sales to send this summary" — Jose's hand-typed
   After Hours Instructions (address, Gate 1 code, driver's-license line,
@@ -213,6 +322,16 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `src/lib/assistant/phoneFactor.ts`, `npm run test:phone-factor`). Scoped
   to the live assignment — a number on another job unlocks nothing. Web
   chat never passes a number; the job-code paths are unchanged.
+- **A "no mobile" icon on the staff table** (Wes 2026-09-17, handed
+  Julian's cell and then "Who are you missing?"): /admin/assistant flags
+  every staff row with no `User.phone`, counts them in the panel summary
+  ("4 on call · 3 with no mobile") and says what the blank costs — an
+  URGENT job note emails that person instead of texting, and AHA cannot
+  recognise their texts as staff. **That table also used to list only
+  ADMIN / AGENT / MANAGER**, and it is the sole editor for `User.phone`,
+  so Ana (BILLING), Julian and the yard had no way to be reached and no
+  way to be given a number; it is every active staff row now, DRIVER and
+  CLIENT excluded.
 - **AHA knows who is texting, by number, server-side**
   (`src/lib/assistant/senderIdentity.ts`; the model never decides). STAFF =
   active User whose `phone` (set on /admin/assistant, "Mobile (texts AHA as
@@ -624,6 +743,141 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   - NOT done: the pick-list floor (`/warehouse/pick/[id]`) still records
     only `PickListItem.scannedCode`; no write-back to RW; no camera
     scanning (wedge/keyboard only, as before).
+## Walk-around photos: date on every frame, Save, out-beside-back (2026-09-17 — Hugo)
+- Hugo's three notes on the Damage ID build (HQ's vehicle check in/out,
+  `/reports/vehicles` + the filed record `/reports/vehicles/[inspectionId]`):
+  time and date at the bottom of each photo; save a photo from HQ for a
+  damage report; scroll through check-out and check-in photos side by side.
+- **One wording for a photo's time: `src/lib/fleet/photoStamp.ts`** (pure).
+  `photoStampWhen` ("Sep 16, 2026 · 2:14 PM PT", Pacific, says so), the
+  short badge form, the numbered slot title ("5. Driver side rear" — the
+  crew's DamageID number), the caption a saved copy carries, and the saved
+  file's name (`Cube-27_check-out_05-driver-side-rear_2026-09-16_14-14.jpg`).
+  The record page, the compare viewer, the return capture screen's "Out"
+  badge and the burned-in stamp all read it. Nothing else formats a
+  photo's time.
+- **WHICH time changed underneath.** `InspectionPhoto.createdAt` used to be
+  the moment the whole form was FILED (`createMany` at finalize), so every
+  photo on a walk-around carried the same time to the minute. All four
+  attach loops (staff check-out/return routes, driver `selfCheckout` /
+  `selfReturn`) now write `createdAt: blob.uploadedAt` — the moment the
+  photo landed in the store from the yard, seconds after the shutter for an
+  in-app shot, server-of-record. No schema change. Older rows keep the
+  filing time; nothing reads camera EXIF on purpose (the phone's word).
+- **Save = a stamped COPY, never the original.** `GET /api/fleet/photos/
+  [photoId]?download=1` reads the private blob, draws the caption along the
+  bottom with `@napi-rs/canvas` (`src/lib/fleet/stampPhoto.ts`) and the
+  Liberation Sans Bold that pdfjs-dist ships (a lambda has no system fonts
+  — text drawn with none is silently blank; both traced into the route in
+  next.config.js), and returns it as an attachment. HEIC or any decode
+  failure → the raw file under the same good name (`X-Photo-Stamped: 0`).
+  **`loadImage` applies EXIF orientation itself** — do not apply it again
+  (the first cut did, and portrait shots came out upside down).
+- **Out beside back: `/reports/vehicles/[inspectionId]/compare`** (+
+  `?slot=`), `WalkaroundCompare` over `buildCompareRecord()` in
+  `src/lib/fleet/comparePairs.ts` (pure). Check-out is ALWAYS the left frame
+  whichever end was opened; Julian's slots in walk order, then each end's
+  close-ups and extras (out first). Arrow keys, filmstrip, Save on each
+  frame. `filedInspection().counterpart` now carries its `inspectorName`,
+  `damagePhotos` and `otherPhotos` for it. Read-only, yard-gated.
+- **Julian's check-in side-by-side was ALREADY this, in four places
+  (2026-09-17: "at checking in of the vehicle, the fleet team takes the
+  same photos they took on checkout prep … damage id would position the
+  photos side by side in a check in report").** Do not build a fifth.
+  (1) DURING check-in capture, `InspectionReturnForm` passes
+  `compareTo={checkout?.photos}` and GuidedPhotoCapture renders the
+  check-out shot directly ABOVE the button that replaces it, so the tech
+  photographs how it is while looking at how it was; (2) the filed record
+  shows each slot beside the other end; (3) `/compare` is the large
+  one-angle-at-a-time viewer; (4) the condition report PDF pairs out/back
+  per slot. What was genuinely missing was the DOOR: the post-check-in
+  screen offered the PDF and the filed record but not the comparison, so
+  it was two taps through a page nobody was aiming for. "Compare out vs
+  back" now sits on the screen the crew is already standing on.
+- `npm run test:photo-stamp`.
+
+## The driver's copy of the checkout sheet, on their phone (2026-09-17 — Wes/Julian)
+- Julian's blind-pickup process: check the vehicle out the day before,
+  fill the sheet, "leave a copy of the checkout sheet inside the assigned
+  vehicle." Wes: "give the drivers a link to the PDF checkout … much
+  better for them to have it on their phone." That paper copy was the ONLY
+  thing putting the recorded condition in the driver's hands — the driver
+  page showed them a photo COUNT and never an image, the self-checkout
+  confirmation email goes to the `driver-checkouts` HQ channel and not to
+  them, and their return card was never given the `compareTo` the STAFF
+  return form has.
+- `GET /api/drive/[token]/condition-report` — same `buildInspectionReport`
+  + `ConditionReportDocument` as the yard's route, so the driver's copy
+  cannot drift from the record it copies. Token is the credential (404
+  invalid / 410 expired / 409 cancelled), scoped to the one assignment.
+  Shown on the page as "Vehicle condition → Open the checkout sheet".
+- **FOUR things it must never carry, and does not:** the DRIVER'S LICENCE
+  photo (`buildInspectionReport` filters `DRIVERS_LICENSE` out of every
+  side on purpose), the lockbox/gate CODE (the report has never read
+  `Asset.accessCode`; codes reach a driver only through the earned-and-
+  unlocked path on the page), anyone else's rental, and **anything about
+  the CHECK-IN**.
+- **The driver's copy is the CHECK-OUT sheet ONLY (2026-09-17 — Wes:
+  "typically we deal straight with production for damage reporting — do
+  not need to send to driver after return").** `checkoutSideOnly()` in
+  inspectionReport.ts strips `back`, every pair's `back`, the check-in
+  damage close-ups and extras, `milesDriven` and `newDamage` — which that
+  file's own comment calls "what the renter is actually being told about"
+  — before the driver route renders. **A driver's link lives 45 days**, so
+  without this the person who drove the truck could read the damage found
+  at check-in before the production heard it. Damage is a conversation
+  with the PRODUCTION; the driver is not a party to it. The availability
+  count on the page is `type: 'CHECKOUT'` for the same reason: a vehicle
+  with only a RETURN on file has nothing to show them. Pre-existing damage
+  recorded at CHECK-OUT stays — that is what they received.
+  `npm run test:driver-report-scope` sweeps EVERY field for check-in
+  markers, so a `back`-shaped field added later fails there rather than
+  quietly reaching a driver. Nothing is emailed to a driver after a return
+  either — `selfReturn` mails the `driver-returns` HQ channel.
+- **NOT gated on blind** — Wes said drivers, not blind drivers, and a
+  staffed pickup's driver having the sheet costs nothing. Gated instead on
+  a walk-around actually being FILED on the assignment (staff's or the
+  driver's own); a link to an empty sheet is worse than no link.
+- **`inspectionReportSendingEnabled()` stays dark and is NOT consulted.**
+  That gate is about EMAILING the RENTER a report; handing the person
+  driving the truck the sheet that used to sit on its passenger seat is a
+  different act. Do not wire this route to that flag, and do not wire that
+  flag on to ship a driver copy.
+- Julian's day-before staff walk-around is UNCHANGED and still not gated on
+  blind anywhere. The driver's four sides remain additional, and on a blind
+  pickup they still merge onto the same CHECKOUT Inspection
+  (`adoptedStaffInspection`). **Caveat if both happen: FRONT and REAR are
+  the same slot on both lists and the record page renders the NEWEST photo
+  per slot**, so the driver's pair displays over the staff's from the day
+  before (both are stored; the earlier pair is not visible in the slot grid
+  or the compare view). The driver's other shots (DRIVER_SIDE,
+  PASSENGER_SIDE, ODOMETER, FUEL_GAUGE, INTERIOR) are legacy slots outside
+  Julian's 23 and do not collide.
+- **Drivers are only asked for photos on an UNPLANNED pickup (2026-09-17 —
+  Julian: "we have no need to prompt drivers for checkout photos unless for
+  some reason it is an unplanned pickup").** His process walks the vehicle
+  around the DAY BEFORE, so on a planned blind pickup the condition is
+  already on file before the driver is near the truck and four more sides in
+  a dark yard buy nothing — they also DISPLACE the yard's front and rear on
+  the filed record (same slot ids, newest wins). "Unplanned" is NOT a flag
+  anyone sets: it is DERIVED from whether a CHECKOUT Inspection filed by
+  SIRREEL (`inspectedByDriverId: null`) exists on the assignment. None =
+  nobody got the chance = the four sides stay required, because that truck
+  would otherwise leave with no record either direction.
+  `driverCheckoutDuty()` in `src/lib/drivers/selfCheckout.ts` is the pure
+  rule; `selfCheckoutState` and `completeSelfCheckout` both read it, and the
+  server re-reads the fact rather than trusting the page — this is the gate
+  that lets a truck leave. Mileage follows the same logic (the yard's
+  overnight reading stands). **Photos are never taken AWAY, only
+  un-demanded** — every slot stays offered, because a driver who finds fresh
+  damage in the yard must be able to shoot it, and the notes line records
+  which way it went. `npm run test:driver-checkout-duty`.
+- NOT done: the driver's RETURN card still has no before/after (the staff
+  form's `compareTo`), and nothing warns that a blind pickup is hours away
+  with the driver's invite undelivered, never opened and no inspection
+  filed — there is no action item for blind-pickup readiness and the fleet
+  Today board carries blind + inspection state but no driver-link state.
+
 ## Job welcome email — "here is your link" (2026-09-11)
 - Wes: after the team replies with a quote, "remind us to send the welcome
   email" — on the job tile or page or both. Both: the /jobs tile carries a
@@ -1003,6 +1257,178 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
 
+## Ana can correct an invoice from her own desk (2026-09-17 — Ana)
+- Ana: "how do I update an invoice from my side?" She could not. Both ways of
+  correcting an invoice existed — **regenerate** (rewrite the figures from
+  the order, KEEP the number — Wes 2026-09-01) and **void + re-cut** — but
+  both lived on the JOB page, two screens from `/collections`, which is where
+  she reads "Client asked for a change". And neither could touch the two
+  facts that live on the invoice and nowhere else.
+- **The split that decides every button here: figures belong to the ORDER;
+  the due date and the printed note belong to the INVOICE.** A rate, a line
+  or a late discount is fixed on the order and pulled through. An invoice
+  total that can be typed over reconciles to nothing, so there is no total
+  field and never should be — `PATCH /api/invoices/[id]` takes `dueDate` and
+  `notes`, full stop.
+  - **Due date** — SirReel bills due-on-receipt so the generator stamps the
+    issue date. Terms a client negotiated, or an extension given on the
+    phone, had nowhere to go, so honouring one meant letting the invoice read
+    as delinquent. That date is what every aging figure and "30d late" chip
+    counts from.
+  - **Note** — the PO number the client's A/P wants on the face of the
+    document, a remit instruction, "corrected 9/17". Ana's edit REPLACES it
+    wholesale; the old value is in the AuditLog `invoice.edited` row.
+- **The PDF follows, rendered from the invoice's OWN snapshot** —
+  `renderStoredInvoice()` (extracted from `renderPaidInvoice`, which is now
+  the PAID-only gate in front of it). NOT `generateRentalInvoice`, which
+  re-derives from the live order and would drag unrelated line edits into a
+  document nobody asked to republish. Replace-on-regenerate for the blob.
+  A **PAID** invoice is already rendered on demand (the PAID stamp), so its
+  blob is left alone.
+- **No snapshot → the edit is REFUSED, whatever the status.** The snapshot is
+  what every presentation is drawn from, PAID render included, so a
+  pre-snapshot invoice would move the row and leave the client's PDF saying
+  something else. The refusal names the fix (regenerate first, or void and
+  re-cut). This guard was first written gated on "needs a blob rewrite" and
+  the test caught the PAID hole — keep it unconditional.
+- **A regenerate now CARRIES THE DUE DATE OVER instead of restamping it.**
+  The generator defaults `dueDate` to the issue date, so a rewrite pushed the
+  due date to today: an invoice 20 days late came back 0 days late because
+  somebody corrected OUR arithmetic, and any hand-set terms were silently
+  gone. A correction does not restart the client's clock. (This is also what
+  lets a hand-set due date survive without a new column.)
+- **Two surfaces, one route.** `/collections` → All HQ invoices → **Correct**
+  on the row: the client's change request IN THEIR WORDS
+  (`clientChangeNote` is on the payload now — "asked for a change" with no
+  words sent her to the job page to read one sentence), the due date, the
+  note, a **"Pull the figures through from the order"** button (the
+  regenerate) and a LINK to the order for what is actually billed. The job
+  page's `JobInvoicesPanel` carries the same edit as **Due date & note**
+  beside its existing Update / Send / Void.
+- VOID is the only hard lock — a withdrawn document stays as it was. **PAID
+  is deliberately NOT locked**: a settled invoice still gets asked for a PO
+  number. Billing-gated (`can(role, 'billing')`) like void, regenerate and
+  reopen. `npm run test:invoice-edits`.
+- Unchanged and still the answer for money: the order is the book. Reopen a
+  CLOSED/INVOICED order (`POST /api/orders/[id]/reopen`, billing-gated) to
+  edit lines or discounts, then pull the figures through.
+
+## "Approved — book it" names the order and takes you to it (2026-09-17 — Wes)
+- Wes, on SR-JOB-0312: "It says that the production supply order is booked
+  but it does not give me any other options there. On the tile it says
+  that I need to book it." Both surfaces were right, about DIFFERENT
+  orders — the job carried one booked order and one still APPROVED.
+- **The header badge cannot tell APPROVED from BOOKED, on purpose.**
+  `cadenceForOrder` in `src/lib/jobs/cadence.ts` maps both to the state
+  `booked`, because a new `CadenceState` would re-tier the board's
+  colours, legend and sort (the same reason `approvedUnbooked` is carried
+  as its own COUNT in `/api/jobs`, not as a state). So the badge is NOT
+  changing. What was missing is the qualifier beside it.
+- **The job page now carries a `#book-it` prompt** under the quick-action
+  row (where JobWelcomeButton already lives), rendered when any live order
+  is APPROVED. It NAMES each order with its content summary and puts
+  `MarkBookedButton` beside it — "which order?" was the whole complaint,
+  and a count on a tile can never answer it.
+- **The tile chip navigates now.** It was plain text inside the row's
+  `<Link>`, so pressing it landed a rep at the top of a long job page
+  whose header reads BOOKED. It is a `<button>` that pushes
+  `/jobs/<id>?book=1`; the job page expands every approved order and
+  scrolls the prompt into view, once per landing.
+- **One name per act, across all three surfaces.** Before: the tile said
+  "Approved — book it", the job page said "Record client approval", the
+  order page said "Mark booked". Now the label follows the STATUS —
+  APPROVED already has the client's yes on file, so the only act left is
+  **Book it**; from DRAFT / QUOTE_SENT the yes is not on file and
+  recording it is half the point, so it is **Record client approval**.
+  The confirm button inside the panel always says Book it. The order
+  page's own APPROVED action was already "Book it" and is unchanged.
+- Nothing about the booking mechanics moved: `POST /api/orders/[id]/
+  mark-booked` and `bookOrder()` are untouched, and `MARK_BOOKABLE` /
+  `BOOKABLE_FROM` still agree on DRAFT / QUOTE_SENT / APPROVED.
+
+## The reservation follows the order's dates (2026-09-17 — Wes)
+- Wes, on Someday Studios' passenger van: "I changed it in the order, but
+  that did not change it on the reservation as we had planned for it to
+  do." Pickup 18th → 17th on the order; the board still drew the van on
+  the 18th. Nothing had ever moved a UNIT with a line's dates:
+  `BookingAssignment.startDate/endDate` are COPIES stamped at assign time
+  from the quoted block (assignWindow.ts), and neither date edit wrote
+  them back. Worse, `coverageOfBlock` matches by exact day, so the NEW
+  block read as unfilled while the same van sat held on the old one.
+- **Two edits move line dates, one implementation follows them:**
+  `syncReservationToLineDates()` in `src/lib/scheduling/followLineDates.ts`,
+  called by the row editor (`PUT /line-items/[lineId]`) and "Change dates…"
+  (`POST /dates/apply`). It runs `holdOnQuoteSend` (peak + envelope widen),
+  re-stamps the units, then `tightenBookingEnvelope` brings the envelope IN
+  when nothing still needs the old days. Pure rules `planAssignmentFollow`
+  / `bookingEnvelopeFor`, `npm run test:follow-line-dates`.
+- **Why the row editor never fired before:** its gate was the line's own
+  `assetCategoryId`, which every catalog-bound vehicle leaves null (the
+  class lives on the catalog row). `holdCategoryForLine()` in
+  holdOnQuoteSend.ts is now the exported, pure resolution the hold itself
+  uses; resolve a line's class through it, never off `assetCategoryId`
+  alone.
+- **The quantity / catalog-binding branch is closed too (same day).** It
+  gated on `newIsHold` off the line's own `assetCategoryId`, so a real van
+  edited 1 → 2 left the hold at 1 and the capacity confirm never fired.
+  Now: both class ids come from `holdCategoryForLine` (before and after the
+  edit — the order page sends both binding fields on EVERY save, so the
+  route compares against the row, not "present in the body");
+  `planHoldSyncOnLineEdit()` (pure, holdOnQuoteSend.ts, `npm run
+  test:quote-hold`) decides what the hold is owed; the WRITE is
+  `holdOnQuoteSend(orderId)` — SET to the peak, never the delta-summing
+  `syncHoldOnLineUpdate` (one van quoted for two separate weeks, one block
+  bumped to 2, is a hold of 2, not 3). The 409 `requiresConfirmation` is
+  kept (only the increase must fit; a class the line did not hold before
+  costs the whole quantity; checked on the line's NEW days), and
+  `saveEditLine` now does the add-line confirm-and-retry instead of a
+  dead-end alert. Response carries `holds { quantityBefore, quantityAfter,
+  releasedUnits, note }`; the page alerts `note`.
+- **Merged with the order-line ↔ unit through line (`66bec271`, rescued
+  from a detached HEAD onto `rescue/line-unit-throughline`, 2026-09-17).**
+  The PUT runs the recompute AROUND that commit's per-truck handling:
+  a VEHICLE line's quantity cut first hands back THIS line's trucks by
+  asset (`releaseLineUnits`, last-bound first, `keep: newQty` so unbound
+  slots go before a bound truck — without it a line of 18 with one van,
+  trimmed to 1, released the van), then recomputes; a bump recomputes,
+  then binds the extras stamped to the line (`assignUnitsForLine`); a
+  line that stops being a vehicle releases its trucks. A vehicle CLASS
+  change is refused (409 `USE_SWITCH_CLASS`) before any of this —
+  `saveEditLine` handles that code INSIDE its 409 branch, because the body
+  can only be read once. Response carries `holds`, `released`,
+  `unitAssignment` and `assignmentsFollowed`.
+- **Limits of the recompute:** it never shrinks a hold whose units are
+  ASSIGNED — on a stage, where there is no per-line truck, a cut is
+  reported in `holds.note` instead; and it only visits classes still
+  quoted, so a class the line LEFT (a stage re-picked) is released by
+  asset via `releaseBookingItem` when `categoryStillQuoted()` is false.
+  **Never `syncHoldOnLineDelete` for that** — at zero it DELETES the
+  BookingItem and the FK cascade takes every unit on it; the line DELETE
+  handler now uses it only for stages and releases a vehicle line's
+  trucks by asset. `syncHoldOnLineAdd/Update` prefer a live rank-1 row and
+  revive a released one from zero.
+- **Which units follow:** the ones carrying the old block's days verbatim
+  (the same rule coverage counts by), up to the moved line's quantity, this
+  order's own before unstamped ones; a sibling order's unit never moves.
+  Overlap is accepted only when the class has NO other block on the order
+  (a row stamped with an order span before blocks existed). CHECKED_OUT:
+  the pickup already happened, so only the return follows, and only when
+  the pickup did not move.
+- **A unit booked elsewhere on the new days does NOT move** on the row
+  editor — it stays, and the PUT response's `assignmentsFollowed.blocked`
+  names it (the page alerts). The client's dates are the client's dates;
+  the truck is a re-pick. "Change dates…" showed the rep every conflict
+  and had them tick through, so it passes `allowConflicts` and the unit
+  moves anyway, audited `overrodeConflict: true`. Every re-stamp is
+  AuditLog `booking_assignment.dates_followed_line` with old/new days.
+- **The envelope shrinks only when nothing bare is on the booking:** a
+  class held with no quoted line behind it (Make Reservation, no order
+  line) has the envelope as its only date, so with one present the
+  envelope stays widen-only. Otherwise pushing an order a week later no
+  longer leaves a phantom hold on the old days.
+- The header `PUT /api/orders/[id]` `startDate/endDate` is still a mirror
+  with no UI and reaches nothing scheduling-side — on purpose.
+
 ## "Booking item is fully assigned" — one capacity rule (2026-09-17 — Jose)
 - Jose, on Mad Minds (SR-JOB-0389): changing Cargo 35 for another van was
   refused "booking item is fully assigned". Not a driver, not a lock. The
@@ -1331,6 +1757,29 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   nothing) so the review modal shows what will go out. NOT wired: the
   cadence runner (`sendCadenceEmail`, its own Resend path, gated OFF by
   `CADENCE_SENDING_ENABLED`) and the pre-job sales welcome (no job yet).
+- **Wired (2026-09-17, Wes: "when I do something like send a paperwork
+  request or a COI request … does that automatically fall within the same
+  email thread? If it doesn't let's make sure it does") — EVERY remaining
+  client-facing send that knows its job, 27 sites:** card authorization
+  request + the client's handoff of it, self-serve "what's next", thank-you,
+  the paperwork portal link (re-sent from the order, re-sent from the
+  portal, the invite to a contact added on the order, the colleague a client
+  approves), negotiated agreement ready to sign, counter-proposal notice,
+  agreement re-issue, the signed copies of the rental agreement and the
+  stage contract, stage contract ready to sign, updated quote on change
+  (LCDW / check-out), final invoice + payment options, payment details
+  (job-aware caller only; the admin and inquiry callers pass no job and
+  send plain), the client's payment-details share to their A/P, after-hours
+  access / share / vehicle pickup, driver request, COI "more needed" and
+  "approved" (job-scoped COIs; a company-level COI has no job and sends
+  plain), the client's COI-requirements mail to their BROKER (client Cc'd +
+  Reply-To, so the broker's answer files to the job), and the sub-rental
+  estimate when it names a job. `sendOnJobThread` takes a null `jobId` and
+  sends plain, so a helper with an optional job needs no branch. Every label
+  has a name in `systemLabel` (the test pins the list) — a new client-facing
+  send needs BOTH the wrapper and a label line, or it reads "Sent by HQ".
+  The survey that found them: `sendAgreementEmail(` still has ~55 call
+  sites, all staff/partner/driver/HQ notices or pre-job sends (no job).
 - **Ingest (`/api/gmail/pubsub`) files an anchored thread to its job by
   itself** — `resolveJobForIngest()`: job address on To/Cc/Delivered-To/
   X-Original-To first, then the References chain against stored ids
@@ -1342,6 +1791,22 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `X-SirReel-Job-Message` header even if Resend rewrote the Message-ID on
   the wire; MONEY-mode inboxes (billing@/payments@) keep an anchored
   message with no invoice keyword (`jobTagged` / `conversationLink`).
+- **The hello@ REPLY-TO CAPTURE is OFF for thread sends (2026-09-17 — Wes:
+  "I don't understand why there are emails still getting generated from the
+  system that go there").** Nothing was ever ADDRESSED to hello@ — it is
+  appended to REPLY-TO by `effectiveReplyTo` in sendAgreementEmail.ts
+  whenever the Reply-To is an on-domain address the ingest does not fully
+  watch (wes@, hq@), so what lands there is the CLIENT'S REPLY. It existed
+  because a reply to a Resend send carried an In-Reply-To HQ had never
+  stored, leaving no way to prove the reply belonged to an HQ conversation
+  (Wes's ruling 2026-08-28, chosen over ingesting wes@). **Phase 1 removed
+  that premise** — every thread send carries an HQ-minted Message-ID stored
+  on the outbound row PLUS `jobs+<code>@` on Cc, two independent anchors —
+  so `sendOnJobThread` passes `replyToExact: true` and the client sees the
+  person alone. **A send with NO job still gets the capture**: no anchor is
+  exactly the case the trick was built for (the pre-job sales welcome,
+  inquiry replies). Partner mail opted out separately on 2026-09-14. Both
+  directions are pinned in `npm run test:partner-mail`.
 - **Unverified, by design tolerant:** whether Resend honours a caller-set
   `Message-ID`. If it does not, the ingested own-copy carries the real id
   on a thread filed to the job, so a client reply referencing it still
@@ -1391,35 +1856,162 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `job-thread-handoff`). Audited `job.thread_claimed|handed|released`.
 - **Notes:** `POST …/conversation/notes`, `cleanNote` (4000 chars),
   `@First` / `@First Last` mentions matched against HQ users into
-  `mentions` (ids). Nothing notifies a mentioned person yet — the chip row
-  under the box is the nudge. Audited `job.note_added`. Do NOT use the
-  legacy `job_messages` table for this.
+  `mentions` (ids). A plain note notifies nobody — the chip row under the
+  box is the nudge. Audited `job.note_added`. Do NOT use the legacy
+  `job_messages` table for this.
+- **URGENT notes (Wes 2026-09-17: "something that elevates it from an
+  internal chat … to 'this needs to be seen right now' by whomever is
+  tagged").** The "Mark urgent" toggle in note mode → `urgent: true` on the
+  POST → `raiseUrgentAlerts`: every tagged person (never the author) gets a
+  TEXT to `User.phone` (the /admin/assistant mobile) via `sendTracked`
+  with `source: 'staff'` — exempt from quiet hours on purpose, a person
+  pressed it — else an EMAIL (label `job-thread-urgent`), else recorded as
+  unreachable. Pure half in conversationRules: `urgentPlan` (who, how),
+  `urgentSmsText` (140-char excerpt + deep link), `alertSummary` ("texted
+  Ana · emailed Julian · Chris unreachable"). **Refused with nobody tagged**
+  (400) — the panel disables the button and says "Tag someone first".
+  **A note is urgent when it has rows in `sr_job_thread_alerts`** (one per
+  recipient: channel SMS/EMAIL/NONE, status SENT/FAILED/SKIPPED, sentTo,
+  detail) — no column on the note, so the table went in by CREATE TABLE
+  alone: `JOB_THREAD_TABLES_DDL` now carries THREE tables and Wes re-runs
+  "Create the job Conversation tables" once (dry run shows one missing).
+  Until then the texts still go out and the audit row `job.note_urgent`
+  records them; only the red chip on the card is lost. The card is red
+  with an URGENT pill and the summary line; the sender's toast reads the
+  same summary, so a failed text is never mistaken for a sent one.
+- **A reply to the client is CONFIRMED before it goes (Wes 2026-09-17:
+  "Things that are going out to the client need to be flagged or confirmed
+  because I'm a little bit afraid that someone's going to try to write an
+  internal note and accidentally send an email to the client").** Two taps:
+  the first ARMS the reply and shows exactly who receives it (To, Cc,
+  from); the second sends. Any edit to the message, the recipients or the
+  mode disarms it, and ⌘↵ follows the same two taps. Notes never arm.
+- **The armed strip also reads the WORDS, not just the recipients.**
+  `internalNoteTells()` in conversationRules.ts (pure, in
+  `test:job-conversation`) looks for the marks of a team note — an
+  @mention of someone on staff, a "Hey team" / "Hi all" opener, a
+  colleague addressed by first name at a line start — and names each one
+  with a **"Keep it internal instead"** button that files the draft as a
+  note and emails nobody. Loud, never blocking: "Hi all" to a production
+  is a real thing to write. The recipient list answers "who gets this";
+  this answers "what IS this", which is the half Wes was afraid of.
+- **Server-side, `POST /api/jobs/[id]/email` refuses without
+  `confirmed: true`** (400). The arm step is what supplies it, so a
+  composer that skips the confirmation — a future one, or a stale tab —
+  cannot put a message in front of a client. `JobEmailButton`'s modal is
+  its own review and passes it. The Chat page does not send client mail.
 - **The composer is the Phase 1 send** (`POST /api/jobs/[id]/email`), now
   **From = the author** (`Jose Pacheco <jose@sirreel.com>` through Resend's
   verified domain — the cadence runner has sent as the agent that way since
   it shipped); a sender outside `@sirreel.com` falls back to SirReel HQ.
   Subject is the job's and read-only; the job address is implicit ("filed
   to SR-JOB-…" chip). ⌘↵ sends. No attachment picker yet — the Send quote /
-  Send invoice buttons still carry the documents.
-- **Placement** (`/jobs/[id]/page.tsx`): the page's outer wrapper is a
-  2-column grid at `xl` (1280px+) — the job's column plus a 400px
-  `<aside>` holding the panel, sticky, full height. Below `xl` a
-  `ConversationTabs` strip (Details | Conversation, with a dot when the
-  client is waiting) sits at the top of the page and the panel takes the
-  full width when the tab is on. **The panel is mounted ONCE** and
-  shown/hidden by class, so it loads once and its summary reaches the tab.
-  `?tab=conversation` is the deep link (same pattern as
-  `/jobs?panel=incoming`). The header's old "Email client" button is now
-  "Conversation" — switches the tab and focuses the box
-  (`job-conversation:focus` window event). `JobEmailThreads` is gone from
-  the job page (still used by /rentalworks/reconcile); `JobEmailButton`
-  stays for the counter-proposal panel.
+  Send invoice buttons still carry the documents. **Cc from the job (Wes
+  2026-09-17):** under the free-text Cc box, "Cc someone on the job…" lists
+  the job's contacts not already in To/Cc (pick one, it re-lists the rest)
+  and "Cc everyone on the job (N)" adds them all; the box stays free-text
+  for an outside address. Both feed the same comma list the route parses
+  (`MAX_JOB_EMAIL_CC` 15). **A client email is TWO taps (Wes 2026-09-17:
+  "I'm a little bit afraid that someone's going to try to write an
+  internal note and accidentally send an email to the client"):** "Email
+  client…" ARMS it and shows To / Cc / from in an amber strip; "Yes, send
+  to the client" sends. Editing anything disarms. ⌘↵ follows the same two
+  steps; a note never arms. The @chip row shows EVERY active teammate but
+  yourself (the old `slice(0, 8)` hid Jose and Ana) and a chip already in
+  the note is lit and inert.
+- **Placement — a DOCK owned by the /jobs layout, not the job page**
+  (Wes 2026-09-17: "a minimize button for the chat window so that we can
+  leave it open on top of the other jobs that we are looking at. Also, a
+  close window button"). The panel used to be an `<aside>` in
+  `/jobs/[id]/page.tsx`, so it died on every walk from one job to the next
+  — there was nothing to leave open. `JobChatDock.tsx` mounts it from
+  `jobs/layout.tsx` (the same trick that keeps the rail's scroll
+  position), as the third flex child of the list|detail row.
+  - Three states, ONE mount: **open** = a reserved 400px column at 1280px+
+    (a flex child, so it never covers the job) and a `fixed inset-0`
+    window below that; **min** = a pill at the bottom right naming the job
+    it holds, over everything; **closed** = gone. Minimise HIDES the panel
+    rather than unmounting it, so a half-typed note survives.
+  - **Follow mode** is what preserves the old always-on rail: while
+    nobody has pressed either button the window re-binds to whichever job
+    is on screen. Minimise and close both stop it (that is what pinning
+    means); the job header's **Conversation** button is the only way back,
+    and it carries the "client replied" dot. Following is gated on 1280px
+    — below that an open window is the whole screen, and a job page that
+    buries itself under a chat on arrival is not a rail.
+  - The window can hold job A while you read job B — that IS the feature,
+    and also exactly how someone writes into the wrong conversation, so
+    the pane carries a **"Holding SR-JOB-A — you're on B · Switch"** strip
+    and an "Open SR-JOB-A" link. `key={target.id}` on the panel means a
+    draft never rides from one job to another.
+  - `?tab=conversation` is still the deep link (the Hand-to-Billing email,
+    an urgent note's text, the order page, /chat) — it OPENS the window,
+    once per job. The `ConversationTabs` strip is gone; the dock is the
+    entry point at every width. `JobEmailThreads` is gone from the job
+    page (still used by /rentalworks/reconcile); `JobEmailButton` stays
+    for the counter-proposal panel.
 - **Rail:** `/api/jobs` rows carry `conversation: { awaitingReply,
   lastInboundAt }` from ONE `emailThread.groupBy` over the page
   (`conversationSummaryForJobs`: newest inbound on any thread filed to the
   job newer than our newest send). The rail shows a "Client replied" chip.
   The order page shows a link to the job's conversation and no composer —
   one place to write.
+- **The Chat page — /chat, every conversation YOU are in (2026-09-17 —
+  Wes: "a chat tab on the left menu … all chats, no matter which job, will
+  show up here … another way to communicate if you're not already in the
+  job", then at once "the chats shouldn't be for everyone. It should be
+  for everyone who is included in that chat. In other words if it was
+  directly @billing, it wouldn't show up in Hugo's and vice versa").**
+  - **INCLUSION, not a listing.** `chatInboxFor(actor)` in
+    `src/lib/email/chatInbox.ts` collects jobs by REASON and the row NAMES
+    the reason: `mentioned` (@you in a note) · `holding` (you hold the
+    claim) · `wrote` (your note, or mail from/to you on the thread) ·
+    `rep` (you are `Job.agentId`) · `desk` (handed to Billing, or it
+    landed in billing@/payments@/ana@, and you ARE the billing desk —
+    `isBillingDesk`, role BILLING or one of those inboxes). **Seniority is
+    not a reason**: an ADMIN sees what they are in, nothing more. If you
+    cannot see why a job is in your list, the rule is wrong.
+  - Scoped SERVER-side off the session (`GET /api/chat` passes no user id
+    and has no "all" mode). Bounded: 45-day window, ≤60 jobs, capped
+    sub-queries. Cc-only participation is NOT a reason — `EmailMessage`
+    has no cc column (Cc lives in `routingHeaders` JSON), and jobs@ is on
+    every send anyway.
+  - **Order is attention, not time** (`chatTier` / `sortChatRows`, pure):
+    urgent-for-you → tagged-you → client waiting → the rest, newest first
+    inside each. "Still on you" is DERIVED — tagged and you have not
+    written since; there is no read/unread table and this did not add one.
+  - **Replies here are INTERNAL NOTES only** (Wes asked which way; the
+    split is by risk). A note's context is the note, so it answers inline
+    — and it POSTs to the job's own notes route, so it is ONE record that
+    "shows up simultaneously in the chat page and the job internal notes",
+    never a copy. Urgent + @chips work the same as on the job. **A client
+    email needs the job**: that message quotes dates and money that live
+    on the job page, and the two-tap confirm lives there too — one
+    composer, so the guard rails cannot drift. Every row carries "Open the
+    job to email the client".
+  - **Company + job on every row AND above the reply box** (Wes: "it needs
+    to be very clear what company and job it is referring to") — the
+    header scrolls away on a phone, so the box repeats it.
+  - **Search at the top does TWO things** (Wes 2026-09-17: "we probably
+    need a search field at top of chat to find jobs or clients that we want
+    to message about"): it filters the rows you HAVE in the browser as you
+    type, and — debounced 250ms — asks `GET /api/chat?q=` for jobs you are
+    NOT in, listed under "Not in your chat" with the same two actions. That
+    is what lets a conversation be STARTED here, not only continued.
+    `searchJobsForChat` matches production / job code / CLIENT company /
+    a person on the job (the same four the /jobs box uses) and is scoped by
+    `resolveDataScope` + `jobScopeWhere` — the /jobs list's own helpers, so
+    chat opens no door that page does not. Archived jobs excluded.
+  - Nav: `CHAT_ITEM` in permissions.ts is in ALL FOUR branches (sales,
+    billing, yard, the fixed IA) — the yard gets tagged as often as sales.
+    A shared nav row is not a shared view; the page scopes it. **FIRST in
+    every branch, directly under the Incoming pill** (Wes 2026-09-17: "I
+    assume the chat item will sit at the top of the left menu, just under
+    Incoming?"). That NARROWS the 2026-09-03 ruling ("move the Reservations
+    tab to the top of the list and have that be the default view for
+    everyone") to its second half: Reservations is still where everyone
+    LANDS — `defaultLandingPath` is untouched — it is just no longer the
+    top row. A chat tab people have to hunt for is one nobody reads.
 - NOT built: an attachment picker in the composer; a mention notification;
   the role gate on the Billing lane (Wes's recommendation was to leave it
   visible); the New inbound column link; Phase 3 (Gmail-native sending).

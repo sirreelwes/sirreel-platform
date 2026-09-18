@@ -21,11 +21,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { JOB_SESSION_COOKIE, verifyJobSessionCookieValue } from '@/lib/portal/jobSession'
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { PUBLIC_SITE_ORIGIN } from '@/lib/site/publicUrl'
 import {
   AUTO_PHYSICAL_DAMAGE_NOTE,
   CERTIFICATE_HOLDER,
+  COI_INBOX,
   requirementsAsHtml,
   requirementsAsText,
 } from '@/lib/coi/requirements'
@@ -38,10 +39,6 @@ import {
 export const dynamic = 'force-dynamic'
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-// Where brokers are told to send the certificate. Wes 2026-09-06: rentals@,
-// not hello@ — nobody chases COIs out of the general inbox.
-const COI_INBOX = 'rentals@sirreel.com'
-
 const INK = '#1a1a1a'
 const MUTED = '#6b7280'
 const ACCENT = '#b45309'
@@ -62,6 +59,7 @@ export async function POST(req: NextRequest) {
     where: { id: resolved.orderId },
     select: {
       orderNumber: true,
+      jobId: true,
       startDate: true,
       endDate: true,
       company: { select: { name: true } },
@@ -146,7 +144,11 @@ export async function POST(req: NextRequest) {
     </p>
   </div>`
 
-  const result = await sendAgreementEmail({
+  // The broker's copy rides the job's thread too: the client is Cc'd and
+  // is the Reply-To, so the broker's answer lands in the same conversation
+  // the rest of the job's paperwork lives in.
+  const result = await sendOnJobThread({
+    jobId: order.jobId,
     to: [to],
     cc: clientEmail ? [clientEmail] : undefined,
     replyTo: clientEmail ?? undefined,

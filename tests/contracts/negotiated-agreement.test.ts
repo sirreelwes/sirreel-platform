@@ -20,6 +20,12 @@ import {
   nextFreeRef,
   APPENDED_SECTIONS,
 } from '../../src/lib/contracts/negotiatedAgreement'
+import {
+  parseAliasEntries,
+  resolveCompanyName,
+  agreementFilename,
+  standingTermsSummary,
+} from '../../src/lib/contracts/fileNegotiatedAgreement'
 
 const failures: string[] = []
 const check = (cond: unknown, msg: string) => {
@@ -142,6 +148,55 @@ async function main() {
 
   // 7. It is a settled agreement, not a proposal.
   check(!flat.includes(squash('Counter Proposal')), 'a filed master must not call itself a counter proposal')
+
+  // 8. WHO it gets filed against. The document is right and still worthless
+  //    if it lands on the wrong company row, so the name resolution is
+  //    pinned here rather than discovered against the live CRM.
+  check(a.companies.length > 0, 'a negotiated agreement must name the companies it is the master for')
+  for (const from of Object.keys(a.companyAliases ?? {})) {
+    check(a.companies.includes(from), `alias "${from}" names nobody in this agreement's company list`)
+  }
+  // The confirmed one: the CRM row carries the legal entity.
+  check(
+    resolveCompanyName(a, 'Party Giraffes') === 'Party Giraffes, LLC',
+    'Party Giraffes must resolve to the legal entity on file',
+  )
+  check(
+    resolveCompanyName(a, 'Graduation Day Productions') === 'Graduation Day Productions',
+    'a company with no alias must be looked up under its own name',
+  )
+  // An operator's alias is the last word — it is a human naming the row.
+  check(
+    resolveCompanyName(a, 'Party Giraffes', { 'Party Giraffes': 'Party Giraffes Inc' }) === 'Party Giraffes Inc',
+    'an explicit alias must override the registry',
+  )
+
+  // 9. Alias parsing. The values are legal entities WITH COMMAS in them, so
+  //    a comma must never be read as a separator — that files a contract
+  //    against half a company name.
+  const parsedAliases = parseAliasEntries('Party Giraffes=Party Giraffes, LLC\nOther Co=Other Co, Inc.')
+  check(parsedAliases["Party Giraffes"] === 'Party Giraffes, LLC', 'a comma inside the name must survive parsing')
+  check(parsedAliases["Other Co"] === 'Other Co, Inc.', 'a second alias must parse from the next line')
+  check(
+    parseAliasEntries('A=B; C=D')['C'] === 'D',
+    'semicolons separate too — a phone keyboard has no comfortable newline',
+  )
+  check(Object.keys(parseAliasEntries('no equals sign here')).length === 0, 'a line with no = is not an alias')
+  check(Object.keys(parseAliasEntries('=nobody')).length === 0, 'an alias with no registry name is not an alias')
+  check(Object.keys(parseAliasEntries(null)).length === 0, 'no aliases at all is an empty map, never a throw')
+
+  // 10. The filed document's name reaches a client's inbox and a blob key.
+  const named = agreementFilename(a, 'Party Giraffes, LLC')
+  check(named.endsWith('.pdf'), 'the filed document must be named as a PDF')
+  check(named.includes('Party Giraffes LLC'), 'the filename must name the company it was rendered for')
+  check(!/[,/\\]/.test(named), 'the filename must not carry a comma or a path separator')
+
+  // 11. The standing-terms summary is what future-Wes reads to remember WHAT
+  //     was negotiated — so it has to name the additions, not just the deal.
+  const summary = standingTermsSummary(a)
+  for (const probe of [a.title, a.version, 'Fleet Agreement', 'LCDW Addendum', a.appendedClauses[0].title]) {
+    check(summary.includes(probe), `standing-terms summary must name "${probe}"`)
+  }
 
   if (failures.length) {
     console.error(`\n${failures.length} assertion(s) failed:`)

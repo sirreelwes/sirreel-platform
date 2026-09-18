@@ -66,6 +66,16 @@ export interface NegotiatedAgreement {
   /** Company names this document is the master for. Filing script targets these. */
   companies: string[]
   /**
+   * Registry name → the company's EXACT name in the DB, where the two differ.
+   *
+   * Matching stays EXACT — an alias is a human stating which row, not the
+   * lookup loosening its rule and picking a near-match. Filing a contract
+   * against the wrong company is the failure worth being rigid about, and
+   * this client is the reason: "Party Giraffes" also near-matches "Giraffe
+   * Air LLC DBA Studio Sands", which is somebody else entirely.
+   */
+  companyAliases?: Record<string, string>
+  /**
    * The agreed coverage window, as YYYY-MM-DD.
    *
    * Recorded here rather than typed at the command line each run. The filing
@@ -126,6 +136,12 @@ export const GRADUATION_DAY_2026: NegotiatedAgreement = {
     },
   ],
   companies: ['Graduation Day Productions', 'Party Giraffes'],
+  // The CRM row carries the legal entity. Confirmed against the company rows
+  // themselves — it is the name in journals/spend-rollup-2026-08-28 and
+  // journals/company-coi-expiry-sync-2026-09-09 (company
+  // 296f798c-c8d6-49af-8019-d932ce1ac9f4). Filing still matches exactly, so a
+  // renamed row refuses and names the candidates rather than guessing.
+  companyAliases: { 'Party Giraffes': 'Party Giraffes, LLC' },
   // Wes, 2026-09-15: "effective 5/15 through 12/31" — 5/15 being the date on
   // their counsel's PDF, the day the redline was settled.
   effectiveDate: '2026-05-15',

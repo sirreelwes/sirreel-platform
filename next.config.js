@@ -101,6 +101,15 @@ const nextConfig = {
         'node_modules/@napi-rs/canvas/**',
         'node_modules/@napi-rs/canvas-linux-x64-gnu/**',
       ],
+      // The stamped-copy download (src/lib/fleet/stampPhoto.ts) draws the
+      // date onto a walk-around photo with @napi-rs/canvas and the
+      // Liberation Sans that pdfjs-dist ships — a lambda has no system
+      // fonts, and text drawn with none is silently blank.
+      '/api/fleet/photos/[photoId]': [
+        'node_modules/@napi-rs/canvas/**',
+        'node_modules/@napi-rs/canvas-linux-x64-gnu/**',
+        'node_modules/pdfjs-dist/standard_fonts/LiberationSans-Bold.ttf',
+      ],
       // AHA's platform memory (src/lib/assistant/memory.ts) reads the
       // written record at request time. Markdown is not imported anywhere,
       // so nft would never trace it into the lambda; these two routes are

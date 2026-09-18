@@ -22,6 +22,7 @@
  */
 
 import { RECEIVE_METHOD_LABEL, usesPartnerDriver, type ReceiveMethodKey } from '@/lib/sub-rentals/partnerKind'
+import { orderHrefFromJob } from '@/lib/nav/orderBackTarget';
 import { useCallback, useEffect, useState } from 'react'
 import { TextButton } from '@/components/sms/TextButton'
 import Link from 'next/link'
@@ -400,7 +401,7 @@ export function JobSubRentalsSection({ jobId }: { jobId: string }) {
                     )}
                     {s.order && (
                       <Link
-                        href={`/orders/${s.order.id}`}
+                        href={orderHrefFromJob(s.order.id)}
                         className="text-[11px] px-1.5 py-0.5 rounded border border-violet-200 bg-violet-50 text-violet-700 hover:border-violet-400"
                       >
                         {s.order.orderNumber}

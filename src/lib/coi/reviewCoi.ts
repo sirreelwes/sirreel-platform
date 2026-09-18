@@ -40,6 +40,18 @@ export interface CoiAiResponse {
   overallPass?: boolean
   /** The insured entity as printed on the cert — see src/lib/coi/insuredMatch.ts. */
   namedInsured?: string | null
+  /**
+   * The PRODUCER box — the broker who issued this certificate, and the only
+   * party who can reissue it. Read on demand by src/lib/coi/broker.ts; never
+   * a verdict, never a gate. Absent on every review filed before 2026-09-17.
+   */
+  producer?: {
+    agency?: string | null
+    contactName?: string | null
+    email?: string | null
+    phone?: string | null
+    address?: string | null
+  } | null
   policyExpiryDate?: string | null
   riskLevel?: 'low' | 'medium' | 'high' | string
   notes?: string
@@ -98,6 +110,22 @@ ALSO EXTRACT (does not affect pass/fail):
   certificate holder (SirReel) and NOT the insurance carrier or the broker/
   producer. Copy it verbatim, including any "dba" wording. Null if unreadable.
   Do NOT judge whether it is the right company — only report what it says.
+- producer: the PRODUCER box — on an ACORD 25 this is the top-LEFT block, the
+  brokerage or agency that issued the certificate, with its own CONTACT NAME,
+  PHONE and E-MAIL fields beside or below it. This is who reissues a corrected
+  certificate, so copy what is printed:
+    agency      — the brokerage/agency name, verbatim
+    contactName — the person named in the producer block, if any. The name of
+                  a PERSON only; never the agency name repeated, never a
+                  department ("Certificates", "Service Team")
+    email       — the producer's e-mail address. ONLY an address printed in
+                  the producer block. Never the insured's, never the
+                  carrier's, never one you infer from a domain
+    phone        — the producer's phone, as printed
+    address      — the producer's street address, as printed
+  Use null for any field that is not printed. Do NOT write "N/A", "same as
+  insured", or a guess — a blank field is a fact and an invented broker is a
+  correction request sent to a stranger.
 
 CRITICAL REQUIREMENTS (cannot be waived — all must pass):
 1. certificateHolder — do NOT judge this one. Copy the CERTIFICATE HOLDER box
@@ -165,6 +193,13 @@ RULES:
 Return ONLY valid JSON (no markdown, no preamble):
 {
   "namedInsured": "Exactly As Printed, Inc." | null,
+  "producer": {
+    "agency": "Brokerage As Printed" | null,
+    "contactName": "Person In The Producer Block" | null,
+    "email": "agent@brokerage.com" | null,
+    "phone": "(555) 555-5555" | null,
+    "address": "Street, City, ST ZIP" | null
+  },
   "policyExpiryDate": "YYYY-MM-DD" | null,
   "certificateHolder": { "pass": true, "found": "the CERTIFICATE HOLDER box, verbatim", "note": "" },
   "generalLiability": {
@@ -282,6 +317,20 @@ export function normalizeCoiReview(raw: CoiAiResponse): CoiAiResponse {
 
   out.namedInsured =
     typeof raw.namedInsured === 'string' && raw.namedInsured.trim() ? raw.namedInsured.trim() : null
+
+  // The producer block is kept as the model returned it, minus the empty
+  // shapes: the KEY is what tells a later reader this review asked at all
+  // (src/lib/coi/broker.ts), so it is written even when every field is null.
+  // Placeholder-scrubbing and e-mail validation live in that reader, on
+  // purpose — a stored review is corrected by re-reading it, never by
+  // re-writing what the document said.
+  const rawProducer: unknown = raw.producer
+  out.producer =
+    rawProducer && typeof rawProducer === 'object' && !Array.isArray(rawProducer)
+      ? (rawProducer as CoiAiResponse['producer'])
+      : typeof rawProducer === 'string' && rawProducer.trim()
+        ? { agency: rawProducer.trim() }
+        : null
 
   return out
 }

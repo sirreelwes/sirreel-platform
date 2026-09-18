@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { buildStageReadyToSignEmail } from '@/lib/email/templates/stageReadyToSign'
 import { portalBaseUrl } from '@/lib/portal/portalUrl'
 import { stageTermsReady } from '@/lib/contracts/stageAreas'
@@ -59,7 +59,8 @@ export async function sendStageReadyToSignEmail(
     agentFirstName: firstNameOf(request.booking?.agent?.name),
   })
 
-  const result = await sendAgreementEmail({
+  const result = await sendOnJobThread({
+    jobId: request.booking?.jobId ?? null,
     to: [to],
     replyTo: request.booking?.agent?.email || undefined,
     subject: email.subject,

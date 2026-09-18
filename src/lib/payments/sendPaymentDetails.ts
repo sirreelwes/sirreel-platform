@@ -14,7 +14,7 @@ import { prisma } from '@/lib/prisma'
 import { buildPaymentInfoEmail } from '@/lib/email/templates/paymentInfo'
 import { createPaymentShare, paymentShareBaseUrl } from '@/lib/payments/paymentShare'
 import { fetchPaymentAttachments } from '@/lib/email/paymentInfoAttachments'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { isPaymentConfigured, type PaymentDetailsRecord } from '@/lib/payments/paymentDetails'
 
 export type SendPaymentDetailsResult =
@@ -58,6 +58,9 @@ export async function loadPaymentRecord(): Promise<PaymentDetailsRecord | null> 
 export async function sendPaymentDetailsEmail(opts: {
   to: string
   firstName: string | null
+  /** The job this is for, when there is one — puts the send on the job's
+   *  thread. The admin and inquiry callers have none and send plain. */
+  jobId?: string | null
 }): Promise<SendPaymentDetailsResult> {
   const record = await loadPaymentRecord()
   if (!record) return { ok: false, reason: 'not_configured' }
@@ -101,7 +104,8 @@ export async function sendPaymentDetailsEmail(opts: {
     bankInfoFilename: s?.paymentBankInfoFilename ?? null,
   })
 
-  const sent = await sendAgreementEmail({
+  const sent = await sendOnJobThread({
+    jobId: opts.jobId ?? null,
     to: [opts.to],
     // The template says "Questions: billing@sirreel.com" — a plain Reply
     // must land there too, not in the unmonitored notifications@ sender.

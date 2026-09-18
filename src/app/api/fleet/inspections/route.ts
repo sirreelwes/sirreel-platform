@@ -198,6 +198,11 @@ export async function POST(req: NextRequest) {
         // a second time, and the column is what a side-by-side reads.
         position: normalizePosition(p.position),
         uploadedBy: auth.userId,
+        // WHEN the photo was taken, as near as the server can know it: the
+        // moment it landed in the store from the yard, not the moment the
+        // form was filed — every photo on a walk-around used to carry the
+        // filing time. Hugo's stamp (2026-09-17) reads this column.
+        createdAt: blob.uploadedAt,
       })
     }
     if (rows.length) {

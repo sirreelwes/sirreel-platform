@@ -9,9 +9,16 @@ import { coiChecklist, coiFlags, type CoiCheckContext } from '@/lib/coi/checks'
 import { COI_SCOPE_GAP_NOTE, coiScopeGap } from '@/lib/coi/coiState'
 import { deriveCoiScope } from '@/lib/coi/jobScope'
 import { buildCoiFixDraft } from '@/lib/coi/fixRequest'
+import {
+  brokerLabel,
+  brokerReviewLinkLines,
+  buildBrokerFixDraft,
+  readCoiBroker,
+} from '@/lib/coi/broker'
+import { signCoiBrokerToken } from '@/lib/coi/brokerReviewToken'
 import { signCoiToken } from '@/lib/coi/coiUploadToken'
-import { coiUploadUrl } from '@/lib/portal/portalUrl'
-import { sendAgreementEmail } from '@/lib/email/sendAgreementEmail'
+import { coiBrokerReviewUrl, coiUploadUrl } from '@/lib/portal/portalUrl'
+import { sendOnJobThread } from '@/lib/email/jobThread'
 import { renderEmailShell, renderEmailText, p as emailP, detailTable } from '@/lib/email/templates/shell'
 
 export const dynamic = 'force-dynamic'
@@ -36,6 +43,7 @@ export const maxDuration = 60
  */
 
 const DECISIONS = new Set(['APPROVED', 'REJECTED', 'PENDING'])
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/
 
 function escapeHtml(v: string): string {
   return v
@@ -242,6 +250,19 @@ function serialize(coi: NonNullable<CoiRow>) {
         )
       : null
 
+  // Who ISSUED this certificate — the only party who can reissue it. Read
+  // out of the stored review (src/lib/coi/broker.ts), never a column.
+  const broker = readCoiBroker(ai)
+  const brokerDraft = buildBrokerFixDraft({
+    ai: ai as Parameters<typeof buildBrokerFixDraft>[0]['ai'],
+    match,
+    policyExpiryDate: coi.policyExpiryDate,
+    ctx,
+    broker,
+    insuredName: coi.namedInsured,
+    jobName: coi.job?.name ?? null,
+  })
+
   const fixDraft = buildCoiFixDraft({
     ai: ai as Parameters<typeof buildCoiFixDraft>[0]['ai'],
     match,
@@ -308,6 +329,9 @@ function serialize(coi: NonNullable<CoiRow>) {
     signedAgreements,
     contacts,
     fixDraft,
+    /** The broker off the certificate, plus the draft that goes to them. */
+    broker: { ...broker, label: brokerLabel(broker) },
+    brokerDraft,
     /** null = we could not see the job; the auto checks stay required. */
     vehiclesOnJob: scope.hasVehicles,
     vehicleReasons: scope.vehicleReasons,
@@ -356,6 +380,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     note?: unknown
     policyExpiryDate?: unknown
     to?: unknown
+    cc?: unknown
     message?: unknown
     notifyTo?: unknown
   }
@@ -383,7 +408,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   if (action === 'REQUEST_FIX') {
     const to = typeof body.to === 'string' ? body.to.trim() : ''
     const message = typeof body.message === 'string' ? body.message.trim() : ''
-    if (!to || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(to)) {
+    if (!to || !EMAIL_RE.test(to)) {
       return NextResponse.json({ error: 'A valid client email is required.' }, { status: 400 })
     }
     if (!message) {
@@ -391,7 +416,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     }
 
     const jobLabel = existing.job ? `${existing.job.name} (${existing.job.jobCode})` : null
-    const sent = await sendAgreementEmail({
+    // A job-scoped COI rides the job's thread; a company-level one (no
+    // job) sends plain — sendOnJobThread does that itself on a null jobId.
+    const sent = await sendOnJobThread({
+      jobId: existing.job?.id ?? null,
+      staffEmail: session.user.email,
       to: [to],
       // Replies belong with the reviewer, not notifications@ — they are the
       // one who read the certificate and can answer the broker's question.
@@ -429,6 +458,115 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     })
     const after = await loadCoi(id)
     return NextResponse.json({ ok: true, coi: serialize(after!), sentTo: to })
+  }
+
+  // Send the BROKER a link to a read-only review of their own certificate
+  // (Wes 2026-09-17). Every correction used to go client → broker → client,
+  // with our requirement text re-explained at each hop; this puts the review
+  // in front of the person who can actually reissue the document.
+  //
+  // Same posture as REQUEST_FIX: the email IS the act, so a send failure
+  // changes nothing, and the certificate parks in COUNTERED ("we asked,
+  // we're waiting"). Differences: the recipient defaults to the producer
+  // block off the certificate, the client is Cc'd by default so nobody is
+  // approached behind their coordinator's back, and the REVIEW LINK is
+  // appended by this route rather than living in the editable draft — a
+  // reviewer trimming a paragraph cannot delete the thing the email exists
+  // to deliver.
+  if (action === 'EMAIL_BROKER') {
+    const to = typeof body.to === 'string' ? body.to.trim() : ''
+    const cc = typeof body.cc === 'string' ? body.cc.trim() : ''
+    const message = typeof body.message === 'string' ? body.message.trim() : ''
+    if (!to || !EMAIL_RE.test(to)) {
+      return NextResponse.json({ error: "A valid email address for the broker is required." }, { status: 400 })
+    }
+    if (cc && !EMAIL_RE.test(cc)) {
+      return NextResponse.json({ error: 'That copy-to address is not a valid email.' }, { status: 400 })
+    }
+    if (!message) {
+      return NextResponse.json({ error: 'The message cannot be empty.' }, { status: 400 })
+    }
+
+    let reviewUrl: string
+    try {
+      reviewUrl = coiBrokerReviewUrl(signCoiBrokerToken({ coiId: id }))
+    } catch (err) {
+      console.error('[coi/review] could not mint a broker review token:', err)
+      return NextResponse.json(
+        { error: 'Could not build the review link. Nothing was sent.' },
+        { status: 500 },
+      )
+    }
+
+    // Name the sample only if one is on file — the forms slot 404s until an
+    // admin has uploaded the PDF (src/lib/coi/requirements.ts).
+    const hasSample = await prisma.siteSetting
+      .findUnique({ where: { id: 'singleton' }, select: { formCoiUrl: true } })
+      .then((r) => !!r?.formCoiUrl)
+      .catch(() => false)
+
+    const jobLabel = existing.job ? `${existing.job.name} (${existing.job.jobCode})` : null
+    const linkLines = brokerReviewLinkLines(reviewUrl, { hasSample })
+    const text = [message, '', ...linkLines].join('\n')
+    const html =
+      `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;white-space:pre-wrap">${escapeHtml(
+        message,
+      )}</div>` +
+      `<div style="font-family:system-ui,-apple-system,sans-serif;font-size:14px;line-height:1.6;margin-top:18px;padding-top:14px;border-top:1px solid #ececec">` +
+      `<p style="margin:0 0 10px">${escapeHtml(linkLines[0])}</p>` +
+      `<p style="margin:0 0 10px"><a href="${escapeHtml(reviewUrl)}" style="color:#0C657A;font-weight:600">Open the certificate review</a></p>` +
+      `<p style="margin:0;font-size:12px;color:#6b7280">${escapeHtml(linkLines[2])}</p>` +
+      `</div>`
+
+    const sent = await sendOnJobThread({
+      jobId: existing.job?.id ?? null,
+      staffEmail: session.user.email,
+      to: [to],
+      cc: cc ? [cc] : undefined,
+      // The reviewer read the certificate; a broker's question about a
+      // requirement has to reach the person who can answer it.
+      replyTo: session.user.email,
+      subject: jobLabel
+        ? `Certificate of insurance — correction needed for ${jobLabel}`
+        : 'Certificate of insurance — correction needed',
+      label: 'coi-broker-review',
+      html,
+      text,
+    })
+    if (!sent.ok) {
+      return NextResponse.json(
+        { error: `The email did not send (${sent.reason}). Nothing was changed.` },
+        { status: 502 },
+      )
+    }
+
+    await prisma.coiCheck.update({
+      where: { id },
+      data: {
+        humanDecision: 'COUNTERED',
+        humanDecisionById: reviewer?.id ?? null,
+        humanDecisionAt: new Date(),
+        coverageVerified: false,
+        humanDecisionNote: note || `Correction requested from the broker — emailed ${to}.`,
+      },
+    })
+    // The link is a credential that outlives this session, so who it went to
+    // is worth keeping beside the certificate. Never the message body — that
+    // is on the job's thread, where the rest of the conversation lives.
+    await prisma.auditLog
+      .create({
+        data: {
+          action: 'coi.broker_review_sent',
+          entityType: 'CoiCheck',
+          entityId: id,
+          userId: reviewer?.id ?? null,
+          newValues: { to, cc: cc || null, jobId: existing.job?.id ?? null, resendMessageId: sent.id ?? null },
+        },
+      })
+      .catch((err) => console.error('[coi/review] audit write failed:', err))
+
+    const afterBroker = await loadCoi(id)
+    return NextResponse.json({ ok: true, coi: serialize(afterBroker!), sentTo: to, cc: cc || null, reviewUrl })
   }
 
   const decision = typeof body.decision === 'string' ? body.decision.toUpperCase() : ''
@@ -491,7 +629,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   let notified: { ok: boolean; to: string | null; reason?: string } = { ok: false, to: null }
   const notifyTo = typeof body.notifyTo === 'string' ? body.notifyTo.trim() : ''
   if (decision === 'APPROVED' && notifyTo) {
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(notifyTo)) {
+    if (!EMAIL_RE.test(notifyTo)) {
       notified = { ok: false, to: notifyTo, reason: 'not a valid email address' }
     } else {
       const jobLabel = existing.job ? `${existing.job.name} (${existing.job.jobCode})` : null
@@ -511,7 +649,9 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         emailP('Your certificate of insurance has been reviewed and <strong>approved</strong>. It is on file for this job &mdash; there is nothing further you need to send.') +
         (rows.length ? detailTable(rows) : '') +
         emailP('If anything on the policy changes before the rental, reply to this email and we will get the updated certificate on file.')
-      const sent = await sendAgreementEmail({
+      const sent = await sendOnJobThread({
+        jobId: existing.job?.id ?? null,
+        staffEmail: session.user.email,
         to: [notifyTo],
         // The reviewer read the certificate and can answer a broker's
         // question about it; notifications@ cannot.
