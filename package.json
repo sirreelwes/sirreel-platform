@@ -36,6 +36,7 @@
     "test:pick-sections": "tsx tests/warehouse/pick-sections.test.ts",
     "test:icode-owner": "tsx tests/warehouse/icode-owner.test.ts",
     "test:stock-fills": "tsx tests/catalog/stock-fills.test.ts",
+    "test:non-rental-stock": "tsx tests/catalog/non-rental-stock.test.ts",
     "test:maintenance-tasks": "tsx tests/admin/maintenance-tasks.test.ts",
     "test:order-back": "tsx tests/nav/order-back-target.test.ts",
     "test:dropdown-placement": "tsx tests/ui/dropdown-placement.test.ts",

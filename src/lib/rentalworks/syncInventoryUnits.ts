@@ -1,4 +1,5 @@
 import { prisma } from '@/lib/prisma'
+import { isNonRentalRwCode } from '@/lib/catalog/nonRentalStock'
 import { rwFetch, isRwAuthError } from '@/lib/rentalworks/rwClient'
 
 /**
@@ -73,7 +74,10 @@ export interface InventoryUnitSyncResult {
   created: number
   /** Rows in HQ that RW did NOT return this run — reported, never deleted. */
   stale: number
-  /** Units whose ICode matched no HQ catalog row. */
+  /** Units whose ICode matched no HQ catalog row — EXCLUDING the gear
+   *  that is deliberately not rental inventory (lib/catalog/nonRentalStock).
+   *  Reporting the truck jump starters as unmatched every morning is how a
+   *  real unmatched code stops being noticed. */
   unmatched: number
   /** The distinct unmatched ICodes, so the report names what to fix. */
   unmatchedICodes: string[]
@@ -86,6 +90,9 @@ export interface InventoryUnitSyncResult {
    *  scripts/link-barcoded-catalog-rows.ts. */
   stranded: number
   strandedICodes: string[]
+  /** Codes on the non-rental list — reported so the number stays visible,
+   *  never as something to fix. */
+  notRentalStockICodes: string[]
   pages: number
   error?: string
 }
@@ -111,7 +118,8 @@ export async function syncInventoryUnits(): Promise<InventoryUnitSyncResult> {
   const empty = {
     pulled: 0, written: 0, created: 0, stale: 0,
     unmatched: 0, unmatchedICodes: [] as string[],
-    stranded: 0, strandedICodes: [] as string[], pages: 0,
+    stranded: 0, strandedICodes: [] as string[],
+    notRentalStockICodes: [] as string[], pages: 0,
   }
 
   // ── 1. Pull the whole register into memory first. A partial pull must
@@ -169,12 +177,20 @@ export async function syncInventoryUnits(): Promise<InventoryUnitSyncResult> {
   for (const c of [...catalog].sort((a, b) => Number(!!a.archivedAt) - Number(!!b.archivedAt))) {
     if (c.rwICode && !byICode.has(c.rwICode)) byICode.set(c.rwICode, c.id)
   }
-  const unmatchedICodes = icodes.filter((c) => !byICode.has(c)).sort()
+  const unmatchedICodes = icodes
+    .filter((c) => !byICode.has(c) && !isNonRentalRwCode(c))
+    .sort()
+  // Ours, barcoded, and never rented — shop kit. An answer, not a gap.
+  const notRentalStockICodes = icodes.filter((c) => isNonRentalRwCode(c)).sort()
   // Matched, but to a row nobody can book. Counted separately so a run
   // cannot report "every unit resolved" while the gear is unscannable.
   const archivedIds = new Set(catalog.filter((c) => c.archivedAt).map((c) => c.id))
   const strandedICodes = icodes
-    .filter((c) => { const id = byICode.get(c); return !!id && archivedIds.has(id) })
+    .filter((c) => {
+      if (isNonRentalRwCode(c)) return false
+      const id = byICode.get(c)
+      return !!id && archivedIds.has(id)
+    })
     .sort()
 
   // ── 3. Write. Sequential upserts: ~1.8k rows once a night is not worth
@@ -195,7 +211,8 @@ export async function syncInventoryUnits(): Promise<InventoryUnitSyncResult> {
     const barcode = str(u.BarCode)!
     const rwICode = str(u.ICode) ?? ''
     const inventoryItemId = byICode.get(rwICode) ?? null
-    if (!inventoryItemId) unmatched++
+    // Shop kit counts as answered, not unmatched — see nonRentalStock.ts.
+    if (!inventoryItemId && !isNonRentalRwCode(rwICode)) unmatched++
 
     const data = {
       barcode,
@@ -265,6 +282,7 @@ export async function syncInventoryUnits(): Promise<InventoryUnitSyncResult> {
     unmatchedICodes,
     stranded,
     strandedICodes,
+    notRentalStockICodes,
     pages,
   }
 }

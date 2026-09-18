@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { orderCodeForStockCode } from '@/lib/catalog/stockFills'
+import { nonRentalStockFor } from '@/lib/catalog/nonRentalStock'
 
 /**
  * Turn whatever a scanner (or a picker's keyboard) put in the box into a
@@ -173,6 +174,15 @@ export function describeUnlanded(
     return `${res.scanned} isn't a code or a barcode we know. Check the label, or use the manual tick.`
   }
   if (res.kind === 'unlinked-unit') {
+    // Some unlinked gear is unlinked on purpose — the jump starters that
+    // live on the trucks are ours and barcoded and have no catalog row
+    // because they never go on an order (lib/catalog/nonRentalStock).
+    // Telling the floor to "flag it" sends them after a row nobody is
+    // going to create.
+    const shopKit = nonRentalStockFor(res.unit.rwICode)
+    if (shopKit) {
+      return `${res.scanned} is ${shopKit.what.toLowerCase()} — ours, but not rental stock, so it doesn't go on an order.`
+    }
     return `${res.scanned} is ${res.unit.description ?? 'a known unit'} (RW item ${res.unit.rwICode}), but it isn't matched to anything in the HQ catalog yet — pick it manually and flag it.`
   }
   const what = res.kind === 'unit'

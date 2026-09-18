@@ -72,6 +72,11 @@ export async function GET(req: NextRequest) {
               : '',
           ].filter(Boolean).join(' · ') + ' — they will not resolve on a scan until matched. See scripts/link-barcoded-catalog-rows.ts.'
         : 'Every unit resolved to an orderable HQ catalog row.',
+      // Ours, barcoded, never rented — listed so the count is visible and
+      // nobody goes looking for a catalog row that should not exist.
+      ...(report.notRentalStockICodes.length
+        ? { notRentalStock: report.notRentalStockICodes }
+        : {}),
     })
   } catch (e) {
     if (isRwAuthError(e) || (e as Error)?.name === 'RwNoCredentialError') {
