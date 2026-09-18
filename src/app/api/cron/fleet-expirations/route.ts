@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic'
  * GET /api/cron/fleet-expirations
  *
  * Daily check (vercel.json schedule). For every active Asset with a
- * registration or BIT certificate expiring within the next 30 days, ensure
+ * registration or DOT inspection expiring within the next 30 days, ensure
  * there's an open Alert row for fleet. Idempotent: matches on Alert.link
  * (which always points at the asset edit URL) + a type prefix, so re-runs
  * don't pile up duplicate alerts for the same asset/doc.
@@ -104,7 +104,7 @@ async function ensureAlert(args: {
 
   const daysLeft = Math.max(0, Math.ceil((args.expiresAt.getTime() - args.now.getTime()) / 86_400_000))
   const severity = daysLeft <= 0 ? 'critical' : daysLeft <= 7 ? 'high' : 'medium'
-  const docLabel = args.docKind === 'registration' ? 'Registration' : 'BIT certificate'
+  const docLabel = args.docKind === 'registration' ? 'Registration' : 'DOT inspection'
   const vehicleLabel = [args.asset.make, args.asset.model].filter(Boolean).join(' ') || args.asset.unitName
   const plate = args.asset.licensePlate ? ` (${args.asset.licensePlate})` : ''
 

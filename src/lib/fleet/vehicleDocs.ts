@@ -35,9 +35,18 @@ export type VehicleDocKind = 'registration' | 'bit-certificate'
 
 export const VEHICLE_DOC_KINDS: readonly VehicleDocKind[] = ['registration', 'bit-certificate']
 
+/**
+ * What people CALL these documents. The kind key stays `bit-certificate` —
+ * it is a wire value in URLs and a column name — but the words on every
+ * screen are Julian's (2026-09-18): the trucks carry a DOT ANNUAL inspection
+ * and the passenger vans a CHP BIT, so "BIT" was simply the wrong name on
+ * most of the fleet. "DOT inspection" is the umbrella he uses and is correct
+ * for both; a per-class label would need a mapping for every category on the
+ * roster, which nobody has given us.
+ */
 export const VEHICLE_DOC_LABEL: Record<VehicleDocKind, string> = {
   registration: 'Registration',
-  'bit-certificate': 'BIT certificate',
+  'bit-certificate': 'DOT inspection',
 }
 
 /** Narrow a path segment / query value to a kind, or null. Never throws. */
@@ -139,7 +148,7 @@ export function vehicleDocFilename(args: {
   expiresAt?: Date | string | null
 }): string {
   const slug = (s: string) => s.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unit'
-  const kindPart = args.kind === 'registration' ? 'registration' : 'BIT-certificate'
+  const kindPart = args.kind === 'registration' ? 'registration' : 'DOT-inspection'
   const at = args.expiresAt ? new Date(args.expiresAt) : null
   const exp = at && !Number.isNaN(at.getTime()) ? `_exp-${at.toISOString().slice(0, 10)}` : ''
   return `${slug(args.unitName)}_${kindPart}${exp}.pdf`
