@@ -1,5 +1,5 @@
 /**
- * Reading Julian's folder of BIT inspections and registrations onto the
+ * Reading Julian's folder of DOT inspections and registrations onto the
  * fleet (2026-09-18).
  *
  *   npx tsx tests/fleet/paperwork-import.test.ts
@@ -69,15 +69,25 @@ const two = matchUnit('Cargo 22 and Cargo 25 reg.pdf', UNITS)
 check('one scan naming two trucks is ambiguous', two.kind === 'many')
 check('and it says which two', two.kind === 'many' && two.units.map((u) => u.id).sort().join() === 'u-g22,u-g25')
 
-console.log('\nregistration or BIT')
+console.log('\nregistration or DOT inspection')
 check('reg', guessDocKind('Cube 27 registration.pdf') === 'registration')
 check('short reg', guessDocKind('cube27_reg.pdf') === 'registration')
-check('bit', guessDocKind('Cube 27 BIT 2026.pdf') === 'bit-certificate')
+// ONE document, several names on the paper (Julian 2026-09-18): a truck
+// carries a DOT ANNUAL inspection, a passenger van a CHP BIT. Every word
+// anyone actually writes has to reach the same kind — "dot" was missing, and
+// Julian names his scans "DOT", so his whole folder would have flagged for a
+// manual pick on every row.
+check("DOT — Julian's own word", guessDocKind('Cube 27 DOT 2026.pdf') === 'bit-certificate')
+check('DOT inspection', guessDocKind('Cube 27 DOT inspection 2026-04-30.pdf') === 'bit-certificate')
+check('annual', guessDocKind('Cube 27 annual 2026.pdf') === 'bit-certificate')
+check('BIT still reads, for the vans', guessDocKind('Passenger Van 3 BIT 2026.pdf') === 'bit-certificate')
 check('the word inspection', guessDocKind('Cargo 22 inspection.pdf') === 'bit-certificate')
 check('neither word → ask', guessDocKind('Cube 27.pdf') === null)
 check('BOTH words → ask, never pick one', guessDocKind('Cube 27 registration and bit.pdf') === null)
-// A COI is a "certificate" too — that word must not drag a row into BIT.
-check('"certificate" alone is not a BIT', guessDocKind('Cube 27 certificate.pdf') === null)
+check('a DOT-and-registration name still asks', guessDocKind('Cube 27 DOT and registration.pdf') === null)
+// A COI is a "certificate" too — that word must not drag a row into an
+// inspection.
+check('"certificate" alone is not an inspection', guessDocKind('Cube 27 certificate.pdf') === null)
 
 console.log('\ndates — only what cannot mean two days')
 check('ISO', findDateInFilename('Cube 27 BIT 2026-04-30.pdf') === '2026-04-30')

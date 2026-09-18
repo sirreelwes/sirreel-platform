@@ -1,7 +1,7 @@
 'use client';
 
 /**
- * /fleet/paperwork — drop a folder of BIT inspections and vehicle
+ * /fleet/paperwork — drop a folder of DOT inspections and vehicle
  * registrations, confirm what matched, file it.
  *
  * Julian keeps these as scans; the per-unit panel takes one at a time through
@@ -41,7 +41,7 @@ type Skipped = { index: number; filename: string; why: string };
 const PROBLEM_TEXT: Record<string, string> = {
   'no-unit': 'Which unit?',
   'many-units': 'Names more than one unit',
-  'no-kind': 'Registration or BIT?',
+  'no-kind': 'Registration or inspection?',
   'needs-date': 'Inspection date?',
   'not-pdf': 'Not a PDF',
 };
@@ -155,7 +155,7 @@ function FleetPaperworkInner() {
 
   /**
    * Typing eighty expiry dates one at a time is its own reason not to bother,
-   * and a terminal's BIT sweep really does put the same date on a whole batch.
+   * and one inspection sweep really does put the same date on a whole batch.
    * Only fills rows that are BLANK — it can never quietly overwrite a date
    * somebody already looked up.
    */
@@ -198,7 +198,8 @@ function FleetPaperworkInner() {
         <Link href="/fleet" className="text-[11px] text-gray-400 hover:text-gray-700">← Fleet</Link>
         <h1 className="text-lg font-bold text-gray-900 mt-1">Upload DOT paperwork</h1>
         <p className="text-[11px] text-gray-500 mt-0.5 max-w-2xl">
-          Drop a folder of registrations and BIT inspection scans. Each file is matched to a unit by its
+          Drop a folder of registrations and DOT inspection scans (the annual on a truck, the BIT on a
+          passenger van). Each file is matched to a unit by its
           name — check the list before filing. The second date on each row is when the document expires:
           optional, but it is what drives the 30-day renewal alert. Anything filed here reaches the
           client&apos;s portal for jobs that unit is on.
@@ -242,7 +243,8 @@ function FleetPaperworkInner() {
         />
         <p className="text-[10px] text-gray-400 mt-3">
           PDFs, up to 60 at a time. Names like <span className="font-mono">Cube 27 registration.pdf</span> or{' '}
-          <span className="font-mono">Cargo 22 BIT 2026-04-30.pdf</span> match on their own; anything else you
+          <span className="font-mono">Cargo 22 DOT inspection 2026-04-30.pdf</span> match on their own; anything
+          else you
           pick from a list.
         </p>
       </div>
@@ -262,10 +264,10 @@ function FleetPaperworkInner() {
             {result.filed.map((f) => (
               <li key={f.index}>
                 <span className="font-semibold text-gray-800">{f.unitName}</span> —{' '}
-                {f.kind === 'registration' ? 'registration' : 'BIT inspection'}
+                {f.kind === 'registration' ? 'registration' : 'DOT inspection'}
                 {f.expiresAt ? <span className="text-gray-400"> · expires {f.expiresAt}</span> : null}
                 {f.kind === 'bit-certificate' && f.isCurrent === false && (
-                  <span className="text-gray-400"> · filed to history, a newer certificate is still current (any expiry you typed belongs to that one, not this)</span>
+                  <span className="text-gray-400"> · filed to history, a newer inspection is still current (any expiry you typed belongs to that one, not this)</span>
                 )}
                 <span className="text-gray-400"> · {f.filename}</span>
               </li>
@@ -315,7 +317,7 @@ function FleetPaperworkInner() {
                 disabled={!bulkExpiry}
                 className="border border-gray-200 hover:border-gray-400 disabled:opacity-40 rounded px-2 py-1 text-[10px] font-semibold text-gray-700"
               >
-                → BITs
+                → inspections
               </button>
             </div>
             <button
@@ -339,7 +341,7 @@ function FleetPaperworkInner() {
                       {r.ready ? (
                         <div className="text-[10px] text-emerald-600 font-semibold mt-0.5 inline-flex items-center gap-1">
                           <Check size={10} aria-hidden />
-                          {r.unitName} · {r.kind === 'registration' ? 'Registration' : `BIT ${r.inspectionDate}`}
+                          {r.unitName} · {r.kind === 'registration' ? 'Registration' : `DOT inspection ${r.inspectionDate}`}
                           {r.expiresAt ? ` · expires ${r.expiresAt}` : ' · no expiry'}
                         </div>
                       ) : (
@@ -376,7 +378,7 @@ function FleetPaperworkInner() {
                       >
                         <option value="">— kind —</option>
                         <option value="registration">Registration</option>
-                        <option value="bit-certificate">BIT inspection</option>
+                        <option value="bit-certificate">DOT inspection</option>
                       </select>
 
                       {r.kind === 'bit-certificate' && (
@@ -392,8 +394,8 @@ function FleetPaperworkInner() {
                       {/* Optional — a document with no expiry is still the
                           document the client needs; the blank only costs the
                           30-day renewal alert. Never guessed from the
-                          filename: the date in a BIT filename is the day it
-                          was inspected, not the day it runs out. */}
+                          filename: the date in an inspection filename is the
+                          day it was inspected, not the day it runs out. */}
                       {r.kind && (
                         <input
                           type="date"

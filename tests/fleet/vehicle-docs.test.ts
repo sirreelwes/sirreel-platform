@@ -115,8 +115,14 @@ check(
 )
 check(
   'no expiry, no expiry segment',
-  vehicleDocFilename({ unitName: 'Cargo 22', kind: 'bit-certificate', expiresAt: null }) === 'Cargo-22_BIT-certificate.pdf',
+  vehicleDocFilename({ unitName: 'Cargo 22', kind: 'bit-certificate', expiresAt: null }) === 'Cargo-22_DOT-inspection.pdf',
 )
+// Julian 2026-09-18: the trucks carry a DOT ANNUAL inspection and the vans a
+// CHP BIT, so "BIT" was the wrong word on most of the fleet. The label is
+// what changed; the kind KEY stays, because it is a wire value in the portal
+// proxy's URL and half a column name.
+check('the label is what people call it', VEHICLE_DOC_LABEL['bit-certificate'] === 'DOT inspection')
+check('the wire value is unchanged', parseVehicleDocKind('bit-certificate') === 'bit-certificate')
 check(
   'an unparseable expiry is dropped rather than written as Invalid Date',
   vehicleDocFilename({ unitName: 'Cube 27', kind: 'registration', expiresAt: 'nope' }) === 'Cube-27_registration.pdf',

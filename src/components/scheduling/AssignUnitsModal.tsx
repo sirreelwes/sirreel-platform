@@ -977,7 +977,7 @@ export function AssignUnitsModal({ bookingItemId, bufferDays, onClose, onChanged
                     )}
                   </div>
                   <p className="text-[11px] text-zinc-500 mt-0.5">
-                    Year, make, VIN, plate &amp; latest BIT for the vehicles on this order. It reaches the client&apos;s
+                    Year, make, VIN, plate &amp; latest DOT inspection for the vehicles on this order. It reaches the client&apos;s
                     portal BY ITSELF once every unit&apos;s record is complete, and always names the units assigned
                     right now — there is nothing to re-send after a swap.
                   </p>

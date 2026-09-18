@@ -1,7 +1,7 @@
 /**
  * Reading a FOLDER of DOT paperwork onto the fleet (2026-09-18).
  *
- * Julian keeps the current BIT inspections and vehicle registrations as a
+ * Julian keeps the current DOT inspections and vehicle registrations as a
  * folder of scans. The per-unit upload built on 2026-09-17 takes one PDF at a
  * time through a modal you have to open per truck — around 160 documents for
  * the fleet, which is a morning of clicking and therefore a job that does not
@@ -20,8 +20,8 @@
  *   - two units matching one filename is AMBIGUOUS, not a pick. "Cargo 22 and
  *     23.pdf" is one scan of two trucks and a person has to say which.
  *   - a date we cannot read unambiguously is left EMPTY. "03-04-2026" is
- *     March 4th or April 3rd and a BIT date that is a month out moves an
- *     expiry window; the operator types it.
+ *     March 4th or April 3rd and an inspection date that is a month out moves
+ *     an expiry window; the operator types it.
  */
 
 import { parseVehicleDocKind, type VehicleDocKind } from '@/lib/fleet/vehicleDocs'
@@ -90,16 +90,22 @@ export function matchUnit(filename: string, units: readonly ImportUnit[]): UnitM
 }
 
 /**
- * Registration or BIT? Read off the filename, and NULL when the words point
- * both ways or neither — the row then asks.
+ * Registration or DOT inspection? Read off the filename, and NULL when the
+ * words point both ways or neither — the row then asks.
  */
 export function guessDocKind(filename: string): VehicleDocKind | null {
   const t = tokenize(filename)
   const has = (...words: string[]) => words.some((w) => t.includes(w))
   const reg = has('reg', 'regis', 'registration', 'registrations', 'dmv', 'tags')
-  // "cert" alone is not a BIT — a COI is a certificate too.
-  const bit = has('bit', 'inspection', 'inspections', 'biennial', 'terminal')
-  if (reg === bit) return null // both, or neither
+  // ONE document, several names on the paper (Julian 2026-09-18): a truck
+  // carries a DOT ANNUAL inspection, a passenger van a CHP BIT. Both file the
+  // same way, so every word people actually write is read as the same kind —
+  // "dot" and "annual" were missing, and Julian names his scans "DOT", so
+  // every row in his folder would have flagged for a manual pick.
+  //
+  // "cert" alone is deliberately NOT here — a COI is a certificate too.
+  const inspection = has('dot', 'annual', 'bit', 'inspection', 'inspections', 'biennial', 'terminal')
+  if (reg === inspection) return null // both, or neither
   return reg ? 'registration' : 'bit-certificate'
 }
 
@@ -221,8 +227,8 @@ export function planPaperworkImport(files: readonly PlanInput[], units: readonly
     const inspectionDate =
       (f.inspectionDate && /^\d{4}-\d{2}-\d{2}$/.test(f.inspectionDate) ? f.inspectionDate : null) ??
       findDateInFilename(f.filename)
-    // A BIT row is the only one that cannot be filed without a date — the
-    // history is dated, and an undated inspection has nowhere to sit.
+    // An inspection row is the only one that cannot be filed without a date —
+    // the history is dated, and an undated inspection has nowhere to sit.
     if (kind === 'bit-certificate' && !inspectionDate) problems.push('needs-date')
 
     if (!f.isPdf) problems.push('not-pdf')

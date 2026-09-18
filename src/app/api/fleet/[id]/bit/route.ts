@@ -80,7 +80,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   // Validate it's really a PDF — content-type OR the %PDF- magic header
   // (mirrors the COI upload's magic-byte check).
   const isPdf = file.type === 'application/pdf' || buf.subarray(0, 5).toString('latin1') === '%PDF-'
-  if (!isPdf) return NextResponse.json({ error: 'BIT scan must be a PDF' }, { status: 415 })
+  if (!isPdf) return NextResponse.json({ error: 'the inspection scan must be a PDF' }, { status: 415 })
   if (buf.length > MAX_BYTES) {
     return NextResponse.json({ error: `PDF is ${(buf.length / 1024 / 1024).toFixed(1)} MB; cap is ${MAX_BYTES / 1024 / 1024} MB` }, { status: 413 })
   }
@@ -122,7 +122,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   } catch (err) {
     console.error('[fleet BIT POST] upload failed:', err)
     return NextResponse.json(
-      { error: 'BIT scan upload failed — please retry; if it persists, the blob store may be misconfigured.' },
+      { error: 'Inspection upload failed — please retry; if it persists, the blob store may be misconfigured.' },
       { status: 502 },
     )
   }

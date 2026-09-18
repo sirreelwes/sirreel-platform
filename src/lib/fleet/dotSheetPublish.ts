@@ -65,7 +65,7 @@ export function missingDotFields(unit: {
   if (!unit.licensePlate) missing.push('license plate')
   if (!unit.year) missing.push('year')
   if (!unit.make) missing.push('make')
-  if (!unit.hasBitInspection) missing.push('BIT inspection')
+  if (!unit.hasBitInspection) missing.push('DOT inspection')
   return missing
 }
 
