@@ -2595,7 +2595,6 @@ export function GanttBoard() {
                   jobId: selected.jobId ?? null,
                   jobCode: selected.jobCode ?? null,
                   jobName: selected.jobName ?? '',
-                  expectsOrder: !!selected.expectsOrder,
                 }}
                 orderCount={Array.isArray(selected.orders) ? selected.orders.length : 0}
                 dates={
@@ -2617,7 +2616,6 @@ export function GanttBoard() {
                           jobId: next.jobId,
                           jobCode: next.jobCode,
                           jobName: next.jobName,
-                          expectsOrder: next.expectsOrder,
                           infoGaps: gaps,
                         }
                       : prev,

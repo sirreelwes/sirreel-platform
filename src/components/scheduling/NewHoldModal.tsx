@@ -189,12 +189,7 @@ export function NewHoldModal({
   // Call-in intake: the agent declares up front that a billable Order is
   // coming. Purely a to-do marker — it keeps the reservation flagged
   // incomplete until an Order actually lands on the job.
-  // Ticked by DEFAULT since 2026-09-18 (Wes: "every reservation should be
-  // locked to a line item on an order"). A +Hold placed here is a rental
-  // somebody is going to be billed for; the exception is the hold that
-  // never becomes one, and that is the one worth an explicit untick. Until
-  // an order lands on the job the reservation carries the board's triangle.
-  const [expectsOrder, setExpectsOrder] = useState(true)
+
   const [notes, setNotes] = useState('')
   // Dates start at the parent's pre-fill; the agent can extend / adjust
   // inside the modal (per the brief: "agent sets end + client/job in the modal").
@@ -259,13 +254,15 @@ export function NewHoldModal({
   // dates, and a quantity. Everything else can be filled in later.
   const canSubmit = contactReady && quantity > 0 && datesValid && !submitting
 
-  // What this hold would still owe if submitted right now. Empty = complete.
+  // What this hold would still owe if submitted right now — of the things
+  // an agent can answer HERE. The order to-do is deliberately left out:
+  // no hold can carry an order at the moment it is created, and the board
+  // raises that one on its own from then on (infoGaps, derived since
+  // 2026-09-18). Counting it here would stamp every hold "incomplete".
   const pendingGaps = bookingInfoGaps({
     companyId: company?.id ?? null,
     jobId: job?.jobId ?? null,
     jobName: job?.name ?? null,
-    expectsOrder,
-    orderCount: 0,
   })
 
   // JobResolverModal callback — the agent either picked an existing Job
@@ -392,7 +389,6 @@ export function NewHoldModal({
           bufferDays,
           bufferOverride,
           isBackup: wantsBackup,
-          expectsOrder,
         }),
       })
       const json = await res.json()
@@ -819,28 +815,14 @@ export function NewHoldModal({
             </p>
           </div>
 
-          {/* Call-in to-do list. Mirrors what the gantt's warning triangle will
-              show on this reservation: what is still missing, plus the
-              agent's own declaration that an Order is coming. */}
+          {/* Call-in to-do list. Mirrors what the gantt's warning triangle
+              will show on this reservation. There is no "an order will be
+              attached" tick any more: every vehicle is billed on an order,
+              so there was nothing for the agent to declare — the board
+              derives it (Wes 2026-09-18). */}
           <div className="rounded border border-amber-300 bg-amber-50 px-3 py-2.5 space-y-2">
-            <label className="flex items-start gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={expectsOrder}
-                onChange={(e) => setExpectsOrder(e.target.checked)}
-                className="mt-0.5 h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
-              />
-              <span className="text-sm text-amber-900">
-                An order will be attached
-                <span className="block text-[11px] text-amber-700 font-normal">
-                  Flags the reservation as awaiting its order until one lands on the job. Untick
-                  only for a hold nobody will be billed for.
-                </span>
-              </span>
-            </label>
-
             {pendingGaps.length > 0 ? (
-              <div className="flex items-start gap-2 border-t border-amber-200 pt-2">
+              <div className="flex items-start gap-2">
                 <span aria-hidden className="text-amber-600 text-base leading-none mt-0.5"><AlertTriangle size={16} aria-hidden /></span>
                 <div className="text-[11px] text-amber-800">
                   <span className="font-semibold">
@@ -853,8 +835,8 @@ export function NewHoldModal({
                 </div>
               </div>
             ) : (
-              <div className="border-t border-amber-200 pt-2 text-[11px] text-amber-700">
-                Nothing outstanding — this reservation is complete.
+              <div className="text-[11px] text-amber-700">
+                Nothing outstanding here — the board will ask for the order this bills on.
               </div>
             )}
           </div>

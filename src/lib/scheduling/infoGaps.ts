@@ -14,10 +14,24 @@
  *     yet". (Legacy Planyo rows carry a jobName with no jobId, so a null
  *     jobId alone would light up hundreds of historical bookings.)
  *
- * `expectsOrder` is a DECLARED expectation, not a derived fact: the agent
- * ticked "an Order will be attached" at intake. It stays on the list until
- * an Order actually links to the booking (or the agent unticks it), which
- * is exactly the follow-up they asked for.
+ * The ORDER gap is DERIVED since 2026-09-18, not declared. Wes: "of course
+ * every vehicle will be attached to an order, because that is how we bill
+ * clients" — so asking an agent to tick "an order will be attached" asked
+ * them to state the obvious, and the tick read to the desk as the WAREHOUSE
+ * order (the gear list), which is a different thing entirely and lives on
+ * `Order.warehouseOrderExpected`. A reservation with no order is simply
+ * incomplete: 32 live ones were, on the day this changed, and only ONE of
+ * them carried the tick.
+ *
+ * Two guards keep that honest:
+ *   • `orderCount` must be KNOWN. A caller that cannot count orders gets
+ *     the old declared behaviour rather than a false alarm.
+ *   • a reservation that has already ENDED is history, not a to-do. Without
+ *     this, scrolling the board back lights up 237 finished Planyo-era
+ *     rentals with a triangle nobody can act on.
+ *
+ * `Booking.expectsOrder` stays in the schema and the info route still
+ * toggles it; nothing reads it for the gap any more.
  */
 
 export type BookingInfoGapKey = 'company' | 'job' | 'order'
@@ -38,12 +52,15 @@ export interface BookingInfoShape {
   /** Number of non-cancelled Orders attached. Omit when unknown — the
    *  order gap is then reported off `expectsOrder` alone. */
   orderCount?: number | null
+  /** When the rental ends. A finished reservation is never asked for an
+   *  order it will now never get. Omit and it counts as live. */
+  endDate?: Date | string | null
 }
 
 const GAP_DEFS: Record<BookingInfoGapKey, Omit<BookingInfoGap, 'key'>> = {
   company: { label: 'Company', detail: 'No production company on this reservation yet.' },
   job: { label: 'Job name', detail: 'No job/show name on this reservation yet.' },
-  order: { label: 'Order', detail: 'An order is expected but none is attached yet.' },
+  order: { label: 'Order', detail: 'No order on this reservation yet — the vehicles have nothing to bill against.' },
 }
 
 /** True when the booking has no production company. */
@@ -60,11 +77,26 @@ export function isJobMissing(b: BookingInfoShape): boolean {
  * Everything still outstanding on a reservation, in the order an agent
  * would fill it in. Empty array = complete (no triangle).
  */
+/** Has this rental already finished? Undated reads as live. */
+function hasEnded(b: BookingInfoShape, now: Date = new Date()): boolean {
+  if (b.endDate == null) return false
+  const end = b.endDate instanceof Date ? b.endDate : new Date(b.endDate)
+  if (Number.isNaN(end.getTime())) return false
+  // Calendar dates are stored at UTC midnight; compare like with like.
+  return end.getTime() < new Date(`${now.toISOString().slice(0, 10)}T00:00:00.000Z`).getTime()
+}
+
+/** True when this reservation has no order to bill its vehicles on. */
+export function isOrderMissing(b: BookingInfoShape): boolean {
+  if (b.orderCount == null) return !!b.expectsOrder // unknown → the old declared rule
+  return b.orderCount === 0 && !hasEnded(b)
+}
+
 export function bookingInfoGaps(b: BookingInfoShape): BookingInfoGap[] {
   const keys: BookingInfoGapKey[] = []
   if (isCompanyMissing(b)) keys.push('company')
   if (isJobMissing(b)) keys.push('job')
-  if (b.expectsOrder && !(b.orderCount ?? 0)) keys.push('order')
+  if (isOrderMissing(b)) keys.push('order')
   return keys.map((key) => ({ key, ...GAP_DEFS[key] }))
 }
 

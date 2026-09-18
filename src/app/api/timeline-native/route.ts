@@ -433,6 +433,7 @@ export async function GET(req: NextRequest) {
         jobName: b.jobName,
         expectsOrder: b.expectsOrder,
         orderCount: (bookingExtras.get(b.id)?.orders ?? []).length,
+        endDate: b.endDate,
       }),
       jobNum: b.bookingNumber,
       rwOrderNumber: b.rentalworksOrderId,
@@ -526,6 +527,9 @@ export async function GET(req: NextRequest) {
               jobName: true,
               companyId: true,
               expectsOrder: true,
+              // The reservation's own end date — an ENDED one is never
+              // asked for the order it will now never get (infoGaps).
+              endDate: true,
               rentalworksOrderId: true,
               job: { select: { id: true, jobCode: true, tags: true, rwOrders: { select: { rwOrderNumber: true } } } },
               company: { select: { name: true } },
@@ -595,6 +599,7 @@ export async function GET(req: NextRequest) {
         jobName: a.bookingItem.booking.jobName,
         expectsOrder: a.bookingItem.booking.expectsOrder,
         orderCount: (bookingExtras.get(a.bookingItem.booking.id)?.orders ?? []).length,
+        endDate: a.bookingItem.booking.endDate,
       }),
       agent: a.bookingItem.booking.agent.name ?? '',
       agentId: a.bookingItem.booking.agent?.id ?? null, // owner — gates the sales status control

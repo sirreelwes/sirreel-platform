@@ -13,15 +13,20 @@
  *   Company   — CompanyPicker, or "+ New company" via /api/crm/companies
  *   Job name  — JobResolverModal (needs the company first; a Job carries
  *               its own, so resolving one also settles the company)
- *   Order     — "an order will be attached", the agent's own declaration;
- *               clears itself once an Order lands on the job
+ *   Order     — DERIVED (Wes 2026-09-18): the reservation has no order to
+ *               bill its vehicles on. It used to be a checkbox, "an order
+ *               will be attached" — which asked the agent to declare
+ *               something that is true of every rental, and which the desk
+ *               read as the WAREHOUSE order (the gear list, a different
+ *               thing that lives on Order.warehouseOrderExpected). The
+ *               to-do clears itself when an order lands on the job; the
+ *               button here goes and writes one.
  *
  * Writes go to POST /api/scheduling/bookings/[id]/info, which enforces
  * the amend rules (fill blanks, don't re-point a live booking).
  *
  * The panel stays visible once everything is filled in — collapsed to a
- * single "Complete" line with the order toggle still reachable, so the
- * agent can flag a late-breaking order on any reservation.
+ * single "Complete" line.
  */
 
 import { useEffect, useState } from 'react'
@@ -37,15 +42,14 @@ export interface ReservationInfoState {
   jobId: string | null
   jobCode: string | null
   jobName: string
-  expectsOrder: boolean
 }
 
 interface Props {
   bookingId: string
   /** Current values, as read off the selected gantt bar. */
   value: ReservationInfoState
-  /** Non-cancelled Orders on this reservation's job — an attached order
-   *  retires the "Order" to-do regardless of the expectsOrder flag. */
+  /** Non-cancelled Orders on this reservation's job. None = the Order
+   *  to-do, which is what "locked to a line item on an order" means here. */
   orderCount: number
   /** Dates of the reservation — seeds the Job resolver's overlap ranking. */
   dates?: { start: string; end: string } | null
@@ -99,12 +103,12 @@ export function CompleteReservationPanel({
     companyId: value.companyId,
     jobId: value.jobId,
     jobName: value.jobName,
-    expectsOrder: value.expectsOrder,
     orderCount,
+    endDate: dates?.end ?? null,
   })
   const complete = gaps.length === 0
 
-  async function save(patch: { companyId?: string; jobId?: string; expectsOrder?: boolean }) {
+  async function save(patch: { companyId?: string; jobId?: string }) {
     setBusy(true)
     setError(null)
     try {
@@ -125,7 +129,6 @@ export function CompleteReservationPanel({
           jobId: json.booking.jobId,
           jobCode: json.booking.jobCode,
           jobName: json.booking.jobName,
-          expectsOrder: json.booking.expectsOrder,
         },
         json.infoGaps ?? [],
       )
@@ -186,18 +189,6 @@ export function CompleteReservationPanel({
         <span className="text-[11px] text-gray-500">
           <span className="text-green-600 font-bold"><Check size={16} aria-hidden /></span> Reservation details complete
         </span>
-        {canEdit && (
-          <label className="flex items-center gap-1.5 text-[11px] text-gray-500 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={value.expectsOrder}
-              disabled={busy}
-              onChange={(e) => void save({ expectsOrder: e.target.checked })}
-              className="h-3.5 w-3.5 rounded border-gray-300 text-amber-600 focus:ring-amber-500"
-            />
-            An order will be attached
-          </label>
-        )}
       </div>
     )
   }
@@ -334,24 +325,30 @@ export function CompleteReservationPanel({
             </div>
           )}
 
-          {/* ── Order expectation ── */}
-          <label className="flex items-start gap-2 cursor-pointer border-t border-amber-200 pt-2">
-            <input
-              type="checkbox"
-              checked={value.expectsOrder}
-              disabled={busy}
-              onChange={(e) => void save({ expectsOrder: e.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
-            />
-            <span className="text-sm text-amber-900">
-              An order will be attached
-              <span className="block text-[11px] text-amber-700 font-normal">
-                {orderCount > 0
-                  ? 'An order is already on this job — this reservation is covered.'
-                  : 'Keeps this reservation flagged until an order lands on the job.'}
-              </span>
-            </span>
-          </label>
+          {/* ── Order ── Derived, not declared: these vehicles are billed
+              on an order, and this reservation has none. The fix is to go
+              and write one, not to tick a box saying one is coming. */}
+          {gaps.some((g) => g.key === 'order') && (
+            <div className="border-t border-amber-200 pt-2">
+              <div className="text-sm text-amber-900">
+                No order on this reservation
+                <span className="block text-[11px] text-amber-700 font-normal">
+                  The vehicles held here have nothing to bill against.
+                  {value.jobId
+                    ? ' Write one on this job, or add them to an order it already has.'
+                    : ' Name the job first — an order lives on one.'}
+                </span>
+              </div>
+              {value.jobId && (
+                <a
+                  href={`/jobs/${value.jobId}`}
+                  className="mt-1.5 inline-block rounded border border-amber-400 bg-white px-2 py-1 text-[11px] font-semibold text-amber-900 hover:bg-amber-100"
+                >
+                  Open the job
+                </a>
+              )}
+            </div>
+          )}
 
           {error && <div className="text-[11px] text-rose-700 font-medium">{error}</div>}
         </div>

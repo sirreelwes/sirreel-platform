@@ -328,6 +328,7 @@ export async function POST(req: NextRequest) {
             jobName: result.booking.jobName,
             expectsOrder: result.booking.expectsOrder,
             orderCount: 0,
+            endDate: result.booking.endDate,
           }),
           // Department drives whether the new-hold flow opens the unit-pick
           // drawer (asset-bearing VEHICLES / STAGES only — not bulk supplies).

@@ -149,6 +149,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       jobId: true,
       jobName: true,
       expectsOrder: true,
+      endDate: true,
       company: { select: { id: true, name: true } },
       job: {
         select: {
@@ -176,6 +177,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       jobName: updated.jobName,
       expectsOrder: updated.expectsOrder,
       orderCount: updated.job?.orders.length ?? 0,
+      endDate: updated.endDate,
     }),
   })
 }
