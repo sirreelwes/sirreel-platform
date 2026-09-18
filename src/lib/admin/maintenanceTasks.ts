@@ -37,6 +37,7 @@
 
 import type { AdditiveDdl } from '@/lib/admin/additiveDdl'
 import { JOB_THREAD_TABLES_DDL } from '@/lib/email/jobThreadTableSql'
+import { BROKER_TABLES_DDL } from '@/lib/coi/brokerTableSql'
 
 export type MaintenanceCategory = 'seed' | 'backfill' | 'schema'
 
@@ -111,6 +112,36 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     cliEquivalent: 'npx tsx scripts/cargo-vans-no-lift-gate.ts',
   },
   {
+    id: 'file-negotiated-agreement',
+    title: 'File a negotiated agreement as the client\u2019s annual master',
+    summary:
+      'Renders the client\u2019s own negotiated redline on SirReel paper and files it as their annual agreement, so every job they book is papered by it.',
+    detail:
+      'Wes 2026-09-18, on Party Giraffes and Graduation Day: "make those negotiated agreements standard for each job as an annual agreement." Their counsel\u2019s redline is already transcribed word-for-word; this renders it for each company and files it TWO ways. As their ANNUAL master it covers every job inside the agreed window \u2014 nothing to sign per job, the portal asks only for the damage-waiver election. As their STANDING terms it becomes the document that goes out whenever an agreement is released for signature anyway, so they are never handed our standard template after their lawyer redlined it. Companies are matched by exact name and it refuses to guess: 0 or 2+ matches are skipped and the near-misses printed. A company already covered by a current master is skipped for a person to supersede by hand, and standing terms already on file are never overwritten. Run the dry run first \u2014 it names the exact company row each name resolved to.',
+    category: 'seed',
+    writes:
+      'sr_company_agreements (one row per company, annual + auto-covering) \u00b7 companies (the standing negotiated terms fields, only where there are none) \u00b7 sr_audit_logs \u00b7 the rendered PDF in the private blob store',
+    cliEquivalent: 'npx tsx scripts/file-negotiated-agreement.ts --key graduation-day-2026 --write',
+    params: [
+      // One option today. The test holds this list against the agreements
+      // registry, so a second negotiated document cannot ship without a
+      // picker entry \u2014 and a typo here fails the build, not the run.
+      {
+        key: 'key',
+        label: 'Which negotiated agreement',
+        options: ['graduation-day-2026'],
+        defaultValue: 'graduation-day-2026',
+        help: 'Graduation Day Productions and Party Giraffes, LLC \u2014 their May redline, effective 5/15 through 12/31.',
+      },
+      {
+        key: 'alias',
+        label: 'Company name overrides',
+        placeholder: 'Party Giraffes=Party Giraffes, LLC',
+        help: 'Only if the dry run says a name did not match. One per line, Registry Name=Exact DB Name \u2014 never comma-separated, because the DB names carry commas. The confirmed ones are already built in.',
+      },
+    ],
+  },
+  {
     id: 'job-conversation-tables',
     title: 'Create the job Conversation tables',
     summary: 'Adds the three tables the job Conversation needs: internal notes, the "who is answering" claim, and the urgent-note alerts.',
@@ -120,6 +151,27 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     writes: 'sr_job_threads, sr_job_thread_notes, sr_job_thread_alerts (each created only if absent, with its indexes) · sr_audit_logs',
     cliEquivalent: 'npx tsx scripts/add-job-thread-tables.ts',
     ddl: JOB_THREAD_TABLES_DDL,
+  },
+  {
+    id: 'broker-directory-tables',
+    title: 'Create the broker directory tables',
+    summary: 'Adds the two tables that keep the list of insurance brokers and which client each one acts for.',
+    detail:
+      'Wes 2026-09-17: "Please start keeping a list of brokers." Until these exist a broker is only ever read off the certificate in front of you, so nothing can answer "who is this client\u2019s broker" when the producer box did not read. sr_brokers is one row per broker keyed by EMAIL (the person, the agency, the phone, when we last saw or wrote to them); sr_broker_clients ties a broker to the clients they act for. Once they exist the list fills itself \u2014 every certificate we review records the broker it names, and every review link we send records who we wrote to. Until then everything behaves exactly as it does today and /admin/brokers says this task is needed. Nothing existing is touched; running it twice changes nothing.',
+    category: 'schema',
+    writes: 'sr_brokers, sr_broker_clients (each created only if absent, with its indexes) \u00b7 sr_audit_logs',
+    cliEquivalent: 'npx tsx scripts/add-broker-tables.ts',
+    ddl: BROKER_TABLES_DDL,
+  },
+  {
+    id: 'seed-known-brokers',
+    title: 'File the brokers we already know',
+    summary: 'Puts the hand-named brokers (today: Barbara Wagner) into the directory so it does not start empty.',
+    detail:
+      'The directory fills itself from certificates and from review links we send, which means it only knows brokers we have met SINCE it shipped. This files the ones Wes named by hand first \u2014 today that is Barbara Wagner (barbara@worthingtoninsur.com), the broker on the Mega COI review. Matched on email, so running it twice never duplicates; it fills blanks and never overwrites a name someone has corrected on the page. Her agency is deliberately left blank rather than guessed from her email domain \u2014 it fills in from the producer box of the next certificate she issues. Each broker is tied to a client only when the name hint matches exactly one; an ambiguous or missing match is reported and left alone. Refuses with a fix line if the tables do not exist yet.',
+    category: 'seed',
+    writes: 'sr_brokers, sr_broker_clients \u00b7 sr_audit_logs',
+    cliEquivalent: 'npx tsx scripts/seed-known-brokers.ts [--write]',
   },
 ] as const
 

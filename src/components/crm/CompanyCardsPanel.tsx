@@ -26,9 +26,22 @@
  * `Default` is what the charge paths reach for. With several cards and no
  * default, HQ deliberately asks rather than guessing: charging the wrong
  * card of two is a call from the client's accounting department.
+ *
+ * ── Asking for another one ─────────────────────────────────────────
+ *
+ * Wes 2026-09-18, on Jose: a keyed card declined and "there's no way for him
+ * to ask for a new card." There wasn't. A declined card is deliberately not
+ * stored, so the 402 was a red sentence with nothing after it — and the card
+ * ask lives on the JOB page, two navigations away, with nothing here saying
+ * so. `CardAskButton` closes that: it names the company's live jobs and
+ * hands the staffer to the job's own Card Authorization tile with
+ * `?card=ask`, which opens the review modal. It does NOT send from here —
+ * one composer for client mail, so the preview, the recipient picker and the
+ * confirm cannot drift into a second copy on the CRM page.
  */
 
 import { useCallback, useEffect, useState } from 'react';
+import { cardAskState } from '@/lib/payments/cardAsk';
 
 interface CardOnFile {
   id: string;
@@ -50,6 +63,123 @@ interface CardOnFile {
 function expiryLabel(e: string | null): string {
   if (!e || e.length !== 4) return '';
   return `${e.slice(0, 2)}/${e.slice(2)}`;
+}
+
+interface CardAskJob {
+  id: string;
+  jobCode: string;
+  name: string;
+  startsAt: string | null;
+}
+
+function jobAskHref(jobId: string): string {
+  return `/jobs/${jobId}?card=ask#card-auth`;
+}
+
+/**
+ * "Ask the client for another card."
+ *
+ * The wallet knows a COMPANY; the card request is sent on a JOB — its subject
+ * line names the production, its recipient is ranked off the job's contacts,
+ * and its portal token is minted against a booking. So this resolves the job
+ * before it can take anyone anywhere.
+ *
+ * Arrived from a job's Card Authorization tile (`/crm/[id]?job=…#cards`)? That
+ * job is the answer and the button goes straight there. Otherwise it asks the
+ * server, and the three outcomes are all said out loud rather than guessed at:
+ * one live job is a button, several are a list to pick from (choosing for the
+ * rep is how a card request lands on the wrong show's thread), and none says
+ * so — a card ask has to hang off a job, and inventing one is worse than the
+ * dead end this replaces.
+ */
+function CardAskButton({
+  companyId,
+  sourceJobId,
+  label,
+  prominent = false,
+}: {
+  companyId: string;
+  sourceJobId?: string | null;
+  label: string;
+  prominent?: boolean;
+}) {
+  const [jobs, setJobs] = useState<CardAskJob[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [failed, setFailed] = useState(false);
+
+  const cls = prominent
+    ? 'rounded-md bg-lt-fg text-white text-[11px] font-semibold px-3 py-1.5 disabled:opacity-40'
+    : 'text-[11px] font-semibold text-lt-fg hover:text-black underline underline-offset-2 disabled:opacity-40';
+
+  // The common path: the staffer walked here from the job itself.
+  if (sourceJobId) {
+    return (
+      <a href={jobAskHref(sourceJobId)} className={cls}>
+        {label} →
+      </a>
+    );
+  }
+
+  if (jobs === null) {
+    return (
+      <button
+        type="button"
+        disabled={loading}
+        onClick={async () => {
+          setLoading(true);
+          setFailed(false);
+          try {
+            const r = await fetch(`/api/crm/companies/${companyId}/card-ask-jobs`);
+            const d = await r.json().catch(() => ({}));
+            if (!r.ok) throw new Error('load');
+            const found: CardAskJob[] = d.jobs || [];
+            // One candidate needs no picking — take them to it.
+            if (found.length === 1) {
+              window.location.href = jobAskHref(found[0].id);
+              return;
+            }
+            setJobs(found);
+          } catch {
+            setFailed(true);
+          } finally {
+            setLoading(false);
+          }
+        }}
+        className={cls}
+      >
+        {loading ? 'Finding the job…' : failed ? 'Could not load jobs — try again' : `${label} →`}
+      </button>
+    );
+  }
+
+  if (jobs.length === 0) {
+    return (
+      <span className="text-[11px] text-lt-fg3">
+        No open job to send a card request on — the ask goes out on a job, from its Card
+        Authorization tile.
+      </span>
+    );
+  }
+
+  return (
+    <div className="text-[11px]">
+      <div className="text-lt-fg2 font-semibold mb-1">Which job is the card for?</div>
+      <div className="flex flex-col items-start gap-1">
+        {jobs.map((j) => (
+          <a
+            key={j.id}
+            href={jobAskHref(j.id)}
+            className="text-lt-fg hover:text-black underline underline-offset-2"
+          >
+            {j.jobCode} · {j.name}
+            {j.startsAt
+              ? ` · picks up ${new Date(j.startsAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', timeZone: 'UTC' })}`
+              : ''}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 export function CompanyCardsPanel({
@@ -167,6 +297,10 @@ export function CompanyCardsPanel({
         <div className="space-y-2">
           {cards.map((c) => {
             const key = `${c.origin}:${c.id}`;
+            // Declined or expired — the same rule the job page's tile reads,
+            // so the two screens agree on whether this client still owes us a
+            // card (src/lib/payments/cardAsk.ts).
+            const ask = cardAskState({ onFile: true, validated: c.validated, expired: c.expired });
             return (
               <div
                 key={key}
@@ -320,6 +454,20 @@ export function CompanyCardsPanel({
                   </div>
                 </div>
 
+                {/* A card that will not charge is only half the news. The
+                    chips above say WHAT is wrong; this says what to do about
+                    it, on the screen where someone just found out. */}
+                {ask.ask && (
+                  <div className="mt-2 rounded-md bg-chip-warn-bg/60 px-2 py-1.5">
+                    <div className="text-[11px] text-chip-warn-fg mb-1">{ask.why}.</div>
+                    <CardAskButton
+                      companyId={companyId}
+                      sourceJobId={sourceJobId}
+                      label={ask.label}
+                    />
+                  </div>
+                )}
+
                 {editing === c.id && (
                   <div className="mt-2 flex items-center gap-2">
                     <input
@@ -380,6 +528,11 @@ function KeyedCardForm({
   onCancel: () => void;
   onAdded: (cards: CardOnFile[], notice: string | null) => void;
 }) {
+  // The gateway refused the $0 check, so nothing was stored and retyping the
+  // same number cannot help. Tracked separately from `err` because it is the
+  // one failure with somewhere to go next: a different card, which only the
+  // client can give us (Wes 2026-09-18).
+  const [declined, setDeclined] = useState(false);
   const [iframeUrl, setIframeUrl] = useState('');
   const [live, setLive] = useState<boolean | null>(null);
   const [token, setToken] = useState('');
@@ -442,6 +595,7 @@ function KeyedCardForm({
     if (!ready || busy) return;
     setBusy(true);
     setErr(null);
+    setDeclined(false);
     try {
       const r = await fetch(`/api/crm/companies/${companyId}/cards/keyed`, {
         method: 'POST',
@@ -458,6 +612,8 @@ function KeyedCardForm({
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || j?.ok === false) {
+        // 402 is the route's "the bank refused it, nothing was stored".
+        if (r.status === 402) setDeclined(true);
         setErr(j?.error || 'Could not store the card.');
         return;
       }
@@ -492,6 +648,24 @@ function KeyedCardForm({
         </p>
       )}
       {err && <p className="text-[11px] text-chip-bad-fg mb-2">{err}</p>}
+      {/* The decline used to end here. It is the one error with a next step:
+          the number is fine to retype but it will fail again, and the only
+          thing that helps is a different card — which the client has to give
+          us (Wes 2026-09-18). */}
+      {declined && (
+        <div className="rounded-md bg-chip-warn-bg/60 px-2 py-1.5 mb-2">
+          <p className="text-[11px] text-chip-warn-fg mb-1.5">
+            Re-keying the same card will decline again. Ask the client for a different one — the
+            request goes out on the job, with a secure link they fill in themselves.
+          </p>
+          <CardAskButton
+            companyId={companyId}
+            sourceJobId={sourceJobId}
+            label="Ask the client for another card"
+            prominent
+          />
+        </div>
+      )}
 
       {iframeUrl ? (
         <iframe

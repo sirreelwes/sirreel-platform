@@ -5,6 +5,8 @@ import { getPublicSpaces } from '@/lib/site/spaces'
 import { getPageTitles } from '@/lib/site/siteSettings'
 import { StandingSetAvailabilityForm } from '@/components/site/StandingSetAvailabilityForm'
 import { SWatermark } from '@/components/site/SWatermark'
+import { JsonLd } from '@/components/site/JsonLd'
+import { breadcrumbJsonLd, itemListJsonLd } from '@/lib/site/structuredData'
 
 /**
  * Public /standing-sets — gallery of PUBLISHED standing-set Spaces (each
@@ -41,8 +43,20 @@ function shortDesc(desc: string | null): string {
 export default async function StandingSetsPage() {
   const [sets, titles] = await Promise.all([getPublicSpaces('STANDING_SET'), getPageTitles()])
 
+  // getPublicSpaces already hides unpublished and photo-less rows, so this
+  // list is exactly what the grid below renders.
+  const listNode = itemListJsonLd(
+    sets.map((s) => ({ name: s.name, path: `/standing-sets/${s.id}` })),
+    'SirReel standing sets',
+  )
+  const crumbs = breadcrumbJsonLd([
+    { name: 'SirReel', path: '/' },
+    { name: 'Standing Sets', path: '/standing-sets' },
+  ])
+
   return (
     <>
+      <JsonLd nodes={[listNode, crumbs]} />
       {/* Hero */}
       <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
         <SWatermark />

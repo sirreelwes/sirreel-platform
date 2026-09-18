@@ -3,6 +3,8 @@ import type { Metadata } from 'next'
 import { notFound } from 'next/navigation'
 import { getPublicSpaceById } from '@/lib/site/spaces'
 import VehicleGallery from '@/components/site/VehicleGallery'
+import { JsonLd } from '@/components/site/JsonLd'
+import { breadcrumbJsonLd, rentalProductJsonLd } from '@/lib/site/structuredData'
 
 /**
  * Public standing-set detail — /standing-sets/[id]. Reads LIVE from Space
@@ -28,8 +30,26 @@ export default async function StandingSetDetailPage({ params }: { params: { id: 
   // Only standing sets render here — a Stage/LED-Wall id 404s on this route.
   if (!s || s.type !== 'STANDING_SET') notFound()
 
+  // A standing set is a rental like any other row in the catalog, and is
+  // modelled as a Product of the one LocalBusiness rather than a Place of
+  // its own — rival venue entities at 8500 Lankershim is precisely what
+  // confuses a knowledge panel. No rate is published for sets, so no Offer.
+  const productNode = rentalProductJsonLd({
+    name: s.name,
+    path: `/standing-sets/${params.id}`,
+    description: s.description,
+    images: [s.photoUrl, ...s.photos.map((p) => p.src)],
+    category: 'Standing Sets',
+  })
+  const crumbs = breadcrumbJsonLd([
+    { name: 'SirReel', path: '/' },
+    { name: 'Standing Sets', path: '/standing-sets' },
+    { name: s.name, path: `/standing-sets/${params.id}` },
+  ])
+
   return (
     <div className="max-w-[1480px] mx-auto px-5 py-8 sm:py-12">
+      <JsonLd nodes={[productNode, crumbs]} />
       <Link
         href="/standing-sets"
         className="inline-flex items-center gap-2 rounded-full border border-[#e4dfd4] bg-white px-4 py-2 text-[13px] font-bold text-[#0c0c0d] shadow-sm hover:border-[#0F7A93] hover:bg-[#faf7f0] transition-colors"

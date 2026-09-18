@@ -90,6 +90,11 @@ interface CompositionOk {
   // Quick Reply only — rep-facing fleet-utilization detail behind the draft's
   // availability tier. Never rendered in the client email itself.
   quickReplyInsight?: QuickReplyInsight;
+  // Card-auth only — why the ask is open, derived server-side from the job's
+  // card (Wes 2026-09-18). DECLINED/EXPIRED mean a card IS on file and this
+  // is asking for a second one; the strip below says so, and the seeded
+  // wording already reflects it.
+  cardAskReason?: 'MISSING' | 'DECLINED' | 'EXPIRED' | 'NONE';
 }
 
 interface QuickReplyInsight {
@@ -377,6 +382,9 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
   // the Send button into "Send anyway" (the resubmit carries
   // confirmDuplicate so the server skips the guard once).
   const [dupWarning, setDupWarning] = useState<{ by: string | null; at: string | null } | null>(null);
+  /** An unsigned partner supplies gear on this order (send-quote only).
+   *  Acknowledged once, then the send goes — see the banner below. */
+  const [partnerWarning, setPartnerWarning] = useState<{ reason: string | null; partners: { name: string; units: string[] }[] } | null>(null);
   const [overrideContactId, setOverrideContactId] = useState<string | null>(null);
   const [showPicker, setShowPicker] = useState(false);
   // The composer box opens BLANK (Wes 2026-09-02: "the default should be a
@@ -512,6 +520,8 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
       // "Send anyway" — carry the confirmation so the server skips the
       // duplicate guard.
       if (dupWarning) sendBody.confirmDuplicate = true;
+      // Same second-pass shape for the unsigned-partner warning.
+      if (partnerWarning) sendBody.confirmUnsignedPartner = true;
       const res = await fetch(endpoints.send, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -525,6 +535,23 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
         setDupWarning({
           by: typeof json?.alreadyReplied?.by === 'string' ? json.alreadyReplied.by : null,
           at: typeof json?.alreadyReplied?.at === 'string' ? json.alreadyReplied.at : null,
+        });
+        sendInFlightRef.current = false;
+        setSendState('idle');
+        return;
+      }
+      if (res.status === 409 && json?.error === 'unsigned-partner') {
+        // A partner on this order has nothing signed. Don't send — name them
+        // and rearm as "Send anyway", so it is seen while there is still time
+        // to get the agreement filed.
+        setPartnerWarning({
+          reason: typeof json?.reason === 'string' ? json.reason : null,
+          partners: Array.isArray(json?.partners)
+            ? (json.partners as { name?: unknown; units?: unknown }[]).map((p) => ({
+                name: typeof p?.name === 'string' ? p.name : 'A partner',
+                units: Array.isArray(p?.units) ? (p.units.filter((u) => typeof u === 'string') as string[]) : [],
+              }))
+            : [],
         });
         sendInFlightRef.current = false;
         setSendState('idle');
@@ -765,6 +792,37 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
               Sending again may double-message the client. Use <span className="font-semibold">Send anyway</span> only if this adds something new.
             </div>
           )}
+
+          {partnerWarning && (
+            <div className="text-xs text-amber-200 bg-amber-900/20 border border-amber-800/60 rounded px-3 py-2">
+              <span className="font-bold">Partner agreement not signed</span> —{' '}
+              {partnerWarning.partners.length
+                ? partnerWarning.partners
+                    .map((p) => (p.units.length ? `${p.name} (${p.units.join(', ')})` : p.name))
+                    .join('; ')
+                : 'a partner on this order'}
+              . This quote supplies their gear on SirReel&apos;s terms, and their own agreement is what
+              carries the condition and indemnity back to them. File it on the Portals page — then{' '}
+              <span className="font-semibold">Send anyway</span> if the quote can&apos;t wait.
+            </div>
+          )}
+
+          {/* A card IS on file and it will not charge. Said here because the
+              rep is about to ask a client who already gave us a card, and
+              because the seeded wording differs from the standard ask —
+              somebody re-reading it should know why (Wes 2026-09-18). */}
+          {preview &&
+            (preview.cardAskReason === 'DECLINED' || preview.cardAskReason === 'EXPIRED') && (
+              <div className="text-xs text-amber-200 bg-amber-900/20 border border-amber-800/60 rounded px-3 py-2">
+                <span className="font-bold">
+                  {preview.cardAskReason === 'DECLINED'
+                    ? 'The card on file was declined'
+                    : 'The card on file has expired'}
+                </span>{' '}
+                — this asks for a different one, and says so. The card already on file stays
+                where it is; the client adds a second one in the portal.
+              </div>
+            )}
 
           {preview && (
             <>
@@ -1270,7 +1328,7 @@ export function EmailReviewModal({ target, quickRespond, onClose, onSent, initia
             }
             className="px-4 py-2 bg-amber-600 hover:bg-amber-500 disabled:opacity-50 disabled:cursor-not-allowed text-white text-sm font-bold rounded-lg"
           >
-            {sendState === 'in-flight' ? 'Sending…' : sendState === 'sent' ? 'Sent' : dupWarning ? 'Send anyway' : 'Send'}
+            {sendState === 'in-flight' ? 'Sending…' : sendState === 'sent' ? 'Sent' : dupWarning || partnerWarning ? 'Send anyway' : 'Send'}
           </button>
         </div>
       </div>

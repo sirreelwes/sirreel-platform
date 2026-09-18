@@ -181,7 +181,8 @@ const PORTAL_ALLOWED_PREFIXES = [
   '/invoice/',         // final-invoice answer page (/invoice/[token])
   '/unit/',            // unlisted subcontracted-unit page (/unit/[token])
   '/vendor/',          // partner's view of a sub-rental (/vendor/[token])
-  '/coi/',             // no-login client COI upload (/coi/[token])
+  '/coi/',             // no-login client COI upload (/coi/[token]) + the
+                       // broker's read-only review (/coi/broker/[token])
   '/api/coi/',         // COI upload / download / link API (endpoints self-gate auth)
   '/driver/',          // no-login driver licence upload (/driver/[token])
   '/api/driver-portal/', // driver portal read + licence upload (token-gated)

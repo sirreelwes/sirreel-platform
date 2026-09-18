@@ -16,7 +16,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { PublicAssistantWidget } from '@/components/site/PublicAssistantWidget'
-import { KeyRound } from 'lucide-react'
+import { KeyRound, FileText } from 'lucide-react'
 import { DriverHoursCard, type HoursEntry } from '@/components/drivers/DriverHoursCard'
 import { DriverSelfCheckoutCard, type SelfCheckoutView } from '@/components/drivers/DriverSelfCheckoutCard'
 import { DriverSelfReturnCard, type SelfReturnView } from '@/components/drivers/DriverSelfReturnCard'
@@ -58,6 +58,8 @@ interface DriveData {
     lockboxApplies: boolean
   }
   loadList: Array<{ id: string; orderNumber: string; description: string; quantity: number }>
+  /** The driver's copy of the condition report, when one has been filed. */
+  conditionReport?: { available: boolean }
   hours: { entries: HoursEntry[]; total: number }
   hoursPromptOpen: boolean
   checkout: SelfCheckoutView
@@ -387,6 +389,30 @@ export default function DriverJobPage({ params }: { params: { token: string } })
             licenceDone={licenceDone}
             onDone={load}
           />
+        )}
+
+        {/* The sheet that used to be printed and left on the passenger
+            seat (Wes 2026-09-17). Same document the yard reads; it
+            carries no licence photo and no access codes. Opens inline,
+            so a phone shows it in the browser's PDF viewer and saving is
+            one tap from there. */}
+        {data.conditionReport?.available && (
+          <Section title="Vehicle condition">
+            <p className="mb-2 text-[13px] text-zinc-400">
+              How {data.vehicle.unitName} was recorded when it went out — photos, mileage, fuel
+              and anything already marked. Worth a look before you roll, and keep it for the
+              return.
+            </p>
+            <a
+              href={`/api/drive/${token}/condition-report`}
+              target="_blank"
+              rel="noreferrer"
+              className="flex min-h-[48px] items-center justify-center gap-2 rounded-xl border border-zinc-700 bg-zinc-800 px-4 text-[15px] font-semibold text-zinc-100 active:bg-zinc-700"
+            >
+              <FileText size={16} aria-hidden />
+              Open the checkout sheet
+            </a>
+          </Section>
         )}
 
         {data.loadList.length > 0 && (

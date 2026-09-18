@@ -6,6 +6,7 @@ import { paymentMethodLabel } from '@/lib/invoices/paymentMethods';
 import { calendarDays, computeBillableDays, weekCapChoices } from '@/lib/orders/billing';
 import { DayClaimsPanel } from '@/components/orders/DayClaimsPanel';
 import { useRouter, useParams, useSearchParams } from "next/navigation";
+import { orderBackTarget } from "@/lib/nav/orderBackTarget";
 import { useSession } from "next-auth/react";
 import { getPermissions } from "@/lib/permissions";
 import type { UserRole } from "@prisma/client";
@@ -318,6 +319,9 @@ type Order = {
     releaseNote: string | null;
     releasedBy: { id: string; name: string | null; email: string } | null;
   } | null;
+  /** Gear added after the warehouse filed this order's check-out sheet —
+   *  work the floor does not know about (lib/orders/addedAfterPull.ts). */
+  addedSincePull?: { id: string; description: string; quantity: number }[];
   // Phase 5 commit 1 — booked snapshot anchor. The Generate invoice
   // button is gated on bookedTotal being non-null.
   bookedTotal: string | null;
@@ -1715,7 +1719,7 @@ export default function OrderDetailPage() {
   // booked, or status got rolled back); we surface the server's error.
   const [bookErr, setBookErr] = useState<string | null>(null);
   const [booking, setBooking] = useState(false);
-  const bookIt = async () => {
+  const bookIt = async (confirmUnsignedPartner = false) => {
     if (booking) return;
     setBooking(true);
     setBookErr(null);
@@ -1723,8 +1727,24 @@ export default function OrderDetailPage() {
       const r = await fetch(`/api/orders/${orderId}/book`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(confirmUnsignedPartner ? { confirmUnsignedPartner: true } : {}),
       });
       const data = await r.json().catch(() => ({}));
+      // A partner on this order has nothing signed (Wes 2026-09-18). Their
+      // agreement is what carries the condition and indemnity back to them,
+      // so the server refuses once and names them. The rep cannot produce a
+      // countersignature, so it is an override rather than a wall — and the
+      // override is recorded on the audit row.
+      if (r.status === 409 && data.error === "unsigned partner") {
+        const go = confirm(`${data.reason}\n\nBook it anyway?`);
+        if (go) {
+          setBooking(false);
+          await bookIt(true);
+          return;
+        }
+        setBookErr("Not booked — the partner agreement isn't signed.");
+        return;
+      }
       if (!r.ok || !data.ok) {
         setBookErr(`Book it failed: ${data.error || `HTTP ${r.status}`}`);
         return;
@@ -1752,12 +1772,26 @@ export default function OrderDetailPage() {
     setBooking(true);
     setBookErr(null);
     try {
-      const r = await fetch(`/api/orders/${orderId}/mark-booked`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ note: fromDraft ? "booked from draft on the order page" : null }),
-      });
-      const data = await r.json().catch(() => ({}));
+      const post = (confirmUnsignedPartner: boolean) =>
+        fetch(`/api/orders/${orderId}/mark-booked`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            note: fromDraft ? "booked from draft on the order page" : null,
+            ...(confirmUnsignedPartner ? { confirmUnsignedPartner: true } : {}),
+          }),
+        });
+      let r = await post(false);
+      let data = await r.json().catch(() => ({}));
+      // Same unsigned-partner override as bookIt above.
+      if (r.status === 409 && data.error === "unsigned partner") {
+        if (!confirm(`${data.reason}\n\nBook it anyway?`)) {
+          setBookErr("Not booked — the partner agreement isn't signed.");
+          return;
+        }
+        r = await post(true);
+        data = await r.json().catch(() => ({}));
+      }
       if (!r.ok || !data.ok) {
         setBookErr(`Mark booked failed: ${data.reason || data.error || `HTTP ${r.status}`}`);
         return;
@@ -3370,6 +3404,7 @@ export default function OrderDetailPage() {
   })();
   const recipients = computeRecipients(order);
   const noRecipient = !recipients.primary;
+  const backTarget = orderBackTarget({ from: searchParams?.get('from'), job: order.job });
 
   return (
     // Light-motif page bg — overrides the dashboard shell's default
@@ -3377,8 +3412,13 @@ export default function OrderDetailPage() {
     // wrapper so the two surfaces feel like one engagement.
     <div className="bg-lt-page -m-3 md:-m-4 p-4 md:p-6 min-h-[calc(100vh-3rem)]">
       <div className="max-w-[1200px] mx-auto">
-        <button onClick={() => router.push("/orders")} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">
-          &larr; Back to Orders
+        {/* Back goes where you CAME FROM. It used to be a fixed push to
+            /orders, so an agent who opened this order from a job was
+            dropped into the master list and had to find the job again
+            (Wes 2026-09-17). A job-side link carries ?from=job and this
+            reads it; every other door still lands on the list. */}
+        <button onClick={() => router.push(backTarget.href)} className="text-sm text-lt-fg2 hover:text-lt-fg mb-4 inline-block">
+          &larr; {backTarget.label}
         </button>
 
       {/* Order Header */}
@@ -3439,7 +3479,7 @@ export default function OrderDetailPage() {
                 const onClick = isSendQuote
                   ? openSendQuoteReview
                   : isBook
-                    ? bookIt
+                    ? () => bookIt()
                     : isMarkBooked
                       ? markBooked
                       : () => updateStatus(action.next);
@@ -3795,6 +3835,20 @@ export default function OrderDetailPage() {
                   Check-in report
                 </Link>
               </div>
+              {/* The floor has already worked this order and something
+                  has been added to it since. Until the rep sends it over,
+                  nobody in the warehouse knows (Wes, 2026-09-18). */}
+              {(order.addedSincePull?.length ?? 0) > 0 && (
+                <div className="mt-2.5 text-[13px] text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-lg px-3 py-2">
+                  <b>
+                    The warehouse has already pulled this order — {order.addedSincePull!.length} line
+                    {order.addedSincePull!.length === 1 ? '' : 's'} added since:
+                  </b>{' '}
+                  {order.addedSincePull!.map((l) => `${l.quantity} × ${l.description}`).join(', ')}.
+                  Send the pull order again so the floor gets a sheet for{' '}
+                  {order.addedSincePull!.length === 1 ? 'it' : 'them'}.
+                </div>
+              )}
               {sendWarehouseFlash ? (
                 <div className="mt-2.5 text-xs text-chip-good-fg">{sendWarehouseFlash}</div>
               ) : order.pickList?.releasedAt ? (

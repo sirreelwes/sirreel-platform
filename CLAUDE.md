@@ -171,6 +171,361 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - The client COI drop link now runs the AI review on arrival (it used to store
   the PDF with no analysis at all).
 
+## A negotiated agreement becomes the client's annual (2026-09-18 — Wes)
+- Wes: "for party giraffe and graduation day, I need to make those negotiated
+  agreements standard for each job as an annual agreement." Their counsel's
+  redline was already transcribed (`negotiated/graduationDay2026.ts`, verbatim
+  — read `negotiatedAgreement.ts` before touching a word of it) and had a
+  filing script since 2026-09-15. Nothing had run it: the write needs the
+  production DB **and** `BLOB_READ_WRITE_TOKEN`, which is deliberately not in
+  `.env.local`, so the only thing in the way was a laptop.
+- **`src/lib/contracts/fileNegotiatedAgreement.ts` is the work**, with the
+  two entry points: `scripts/file-negotiated-agreement.ts` (argv + journal +
+  exit code, nothing else) and /admin/maintenance →
+  `file-negotiated-agreement`. The web path is the one place the blob token
+  simply IS — a phone run needs no `vercel env run`. Add behaviour to the
+  lib or the phone loses it.
+- **It files the document TWICE, for two different questions**, because
+  Wes's sentence names both mechanisms: `CompanyAgreement.autoCoverJobs` (the
+  ANNUAL master — every job inside the window is papered by it and the portal
+  asks only for the LCDW election, `annualCoverage.ts`) and
+  `Company.negotiatedTermsUrl` (the STANDING document — what goes out
+  whenever an agreement IS released for signature,
+  `ensureSignedAgreementForOrder`). Coverage outranks standing terms, so only
+  the first is felt while it holds; the second is what stops the day the
+  window lapses (2026-12-31 here) from handing that client our baseline
+  template after their lawyer redlined it. One PDF, both pointers.
+- `standingLcdwDecision` stays NULL on purpose — their counsel settled the
+  terms, nobody elected the damage waiver, and a null standing answer is
+  exactly what makes the portal ask per job.
+- **What it refuses, rather than guessing:** companies are matched on EXACT
+  name (0 or 2+ → skipped, near-misses printed as pasteable aliases); a
+  company already carrying a CURRENT auto-covering master is skipped for a
+  person to supersede by hand; standing terms already on file are never
+  overwritten (the annual is still filed and the log says so); no expiry date
+  is a refusal, because a master that never lapses never hands the signing
+  ask back. Dry run is the default on both paths and still renders the PDF.
+- `Party Giraffes` → **`Party Giraffes, LLC`** is a confirmed
+  `companyAliases` entry on the agreement, so nothing is typed on a phone.
+  Matching stays exact anyway: "Party Giraffes" also near-matches "Giraffe
+  Air LLC DBA Studio Sands", which is somebody else. An `alias` param
+  overrides it when the dry run says a name did not match — one per LINE or
+  semicolon, never comma-separated, because the values carry commas.
+- Coverage is read live, so jobs already open for these companies are covered
+  on their next read; no backfill. **RAN 2026-09-18 (Wes, from the phone):
+  both masters filed, standing terms set on both companies.**
+  `npm run test:negotiated-agreement`, `npm run test:maintenance-tasks`.
+
+### They sign THEIR document, not ours (2026-09-18 — Wes: "build the proper door")
+- The filed masters cover with **no signature on them** — a third state the
+  two-state model in `companyAnnual.ts` did not have (covering, unsigned,
+  never offered). The door to fix that existed but pointed at the wrong
+  document: `offerAnnualForSignature` built EVERY offer from
+  `CANONICAL_CLAUSES` via `generateCounterPdf`, so offering an annual to
+  Graduation Day would have put our standard terms in front of the one
+  client whose lawyer spent five months not agreeing to them — and
+  `signAnnual` would then have countersigned OUR clauses under their
+  signature. Both paths now render the negotiated document.
+- **Which document a row IS lives in `CompanyAgreement.source`**
+  (`NEGOTIATED:<key>`, read by `negotiatedKeyFromSource`). Written at OFFER
+  time, read at SIGN time — so an offer signs as the document the client
+  actually read, even if next year's agreement lands in the registry in
+  between. No column: `source` is the existing free-text provenance field
+  and nothing else reads it (an ALTER is a laptop job).
+  `negotiatedAgreementForCompany()` is the registry lookup by the company's
+  own CRM name, aliases included, EXACT — a near-match would put one
+  client's negotiated terms in front of another.
+- **The countersigned copy is one renderer, two states.**
+  `NegotiatedAgreementDocument` takes an optional `signature` and swaps the
+  blank Lessee column for the executed block + E-SIGN audit trail (same
+  evidence and the same bundled handwriting face as the per-order signed
+  copy). SirReel's own line stays blank — countersigning our side is a
+  separate act nobody performed.
+- **Signing supersedes the unsigned master.** `signAnnual` switches
+  `autoCoverJobs` off on every OTHER covering RENTAL_AGREEMENT master for
+  that company **that nobody signed** (`signedAt: null`), appends why to its
+  note, audits `company_agreement.superseded`, and — only where the
+  company's standing terms point at the very file just superseded — moves
+  `negotiatedTermsUrl` to the executed copy. A master someone DID sign is
+  never quietly disabled by another signature. Nothing is deleted.
+- The portal's affirmation now names the document by its own title
+  (`acknowledgementFor(title)`); it used to say "the Annual Rental
+  Agreement" over a document titled "2026 Negotiated Rental Agreement" — the
+  one sentence in the flow that has to match what they read.
+- **Signing also fills the LCDW gap**: `standingLcdwDecision` is stamped from
+  the signer's election, which is what lets `fileJobAddendum` cut a job's
+  addendum from the master alone. Until then each job's addendum waits on a
+  per-job election, and its "Executed" row does not print (it renders only
+  with `masterSignerName` / `masterSignedAt`).
+
+### §32 is OPEN — do not ask them to sign yet (2026-09-17 redline)
+- Graduation Day's counsel (Nicholas Marell) redlined the filed document on
+  2026-09-17 — three edits, ALL in **§32 Third-Party Equipment**, the clause
+  SirReel appended on 9/15. Clauses 1–31, the Fleet Agreement and the whole
+  LCDW Addendum came back unmarked, and their numbering is unchanged so
+  `crossReferencesHold()` still passes. **Wes has not decided whether to
+  counter.** Two counters were raised for him: append ", subject to
+  Section 14" to their third edit ("in any event" is what someone argues
+  overrides the limitation of liability), and fix the garbled English in
+  their first ("any failure of such third party's or our failure to adhere").
+- **An agreed §32 goes in `GRADUATION_DAY_2026.appendedClauses` as a body
+  override — NEVER in `contractClauses.ts`.** `canonical('30')` is the
+  baseline Third-Party Equipment clause, and the same body is rendered by
+  `RentalAgreementBody` (the portal's readable agreement),
+  `SignedAgreementDocument` (every signed copy) and the review tooling's
+  baseline map. Editing it there renegotiates that clause for every client
+  at once, silently, on the strength of one client's counsel.
+- `APPENDED_CLAUSE_DIGEST` in the test pins the appended clauses. Nothing
+  did before 2026-09-18: a change to our baseline clause 30 altered a FILED
+  client contract with no test failure. The client-verified digest stays over
+  THEIR 31 clauses alone.
+- **Do not rebuild from the DOCX** Wes was sent (a PDF→Word conversion):
+  ten words carry literal ASCII hyphens from the conversion
+  (compen-sation, inde-pendent, cover-age, compre-hensive, insur-ance,
+  re-duced, Agree-ment, con-strued, arbitra-tion, circum-stances) while
+  "non-payment" in §21 is a REAL hyphen, and the file lost all front matter
+  (no Lessee block, no lede, no version line — the company name appears only
+  in the running header). Edit the clause text in the repo and re-render.
+- The coverage stays ON in the meantime: their redline touches one clause,
+  and the alternative puts their coordinators back to signing our baseline
+  per job — strictly worse paper than their negotiated document.
+
+## Their counsel reviews the agreement in HQ (2026-09-18 — Wes)
+- Wes: "Marell will probably want to see the entire agreement again. I'll
+  need to send my finished one to him. Ideally, I can just send it in HQ to
+  him, and he can review it there with a button that allows him to download
+  a DOCX file."
+- **The Word file is COMPOSED from the clause data, never converted.**
+  `src/lib/contracts/generateNegotiatedAgreementDocx.ts` writes
+  WordprocessingML and zips it with `pizzip` (already a dependency). Why not
+  `docxtemplater`, which is also here: it FILLS a template, and a template
+  means a binary .docx in the repo carrying clause text that has to stay in
+  lockstep with contractClauses.ts — the exact drift the digest test exists
+  to stop. Why not a conversion: the file Marell returned on 9/17 was a
+  PDF→Word conversion with ten invented hyphens and no front matter at all.
+  Composing cannot reproduce either defect, and the test asserts both
+  directions (no artifact words, "non-payment" intact).
+- Headings are LITERAL text, never Word auto-numbering — their numbering
+  carries a deliberate GAP at 15 (counsel deleted Subrogation) and Word
+  would silently close it. The test pins the gap.
+- **`/agreement/review/[token]`** is read-only in the strong sense: no form,
+  no POST, no session, two download buttons. `signCounselReviewToken`
+  (`counselReviewToken.ts`) reuses the COI HMAC envelope with a THIRD domain
+  separator (`counsel-review.v1`); `npm run test:counsel-review` asserts a
+  COI broker token does not verify as a counsel token or the reverse —
+  three schemes now sign JSON with one secret. Payload is ONE
+  `companyAgreementId`, 45-day TTL, so a forwarded link never widens.
+- **`buildCounselReviewPacket()` IS the disclosure envelope** and the page
+  renders nothing it does not return. OUT: every rate and dollar figure that
+  is not contract text, the orders and jobs the master papers, other
+  paperwork, any other client's terms, HQ's notes, who filed it, and the
+  partner arrangements behind §32.
+- **Rendered LIVE from the registry, not from the filed blob** — the same
+  "recomputed on every view" rule as the broker desk, because §32 is still
+  moving. So the page SAYS it is the current copy for review rather than the
+  executed agreement (`isCurrentDraft`), and a later correction needs no
+  re-send. Once signed it flips to "Executed — this copy is for your file".
+- **Sent from /crm/companies → Annual agreement → "Send to their counsel ↗"**
+  (`POST …/agreements/[agreementId]/counsel-review`). Posture copied from
+  the COI broker desk: the EMAIL IS THE ACT (a send failure stamps nothing),
+  the **LINK is appended by the ROUTE and never by the editable note** (the
+  partner-welcome rule), Reply-To is the sender exact, audited
+  `company_agreement.counsel_review_sent` with who it went to and never the
+  body. **NO Cc (Wes: "no cc")** — the COI rule copies the coordinator
+  because nobody's broker should be approached behind their back; counsel is
+  Wes writing to the lawyer he is negotiating with, and the box is free for
+  a human to add one.
+- Refuses (409) for a company with no registry agreement: the Word copy is
+  composed from clause text, so there has to be clause text.
+- NOT built: counsel cannot upload a redline BACK — they email it and it is
+  transcribed into `appendedClauses` by hand (`ContractReview` already has a
+  redline-upload path if that changes). Nothing nudges when a link has been
+  open for days with no reply.
+
+## No partner's gear on a job without their signature (2026-09-18 — Wes)
+- Wes, reading his counsel's §32 redline: "go ahead with the unsigned-partner
+  gate." §32 supplies a partner's unit to the client **on SirReel's own
+  terms**, and Graduation Day's negotiated version pushes further — we answer
+  for a failure (theirs or ours) to meet §4 and for "the acts and omissions of
+  such third parties". All of that is survivable ONLY because the partner
+  carries it back to back: partner agreement **§6** (condition, maintenance,
+  load-testing, certifications, repair-or-replace at their cost) and **§11**
+  (they indemnify "SirReel, its officers, employees, agents AND CLIENTS" for a
+  Unit's condition, their breach, and their personnel's acts in delivery,
+  setup and collection — expressly carved OUT of their own consequential
+  exclusion). No signature, nothing behind the promise.
+- **The hole:** the signature gate existed — `PARTNER_APPROVED_VENDOR_WHERE`
+  in site/vehicleCatalog.ts — and guards the PUBLIC LISTING only.
+  `/api/catalog/search` matches a partner unit on `isActive` +
+  `offeredToSirReel` + `vendor.isActive`, so a rep could quote AND book an
+  unsigned partner's unit. VSM Planet is the live example: quotable today,
+  agreement unsigned.
+- **`src/lib/sub-rentals/partnerPaperGate.ts`** is the rule.
+  `partnerPaperStatus()` is pure: none / unsigned / signed / expired /
+  not-yet-effective, best row wins (a lapsed copy or an unsigned re-file
+  beside a signed one is still covered), both date ends inclusive of the
+  calendar day like `isCoverageCurrent`. **Only "nothing signed" blocks** —
+  a lapsed agreement is named loudly and lets the booking through.
+- **Scope is a live SubRental with a ROSTER unit**, and deliberately NOT
+  `PARTNER_SUB_RENTAL_WHERE` from orders/partnerLines.ts: that predicate
+  excludes DELIVER_TO_SIRREEL because it answers "does this come through our
+  warehouse". This one answers "whose gear is it", and a partner's generator
+  dropped at Sun Valley is still theirs. **Ad-hoc sub-leases are out of
+  scope** — §32 covers them, but the backstop there is that house's own
+  rental terms under which we are the renter. There is paper; it isn't ours.
+- **THREE doors reach BOOKED and two of them needed it.** `/mark-booked`
+  (the job page + the order page's "Record client approval") and **`/book`**
+  (the order page's APPROVED action, which had no floor gate either — still
+  doesn't, flagged not fixed). A gate on one is bypassed by the other button.
+- **Confirmable, not a wall** — unlike `partnerFloorGate`, which refuses
+  outright. A rep cannot produce a partner's countersignature, and a client
+  waiting on a Friday is not a reason to leave a booking unrecorded. So the
+  server refuses ONCE with the partner and units NAMED, and
+  `confirmUnsignedPartner: true` pushes it through, recorded on the audit row
+  as `unsignedPartnerOverride`.
+- **send-quote warns, it does not stop.** A quote commits nothing and no
+  gear is on the road, so the 409 (`error: 'unsigned-partner'`) is
+  acknowledged once and the button re-arms as **Send anyway** — the same
+  shape as `EmailReviewModal`'s existing already-replied guard, reusing that
+  machinery rather than adding a second pattern.
+- NOT done: the client's own portal approval (`/api/portal/job/approve-quote`)
+  is deliberately NOT gated — you cannot refuse a client's yes because our
+  partner has not countersigned. That one wants an action item, which is the
+  obvious next step and is not built. Nor is an action item / job-page prompt
+  for the unsigned partner generally.
+- `npm run test:partner-paper`.
+
+## The broker gets the review, not a forwarded paragraph (2026-09-17 — Wes)
+- Wes: "Is there a way to extract the broker from a COI and add an option to
+  send a link to them when we need an updated COI or something isn't passing
+  our test? The link would open a read only review showing the broker what we
+  are rejecting or requesting be fixed." Every correction used to go client →
+  broker → client, with our requirement text re-explained at each hop.
+- **The broker is read off the document, not stored.** `COI_PROMPT` now
+  extracts the ACORD 25 **PRODUCER** box (agency, contact name, email, phone,
+  address) beside `namedInsured`; it lives in `CoiCheck.aiResponse.producer`
+  and is read on demand by `readCoiBroker()` in `src/lib/coi/broker.ts`.
+  **No column, no migration** — same reasoning as the named insured: a raw
+  FACT off the certificate that a re-run corrects. Placeholder-scrubbing
+  ("N/A", "same as insured") and e-mail validation live in the READER, not in
+  what we store; an invented broker is a correction request sent to a
+  stranger with the client's name in it.
+- **"Never asked" ≠ "blank box."** A review filed before today has no
+  `producer` key at all and the desk says "re-run it to pull the broker off
+  the certificate" — the same distinction `aiHasInsuredName` carries. Today's
+  `normalizeCoiReview` always stamps the key, so an empty producer box on a
+  fresh review reads as asked-and-blank.
+- **`POST /api/coi/review/[id]` action `EMAIL_BROKER`** — the fourth option
+  beside Approve / Reject / Request fix from client. Same posture as
+  REQUEST_FIX: the email IS the act (a send failure changes nothing), the row
+  parks in COUNTERED, Reply-To is the reviewer. Differences: the recipient
+  defaults to the producer block, the **client is Cc'd by default** (nobody's
+  broker is approached behind their coordinator's back), and **the review
+  LINK is appended by the route, never by the editable draft** — the partner-
+  welcome rule, so a reviewer trimming a paragraph cannot delete the thing the
+  email exists to deliver. Audited `coi.broker_review_sent` (who it went to,
+  never the body — that is on the job's thread). Label `coi-broker-review`
+  rides `sendOnJobThread`, so the broker's reply files to the job.
+- **The link opens `/coi/broker/[token]`** — read-only in the strong sense:
+  no form, no POST, no session. `signCoiBrokerToken` reuses the COI-upload
+  HMAC envelope with a **domain separator** (`coi-broker-review.v1`) so an
+  upload token can never be replayed as a review token, and the payload is
+  ONE `coiId` — a forwarded link never widens. 45-day TTL.
+- **`buildBrokerReviewPacket()` IS the disclosure envelope**, and the page
+  renders nothing it does not return. IN: the requirements, the verdict per
+  requirement, what THEIR certificate shows, the insured, the job name, the
+  replacement-value sentence, where to send the corrected one (the existing
+  client drop link). OUT: the reviewer's internal note, the per-check model
+  prose (it names requirements this job may not have — the 2026-09-09 leak),
+  the risk level, the stored PDF, the order, any rate, any contact but ours.
+- Verdicts are **recomputed on every view**, not frozen at send: a broker who
+  opens the link after the desk approved reads "nothing further needed", and
+  a production company fixed in HQ clears the named-insured line here too.
+  A gear-only job's auto rows stay NA, so we never ask a broker for coverage
+  this job does not need.
+- **The sample certificate rides along** (Wes 2026-09-17: "we may want to
+  also add a copy of our sample COI to broker") — the same ACORD the portal
+  and the Forms menu offer, `SAMPLE_COI_PATH` in requirements.ts, absolute on
+  the marketing origin so it resolves from any host or inbox. **Gated on
+  `SiteSetting.formCoiUrl` being set on BOTH surfaces**: `/api/public/forms/
+  [slot]` 404s until an admin uploads the PDF, so the page offers nothing
+  rather than a dead link and `brokerReviewLinkLines({ hasSample })` names it
+  in the email only when one is on file. A broker matching a document beats a
+  broker matching a paragraph; a broker clicking a 404 costs the round trip
+  this feature exists to save.
+- `COI_INBOX` ('rentals@') moved into `requirements.ts` — the portal's broker
+  email and this page name one mailbox. `npm run test:coi-broker`.
+- NOT done: nothing yet nudges when a broker has had the link for days with
+  no new certificate, and the broker is not offered on the job page. **The
+  "no company-level broker on file" half is now done** — see "A list of
+  brokers" above.
+
+## A list of brokers, not just a name on a certificate (2026-09-17 — Wes)
+- Wes: "Please start keeping a list of brokers — for example on the Mega COI
+  review we sent to the broker, whose name is Barbara Wagner and her email is
+  barbara@worthingtoninsur.com." `readCoiBroker()` reads ONE certificate's
+  producer box; that is the right home for a fact about a document and the
+  wrong home for a LIST. Nothing could answer "who is this client's broker"
+  when the producer box did not read — which is exactly the certificate most
+  likely to need correcting.
+- **Two tables, additive SQL, NEVER `db push`:** `sr_brokers` (one row per
+  broker, keyed by EMAIL) and `sr_broker_clients` (which of our clients each
+  acts for, and how we learned it: CERTIFICATE / CONTACTED / MANUAL). From a
+  phone: /admin/maintenance → **"Create the broker directory tables"**; on a
+  laptop `npx tsx scripts/add-broker-tables.ts`. Models `Broker` /
+  `BrokerClient` carry **no relations** and the DDL no foreign keys — the
+  job-Conversation shape, for the same reason (a live DB with known drift,
+  and a constraint that can fail a COI review is worse than a dead link row
+  the reader skips). **Until it has run everything behaves exactly as
+  before**: every read returns empty and every write is a no-op on P2021/P2022.
+- **Two rules carry the weight** (`src/lib/coi/brokerDirectory.ts`, pure half
+  in `normalizeBrokerFacts` / `mergeBrokerFacts`, `npm run
+  test:broker-directory`):
+  1. **The email is the identity.** No readable email, no row — a directory
+     keyed on a name a model read off a scan is a list of misspellings that
+     looks like a directory.
+  2. **A typed fact outranks a read one, and a blank never wins.** MANUAL
+     (a person editing /admin/brokers) may REPLACE a field; CERTIFICATE and
+     CONTACTED only FILL a blank. Otherwise the next certificate whose
+     producer box says "Certificates Dept" silently reverts a name someone
+     corrected — wrong in the way nobody notices, because the row still looks
+     filled in.
+- **It fills itself.** `recordBroker()` runs on the client COI drop
+  (`/api/coi/[token]` — the arrival path for most certificates, called AFTER
+  the job resolves so a job-only token still files under that job's client),
+  on the desk's AI re-run (the path that back-fills older certificates), and
+  on `EMAIL_BROKER` with `contacted: true` (the address a PERSON chose, which
+  outranks whatever the producer box read — the certificate's name/agency
+  ride along only when they belong to that same address). Every call is
+  best-effort: a stored COI or a sent email must never be lost to a list.
+- **The payoff is on the review desk.** `serialize()` is async now and
+  carries `knownBrokers` — the directory's answer for THIS client. The
+  compose panel offers them as chips, seeds the To box from the directory
+  when the certificate named nobody, and the broker card reads "Not read off
+  this certificate — but Barbara Wagner is on file for this client."
+- **/admin/brokers** (nav: Admin → Brokers, under COIs) lists them with their
+  clients, last seen, and how often we have written. Add and edit by hand;
+  removal is `isActive false`, never a delete. Staff-gated, not ADMIN-only —
+  the people who chase certificates are sales and billing.
+- **Barbara Wagner is seeded, not hardcoded into a code path.**
+  `src/lib/coi/knownBrokers.ts` is the registry (the partnerProspects shape);
+  /admin/maintenance → **"File the brokers we already know"** or `npx tsx
+  scripts/seed-known-brokers.ts --write` files her, matched on email so a
+  second run never duplicates. Her client is found by the name hint "mega"
+  and linked ONLY on exactly one match — an ambiguous or missing match is
+  reported, because a broker filed under the wrong client is how one
+  production's insurance question reaches another's agent.
+- **Her agency is deliberately BLANK.** `barbara@worthingtoninsur.com`
+  obviously suggests "Worthington Insurance", and `COI_PROMPT` tells the model
+  in as many words never to infer an agency from an email domain. The same
+  guess typed by hand, into the row a rep reads before emailing a stranger, is
+  the same mistake with a person's hand on it. It fills itself from the
+  producer box of the next certificate she issues.
+- NOT done: a broker is never tied to a client from the page (links form
+  themselves from certificates and sends, or from the seed's hint); nothing
+  merges two rows for one person at two addresses; and the directory is not
+  offered anywhere outside the COI review desk and its own page.
+
 ## After-hours VEHICLE pickup email (2026-09-10)
 - Wes: "an easy button for sales to send this summary" — Jose's hand-typed
   After Hours Instructions (address, Gate 1 code, driver's-license line,
@@ -468,6 +823,55 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   must STAY dead — it updateMany's every rank-2 REQUESTED item to rank 1,
   which would silently promote every LiteHold.
 
+## Action items are labelled by the PICKUP, not the record (2026-09-17 — Wes)
+- Wes, with 41 COI rows and 71 replacement-cost rows on his phone: "a ton
+  of action items that are persistent on the screen even if their time of
+  action has passed … after [a day or two] we need to have them drop off."
+  Nothing on the list was old — every provider re-derives its rows on each
+  load, so a row exists only while its condition is still true — but the
+  row's timestamp was `occurredAt`, the date the RECORD was created (a
+  booking made yesterday for a pickup six weeks out read "17h ago").
+- **Age-based expiry was considered and rejected**: dropping a live "COI
+  missing" at 48h hides the row exactly when the pickup it warns about gets
+  close. **The window is measured from the PICKUP.** `ActionItem.dueAt` is
+  the pickup; the panel labels the row "pickup in 4d" / "pickup today" and
+  the group header "next pickup …"; the registry sorts soonest pickup first
+  inside a priority. Items with no pickup (a quiet quote, an untouched
+  inquiry) keep the "N ago" label. Rules in `src/lib/actionItems/rules.ts`
+  (pure, `npm run test:action-window`).
+- **`PICKUP_WINDOW_DAYS = 14`**: COI and card-required show only for
+  bookings starting today through +14 days (the SQL says
+  `start_date <= CURRENT_DATE + 14`). A COI for a pickup six weeks out is
+  not this week's chase and was the bulk of the 41. The day-of-pickup row
+  still shows (2026-08-31 ruling); the day after, it is gone.
+  Kit-incomplete keeps its 7-day lookahead and now carries `dueAt`.
+- **COI is ONE ROW PER JOB** (`groupCoiByJob`): the certificate lives on
+  `sr_coi_checks.job_id`, so a job with two bookings was the same ask twice
+  (Digital Paradigm, in the screenshot). The item is keyed on the LEAD
+  booking — the soonest pickup, ties by id — so a `coi:<bookingId>`
+  dismissal recorded before the merge still matches for the usual
+  one-booking job. A `coi_received` on ANY of the job's paperwork rows now
+  settles the whole job (it used to settle only its own booking).
+- **Replacement cost is three shapes, not 71 rows**
+  (`splitReplacementGroups`): a VEHICLE row going out inside 7 days is its
+  own HIGH item (same `replacement-cost:item:<id>` key as before); every
+  other catalog row folds into ONE item `replacement-cost:backlog`
+  (low, medium while something in it goes out inside the window — it never
+  lights the red badge) linking to
+  `/inventory/wizard?view=value&upcoming=1`; free-typed lines fold into ONE
+  agent item `replacement-cost:free-typed` linking to the soonest order.
+  The wizard's new "On upcoming orders" chip / `?upcoming=1` on
+  `/api/inventory/items` is the same predicate (no catalog cost, no priced
+  RentalWorks unit, a line on a live not-yet-returned order), soonest
+  pickup first — so the queue IS the backlog the panel counted. The
+  backlog's dismissal key is fixed: "Mark handled" hides the chore for
+  that user until they clear the dismissal; a changing count does not
+  bring it back, the urgent rows still surface on their own.
+- NOT done (Wes chose 1, 3, 4 of the four): a 30-day backstop on the
+  past-event providers (quote-aging, inquiry-untouched, payment-info,
+  annual-requested, duplicate-job, driver-hours, partner-photos) — a quote
+  quiet for 90 days still sits there until the job is marked lost.
+
 ## Sign-in is gated on the DOMAIN, not on having an account (2026-09-11)
 - Hugo: warehouse@ "is presenting as a sales view". It was: the NextAuth
   `signIn` callback checks `isAllowedEmailDomain(email)` and NOTHING
@@ -622,7 +1026,103 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   close-ups and extras (out first). Arrow keys, filmstrip, Save on each
   frame. `filedInspection().counterpart` now carries its `inspectorName`,
   `damagePhotos` and `otherPhotos` for it. Read-only, yard-gated.
+- **Julian's check-in side-by-side was ALREADY this, in four places
+  (2026-09-17: "at checking in of the vehicle, the fleet team takes the
+  same photos they took on checkout prep … damage id would position the
+  photos side by side in a check in report").** Do not build a fifth.
+  (1) DURING check-in capture, `InspectionReturnForm` passes
+  `compareTo={checkout?.photos}` and GuidedPhotoCapture renders the
+  check-out shot directly ABOVE the button that replaces it, so the tech
+  photographs how it is while looking at how it was; (2) the filed record
+  shows each slot beside the other end; (3) `/compare` is the large
+  one-angle-at-a-time viewer; (4) the condition report PDF pairs out/back
+  per slot. What was genuinely missing was the DOOR: the post-check-in
+  screen offered the PDF and the filed record but not the comparison, so
+  it was two taps through a page nobody was aiming for. "Compare out vs
+  back" now sits on the screen the crew is already standing on.
 - `npm run test:photo-stamp`.
+
+## The driver's copy of the checkout sheet, on their phone (2026-09-17 — Wes/Julian)
+- Julian's blind-pickup process: check the vehicle out the day before,
+  fill the sheet, "leave a copy of the checkout sheet inside the assigned
+  vehicle." Wes: "give the drivers a link to the PDF checkout … much
+  better for them to have it on their phone." That paper copy was the ONLY
+  thing putting the recorded condition in the driver's hands — the driver
+  page showed them a photo COUNT and never an image, the self-checkout
+  confirmation email goes to the `driver-checkouts` HQ channel and not to
+  them, and their return card was never given the `compareTo` the STAFF
+  return form has.
+- `GET /api/drive/[token]/condition-report` — same `buildInspectionReport`
+  + `ConditionReportDocument` as the yard's route, so the driver's copy
+  cannot drift from the record it copies. Token is the credential (404
+  invalid / 410 expired / 409 cancelled), scoped to the one assignment.
+  Shown on the page as "Vehicle condition → Open the checkout sheet".
+- **FOUR things it must never carry, and does not:** the DRIVER'S LICENCE
+  photo (`buildInspectionReport` filters `DRIVERS_LICENSE` out of every
+  side on purpose), the lockbox/gate CODE (the report has never read
+  `Asset.accessCode`; codes reach a driver only through the earned-and-
+  unlocked path on the page), anyone else's rental, and **anything about
+  the CHECK-IN**.
+- **The driver's copy is the CHECK-OUT sheet ONLY (2026-09-17 — Wes:
+  "typically we deal straight with production for damage reporting — do
+  not need to send to driver after return").** `checkoutSideOnly()` in
+  inspectionReport.ts strips `back`, every pair's `back`, the check-in
+  damage close-ups and extras, `milesDriven` and `newDamage` — which that
+  file's own comment calls "what the renter is actually being told about"
+  — before the driver route renders. **A driver's link lives 45 days**, so
+  without this the person who drove the truck could read the damage found
+  at check-in before the production heard it. Damage is a conversation
+  with the PRODUCTION; the driver is not a party to it. The availability
+  count on the page is `type: 'CHECKOUT'` for the same reason: a vehicle
+  with only a RETURN on file has nothing to show them. Pre-existing damage
+  recorded at CHECK-OUT stays — that is what they received.
+  `npm run test:driver-report-scope` sweeps EVERY field for check-in
+  markers, so a `back`-shaped field added later fails there rather than
+  quietly reaching a driver. Nothing is emailed to a driver after a return
+  either — `selfReturn` mails the `driver-returns` HQ channel.
+- **NOT gated on blind** — Wes said drivers, not blind drivers, and a
+  staffed pickup's driver having the sheet costs nothing. Gated instead on
+  a walk-around actually being FILED on the assignment (staff's or the
+  driver's own); a link to an empty sheet is worse than no link.
+- **`inspectionReportSendingEnabled()` stays dark and is NOT consulted.**
+  That gate is about EMAILING the RENTER a report; handing the person
+  driving the truck the sheet that used to sit on its passenger seat is a
+  different act. Do not wire this route to that flag, and do not wire that
+  flag on to ship a driver copy.
+- Julian's day-before staff walk-around is UNCHANGED and still not gated on
+  blind anywhere. The driver's four sides remain additional, and on a blind
+  pickup they still merge onto the same CHECKOUT Inspection
+  (`adoptedStaffInspection`). **Caveat if both happen: FRONT and REAR are
+  the same slot on both lists and the record page renders the NEWEST photo
+  per slot**, so the driver's pair displays over the staff's from the day
+  before (both are stored; the earlier pair is not visible in the slot grid
+  or the compare view). The driver's other shots (DRIVER_SIDE,
+  PASSENGER_SIDE, ODOMETER, FUEL_GAUGE, INTERIOR) are legacy slots outside
+  Julian's 23 and do not collide.
+- **Drivers are only asked for photos on an UNPLANNED pickup (2026-09-17 —
+  Julian: "we have no need to prompt drivers for checkout photos unless for
+  some reason it is an unplanned pickup").** His process walks the vehicle
+  around the DAY BEFORE, so on a planned blind pickup the condition is
+  already on file before the driver is near the truck and four more sides in
+  a dark yard buy nothing — they also DISPLACE the yard's front and rear on
+  the filed record (same slot ids, newest wins). "Unplanned" is NOT a flag
+  anyone sets: it is DERIVED from whether a CHECKOUT Inspection filed by
+  SIRREEL (`inspectedByDriverId: null`) exists on the assignment. None =
+  nobody got the chance = the four sides stay required, because that truck
+  would otherwise leave with no record either direction.
+  `driverCheckoutDuty()` in `src/lib/drivers/selfCheckout.ts` is the pure
+  rule; `selfCheckoutState` and `completeSelfCheckout` both read it, and the
+  server re-reads the fact rather than trusting the page — this is the gate
+  that lets a truck leave. Mileage follows the same logic (the yard's
+  overnight reading stands). **Photos are never taken AWAY, only
+  un-demanded** — every slot stays offered, because a driver who finds fresh
+  damage in the yard must be able to shoot it, and the notes line records
+  which way it went. `npm run test:driver-checkout-duty`.
+- NOT done: the driver's RETURN card still has no before/after (the staff
+  form's `compareTo`), and nothing warns that a blind pickup is hours away
+  with the driver's invite undelivered, never opened and no inspection
+  filed — there is no action item for blind-pickup readiness and the fleet
+  Today board carries blind + inspection state but no driver-link state.
 
 ## Job welcome email — "here is your link" (2026-09-11)
 - Wes: after the team replies with a quote, "remind us to send the welcome
@@ -1002,6 +1502,202 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   beside Lighting & Electric and the Grip Packages. No column, no geometry,
   no photo. Worth reaching for before the tile if the service ever needs a
   public entrance.
+
+## A declined card has a button now (2026-09-18 — Wes/Jose)
+- Wes: "Jose inputted a card for a client, which was declined, but it says
+  that there's no way for him to ask for a new card. We need a button for
+  that." Two dead ends, in two places, for the same reason: the card ASK is
+  job-scoped and both screens a decline lands on are not.
+  - **The keyed path** (/crm/[id]#cards → "Key in a card the client
+    authorized"). A card that fails the $0 check is deliberately NOT stored,
+    so the 402 was a red sentence with nothing after it — and the ask lives
+    on the job page, which the wallet never named.
+  - **The portal path.** There the unapproved authorization IS stored (the
+    client is mid-form; the rest of their paperwork must not be lost), so
+    the job's Card Authorization tile read "On file · ····4242" over the line
+    "The $0 check was not approved — ask for another card" and offered no
+    control: "Send CC request" renders only in the no-card branch, which is
+    the one branch a declined card is never in.
+- **`cardAskState()` in `src/lib/payments/cardAsk.ts` is the one rule** (pure;
+  `npm run test:card-ask`). MISSING (no card) → "Send CC request"; DECLINED
+  (`validated === false`) and EXPIRED → "Ask for another card", flagged
+  `replacement`. **DECLINED outranks EXPIRED** when a card is both, which it
+  usually is — an expired card also fails the $0 check — and that matches
+  what the tile has said since 2026-09-01. Only an explicit `false` is a
+  decline; the rule keeps "never checked" separate even though today's two
+  readers collapse a null `authRespStat` to false, exactly as the existing
+  "Unvalidated" chip already does.
+- **Nothing sends from the wallet.** `CardAskButton` in CompanyCardsPanel
+  resolves a job and hands the staffer to `/jobs/<id>?card=ask#card-auth`,
+  which opens the SAME review modal every client email goes through — one
+  composer, so the preview, the recipient picker and the confirm cannot
+  drift into a second copy on the CRM page. Job resolution:
+  `?job=` when they walked here from a job tile, else
+  `GET /api/crm/companies/[id]/card-ask-jobs` (`cardAskJobsForCompany` in
+  jobCardOnFile.ts, soonest pickup first, archived/LOST/HOLD out, WRAPPED
+  in because a wrapped job still gets invoiced). **A LIST, never a pick** —
+  with two shows for one production, choosing for the rep is how a card
+  request lands on the wrong job's thread, and the job is what the client
+  reads in the subject. One candidate is a button, several are a choice,
+  none says so plainly rather than dead-ending again.
+- **The email says the right thing.** "Before we can send X out the door, we
+  need a credit card on file" is wrong to the client who typed one in last
+  week — it reads as our mistake and leaves them not knowing theirs was
+  refused. `cardAskClientSentence()` swaps that first sentence;
+  `composeCardAuthEmail` derives the reason SERVER-side off the job's card
+  (booking paperwork first, then the company wallet — the same precedence as
+  `/api/jobs/[id]`), never from a flag the browser passes, so a client can't
+  be told their good card failed. Everything else — the security paragraph,
+  the button, the closer — is unchanged, and MISSING/NONE leave the standard
+  ask byte-for-byte. Deliberately vague about WHY the bank refused it: we
+  don't know and their bank won't tell us. The review modal carries an amber
+  strip saying a card is on file and this asks for a second one.
+- The card already on file **stays** — the client adds another in the portal
+  (Wes 2026-09-03: "we don't wanna remove the first card"), which is what
+  `CcAuthCard`'s "Add another card" has always done.
+- NOT done: nothing chases a replacement that never arrives (no action item
+  for "asked for another card N days ago, still declined"), and a declined
+  charge at the collections desk still has no ask of its own.
+
+### The client is told too (2026-09-18 — Wes: "I don't understand how they were able to submit a card that was declined")
+- They were, on ONE of the three entry paths, and the split is deliberate:
+  **staff keying** (/crm/[id]#cards) and the **company account portal**
+  (`addClientCompanyCard`) both REFUSE a decline and store nothing; the
+  **client's job portal** (`/api/portal/[token]/sign` step `cc`) stores it.
+  That last one is right and stays: the same statement writes their
+  signature, payment preference and cardholder details, so refusing the card
+  would throw all of it away with the client standing there mid-form. **A
+  declined card on file can only have come through the portal** — the keyed
+  path cannot produce one.
+- **What was wrong is that the route answered a bare 200.** `r.ok` was true,
+  `onAuthorized()` fired, and the step collapsed to the green "Credit Card
+  Authorized" panel. The client saw success and walked away; the desk got a
+  `recordCardTrouble` AUTH_DECLINED email about a card only the client could
+  replace. The one person who could fix it in ten seconds, wallet still
+  open, was the one person nobody told.
+- **The storage stays; the success CLAIM goes.** The cc step now carries
+  `cardApproved` (three-state: approved / refused / **never answered** — a
+  gateway that THREW is not a decline, the card may be fine, so the client
+  hears nothing), and the response adds `cardDeclined` + `cardMessage` only
+  on a real refusal. `ok: true` still means "your submission was recorded",
+  which is true either way.
+- **Both halves, or the fix lasts until they refresh.** At SUBMIT the card
+  shows the notice and re-opens capture with the card cleared and the
+  signature/name/ZIP kept. On a RETURN visit `CardsOnFilePanel` replaces the
+  green banner with the red one — computed over the LIST (`usable`), so a
+  production that added a good second card is not nagged.
+- **`authChecked` on `CardOnFileSummary` is the whole safety of this.**
+  `validated` is `authRespStat === 'A'`, false for a refused card AND for
+  every card stored before the $0 check shipped (2026-09-01). On a staff chip
+  that conflation is a shrug; telling a CLIENT their working card was refused
+  by their bank is a false alarm worse than the silence it replaces. Read the
+  pair through `clientCardWasDeclined()` — never `validated` alone — on any
+  client-facing surface. A declined card also stops being selectable as the
+  charge card in `ClientCardRows`.
+- Neither notice guesses WHY (same rule as `cardAskClientSentence`), and both
+  say nothing was charged + what survived. `npm run test:card-ask` pins all
+  of it, including the never-checked false-alarm direction.
+- Known gap: `CardShell`'s `statusLabel` still reads "Authorized" from the
+  paperwork step's own `done`, so the header chip can disagree with a red
+  body. Fixing it means lifting `useClientCards` into `CcAuthCard`, which
+  would fetch on every portal open — deliberately not done.
+
+## Ana can correct an invoice from her own desk (2026-09-17 — Ana)
+- Ana: "how do I update an invoice from my side?" She could not. Both ways of
+  correcting an invoice existed — **regenerate** (rewrite the figures from
+  the order, KEEP the number — Wes 2026-09-01) and **void + re-cut** — but
+  both lived on the JOB page, two screens from `/collections`, which is where
+  she reads "Client asked for a change". And neither could touch the two
+  facts that live on the invoice and nowhere else.
+- **The split that decides every button here: figures belong to the ORDER;
+  the due date and the printed note belong to the INVOICE.** A rate, a line
+  or a late discount is fixed on the order and pulled through. An invoice
+  total that can be typed over reconciles to nothing, so there is no total
+  field and never should be — `PATCH /api/invoices/[id]` takes `dueDate` and
+  `notes`, full stop.
+  - **Due date** — SirReel bills due-on-receipt so the generator stamps the
+    issue date. Terms a client negotiated, or an extension given on the
+    phone, had nowhere to go, so honouring one meant letting the invoice read
+    as delinquent. That date is what every aging figure and "30d late" chip
+    counts from.
+  - **Note** — the PO number the client's A/P wants on the face of the
+    document, a remit instruction, "corrected 9/17". Ana's edit REPLACES it
+    wholesale; the old value is in the AuditLog `invoice.edited` row.
+- **The PDF follows, rendered from the invoice's OWN snapshot** —
+  `renderStoredInvoice()` (extracted from `renderPaidInvoice`, which is now
+  the PAID-only gate in front of it). NOT `generateRentalInvoice`, which
+  re-derives from the live order and would drag unrelated line edits into a
+  document nobody asked to republish. Replace-on-regenerate for the blob.
+  A **PAID** invoice is already rendered on demand (the PAID stamp), so its
+  blob is left alone.
+- **No snapshot → the edit is REFUSED, whatever the status.** The snapshot is
+  what every presentation is drawn from, PAID render included, so a
+  pre-snapshot invoice would move the row and leave the client's PDF saying
+  something else. The refusal names the fix (regenerate first, or void and
+  re-cut). This guard was first written gated on "needs a blob rewrite" and
+  the test caught the PAID hole — keep it unconditional.
+- **A regenerate now CARRIES THE DUE DATE OVER instead of restamping it.**
+  The generator defaults `dueDate` to the issue date, so a rewrite pushed the
+  due date to today: an invoice 20 days late came back 0 days late because
+  somebody corrected OUR arithmetic, and any hand-set terms were silently
+  gone. A correction does not restart the client's clock. (This is also what
+  lets a hand-set due date survive without a new column.)
+- **Two surfaces, one route.** `/collections` → All HQ invoices → **Correct**
+  on the row: the client's change request IN THEIR WORDS
+  (`clientChangeNote` is on the payload now — "asked for a change" with no
+  words sent her to the job page to read one sentence), the due date, the
+  note, a **"Pull the figures through from the order"** button (the
+  regenerate) and a LINK to the order for what is actually billed. The job
+  page's `JobInvoicesPanel` carries the same edit as **Due date & note**
+  beside its existing Update / Send / Void.
+- VOID is the only hard lock — a withdrawn document stays as it was. **PAID
+  is deliberately NOT locked**: a settled invoice still gets asked for a PO
+  number. Billing-gated (`can(role, 'billing')`) like void, regenerate and
+  reopen. `npm run test:invoice-edits`.
+- Unchanged and still the answer for money: the order is the book. Reopen a
+  CLOSED/INVOICED order (`POST /api/orders/[id]/reopen`, billing-gated) to
+  edit lines or discounts, then pull the figures through.
+
+## Orders by the day they were created — checking the EOD report (2026-09-17 — Ana)
+- Ana: "Is there a way I can check the drop down list of orders and quotes and
+  specify a certain date? … there is no filter for finding orders grouped
+  together by date. And a way to calculate the total value while I'm
+  searching would be great, too. That way I know if the EOD report that gets
+  generated is accurate or not."
+- **The value total already existed** (the `{total} orders · $X total` line in
+  the /orders header, `valueTotal` off the whole filtered set, not the page)
+  and follows every filter including the new dates. What was missing was the
+  date filter and, more importantly, a count Ana could hold against the report.
+- **`tallyOrderDay()` in `src/lib/orders/dayTally.ts` is the ONE definition,
+  and both surfaces read it** — the EOD report renders it into the evening
+  email, /orders renders it above the table. A date filter that counted rows
+  its own way would not CHECK the report; it would be a second number to argue
+  with. Pure, `npm run test:order-day-tally`.
+  - A quote is `quoteStatus` DRAFT or SENT — never `status`; an order can be
+    BOOKED while quoteStatus lags, and the question is whether the client said
+    yes. Orders are worth `bookedTotal ?? total` (`total` keeps moving with
+    post-booking edits), quotes are worth `total`.
+  - CANCELLED is out. DRAFT, LOST and ARCHIVED are IN — a quote written and
+    lost the same afternoon was still written.
+- **The card is deliberately NOT a description of the table under it.** The
+  /orders list hides drafts, lost and archived by default and still shows
+  cancelled rows, so the row count differs BOTH ways. `reconciliationNote()`
+  names it in one sentence ("Counts 1 draft, 1 lost … Leaves out 1 cancelled
+  order the list still shows") and says nothing on a day where they agree. A
+  card that quietly counted only the visible rows would be worse than no card:
+  a confirmation that agrees with nothing. The tally query therefore ignores
+  `where` and is built from the window + scope alone — a status filter must
+  not move the figures being checked.
+- **Pacific days, not UTC** (`createdFrom` / `createdTo`, `YYYY-MM-DD`, both
+  ends inclusive, either one alone means that single day). A UTC cut would put
+  every order written after 4pm into tomorrow's count and the two screens would
+  disagree every evening. The day helpers moved out of eodReport.ts (which
+  imports prisma) to `src/lib/time/pacificDay.ts` so the tally and its tests
+  stay pure; eodReport re-exports them, so its dozen importers are unchanged.
+- The EOD panel now prints the COUNT beside each of those two figures — it only
+  ever showed dollars — and links to `/orders?createdFrom=<date>&createdTo=<date>`.
+  The orders page reads that deep link off `window.location` in an effect, NOT
+  `useSearchParams` (a client page with no Suspense boundary fails `next build`).
 
 ## "Approved — book it" names the order and takes you to it (2026-09-17 — Wes)
 - Wes, on SR-JOB-0312: "It says that the production supply order is booked

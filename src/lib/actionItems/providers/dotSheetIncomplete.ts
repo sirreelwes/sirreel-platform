@@ -27,6 +27,7 @@
 import type { OrderStatus, UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import type { ActionItem, ActionItemProvider, ProviderContext } from '@/lib/actionItems/types'
+import { PICKUP_WINDOW_DAYS, startOfUtcDay } from '@/lib/actionItems/rules'
 import { dotSheetStatesForOrders } from '@/lib/fleet/dotSheet'
 import { deskBlockerSentence } from '@/lib/fleet/dotSheetPublish'
 
@@ -46,16 +47,24 @@ export const dotSheetIncompleteProvider: ActionItemProvider = {
   id: 'dot-sheet-incomplete',
   kind: 'DERIVED',
   async fetch(_ctx: ProviderContext): Promise<ActionItem[]> {
-    const today = new Date()
-    today.setUTCHours(0, 0, 0, 0)
+    const today = startOfUtcDay()
+    const until = new Date(today.getTime() + PICKUP_WINDOW_DAYS * 86_400_000)
 
-    // Candidates first: a committed order, not ended, with a booking (no
-    // booking = no assignments = nothing to describe).
+    // Candidates first: a committed order with a booking (no booking = no
+    // assignments = nothing to describe), going out INSIDE the pickup window.
+    //
+    // The window is the convention from rules.ts (Wes 2026-09-17: "action
+    // items that are persistent on the screen even if their time of action
+    // has passed"). It matters more here than for most providers: with no BIT
+    // inspections on file at all, every committed order in the book would
+    // otherwise raise a row on day one, which is the pile he was complaining
+    // about rather than a worklist. A truck going out in three weeks is a row
+    // that will arrive when it means something.
     const candidates = await prisma.order.findMany({
       where: {
         status: { in: [...COMMITTED] },
         bookingId: { not: null },
-        OR: [{ endDate: null }, { endDate: { gte: today } }],
+        startDate: { gte: today, lte: until },
         job: { status: { not: 'LOST' }, archivedAt: null },
       },
       select: {
@@ -96,6 +105,9 @@ export const dotSheetIncompleteProvider: ActionItemProvider = {
         // The fix is on the unit, so point at Fleet rather than the order.
         href: '/fleet',
         occurredAt: o.startDate ?? o.updatedAt,
+        // Pickup-tied: the panel labels the row "pickup in 4d" rather than by
+        // when the order happened to be created, and sorts it soonest-first.
+        dueAt: o.startDate ?? null,
         source: 'dot-sheet-incomplete',
         dismissal: { kind: 'sideRow' },
       })

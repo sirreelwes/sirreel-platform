@@ -25,6 +25,13 @@
  *     run of similar items shares a price.
  *   - Coverage counters update live; the queue shrinks as items get
  *     completed ("needs …" views drop finished rows automatically).
+ *
+ * `/inventory/wizard?view=value&upcoming=1` — the Action Items backlog
+ * row ("Add replacement costs — N catalog rows") lands here. `upcoming=1`
+ * asks the items API for only the rows on a live, not-yet-returned order
+ * that nothing can value (no catalog cost, no RentalWorks unit cost),
+ * soonest pickup first, so the queue IS the backlog the panel counted.
+ * The chip in the controls turns it off again. (Wes 2026-09-17.)
  */
 
 import { useCallback, useEffect, useMemo, useState } from 'react'
@@ -98,6 +105,9 @@ export default function InventoryWizardPage() {
 
   const [mode, setMode] = useState<ViewMode>('either')
   const [catFilter, setCatFilter] = useState('') // category NAME (queue groups by name)
+  // "On upcoming orders" — read from the URL once; the chip toggles it.
+  const [upcomingOnly, setUpcomingOnly] = useState(false)
+  const [urlRead, setUrlRead] = useState(false)
   const [cursor, setCursor] = useState(0)
 
   const [costInput, setCostInput] = useState('')
@@ -105,14 +115,24 @@ export default function InventoryWizardPage() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
 
-  // ── Initial load: whole active inventory in one shot ──────────────
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    if (params.get('upcoming') === '1') setUpcomingOnly(true)
+    const view = params.get('view')
+    if (view && view in VIEW_LABELS) setMode(view as ViewMode)
+    setUrlRead(true)
+  }, [])
+
+  // ── Initial load: whole active inventory in one shot (or, with the
+  //    upcoming filter on, just the unvalued rows going out) ───────────
+  useEffect(() => {
+    if (!urlRead) return
     let cancelled = false
     ;(async () => {
       setLoading(true)
       setLoadError('')
       try {
-        const res = await fetch('/api/inventory/items?limit=1000')
+        const res = await fetch(`/api/inventory/items?limit=1000${upcomingOnly ? '&upcoming=1' : ''}`)
         const data = await res.json()
         if (cancelled) return
         if (!res.ok) { setLoadError(data.error || `Load failed (HTTP ${res.status})`); return }
@@ -134,7 +154,7 @@ export default function InventoryWizardPage() {
       }
     })()
     return () => { cancelled = true }
-  }, [])
+  }, [urlRead, upcomingOnly])
 
   const queue = useMemo(() => buildQueue(items, mode, catFilter), [items, mode, catFilter])
   const current = queue[cursor] ?? null
@@ -297,6 +317,17 @@ export default function InventoryWizardPage() {
           <option value="">All categories</option>
           {categories.map((c) => <option key={c.id} value={c.name}>{c.name} ({c._count.items})</option>)}
         </select>
+        <button
+          type="button"
+          onClick={() => setUpcomingOnly((v) => !v)}
+          aria-pressed={upcomingOnly}
+          title="Only rows on a live order that nothing can value yet, soonest pickup first"
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+            upcomingOnly ? 'bg-amber-600 border-amber-600 text-white' : 'bg-zinc-800 border-zinc-700 text-zinc-400 hover:text-white'
+          }`}
+        >
+          On upcoming orders
+        </button>
       </div>
 
       {loading ? (
