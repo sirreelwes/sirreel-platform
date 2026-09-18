@@ -21,6 +21,9 @@
 import {
   cardAskState,
   cardAskClientSentence,
+  clientCardWasDeclined,
+  CARD_DECLINED_AT_SUBMIT,
+  CARD_DECLINED_ON_FILE,
   type CardAskInput,
   type CardAskReason,
 } from '../../src/lib/payments/cardAsk'
@@ -184,6 +187,62 @@ for (const reason of ['MISSING', 'NONE'] as CardAskReason[]) {
   })
   assert(body === standard, `cardAskReason ${reason} leaves the standard ask untouched`)
 }
+
+console.log('\nWhat the CLIENT is told in their own portal\n')
+
+// The hazard this field exists for. `validated: false` covers two different
+// facts and only one of them may ever reach a client: every card stored
+// before the $0 check shipped (2026-09-01) has a null authRespStat, so it
+// arrives here as validated:false / authChecked:false. Calling that a
+// decline would tell a production's accounting desk their working card was
+// refused by their bank — a false alarm worse than the silence it replaces.
+assert(
+  clientCardWasDeclined({ authChecked: true, validated: false }) === true,
+  'asked the gateway and told no → declined',
+)
+assert(
+  clientCardWasDeclined({ authChecked: false, validated: false }) === false,
+  'NEVER CHECKED is not a decline — the legacy-card false alarm',
+)
+assert(
+  clientCardWasDeclined({ authChecked: true, validated: true }) === false,
+  'approved card is not declined',
+)
+assert(
+  clientCardWasDeclined({}) === false,
+  'a card carrying neither field says nothing — fails quiet, not loud',
+)
+assert(
+  clientCardWasDeclined({ validated: false }) === false,
+  'validated:false ALONE never reads as a decline',
+)
+
+// Both notices have the same job, so both must do all three things. A client
+// who is not told nothing was charged phones the desk; one who is not told
+// their signature survived redoes the whole step.
+for (const [name, text] of [
+  ['at submit', CARD_DECLINED_AT_SUBMIT],
+  ['on file', CARD_DECLINED_ON_FILE],
+] as const) {
+  assert(/did not approve/i.test(text), `${name}: says the bank did not approve it`)
+  assert(/nothing was charged/i.test(text), `${name}: says nothing was charged`)
+  assert(/different card/i.test(text), `${name}: asks for a different card`)
+  // Same rule as the staff-side sentence: we do not know why, and the
+  // client's bank will not tell us. Guessing at a production's A/P desk is
+  // its own phone call.
+  assert(
+    !/insufficient|expired|funds|fraud|frozen|limit|stolen/i.test(text),
+    `${name}: does NOT guess why the bank refused it`,
+  )
+}
+assert(
+  /signature/i.test(CARD_DECLINED_AT_SUBMIT),
+  'at submit: says the signature survived, so nobody redoes the step',
+)
+assert(
+  /stays on file/i.test(CARD_DECLINED_ON_FILE),
+  'on file: says the dead card is not being removed underneath them',
+)
 
 console.log('')
 if (failures.length) {

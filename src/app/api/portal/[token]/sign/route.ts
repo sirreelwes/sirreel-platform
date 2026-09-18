@@ -4,6 +4,7 @@ import { recordCardTrouble } from '@/lib/portal/cardTrouble'
 import { notifyPortalPaperwork } from '@/lib/email/notifyPortalPaperwork'
 import { applyLcdwElectionToJobOrders } from '@/lib/lcdw/applyElectionToOrders'
 import { mirrorPaperworkCardToWallet } from '@/lib/payments/companyCards'
+import { CARD_DECLINED_AT_SUBMIT } from '@/lib/payments/cardAsk'
 import { normalizePaymentPreference, paymentPreferenceLabel } from '@/lib/payments/paymentPreference'
 import { prisma } from '@/lib/prisma'
 
@@ -84,6 +85,16 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
     const body = await req.json()
     const ip = req.headers.get('x-forwarded-for') || 'unknown'
     const now = new Date()
+    // Set by the cc step, read by the response at the bottom — declared here
+    // because the answer has to outlive the block that computes it.
+    //
+    // Three-state on purpose, and it is what the CLIENT is told (Wes
+    // 2026-09-18). true = approved. false = the gateway answered no.
+    // null = we never got an answer: another step entirely, no card on this
+    // submission, or the gateway threw. A THROWN call is not a decline — the
+    // card may be perfectly good — so the client hears nothing and the
+    // store-it-anyway behaviour in the cc step is unchanged.
+    let cardApproved: boolean | null = null
 
     if (body.step === 'agreement') {
       await prisma.$executeRawUnsafe(`
@@ -264,6 +275,7 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
           authRespStat = zero.respstat ?? null
           authRespText = zero.resptext?.slice(0, 300) ?? null
           authValidatedAt = new Date()
+          cardApproved = isApproved(zero)
           if (!isApproved(zero)) {
             console.error(
               `[cc-auth] $0 validation NOT approved for token ${params.token.slice(0, 8)}: ` +
@@ -371,7 +383,19 @@ export async function POST(req: NextRequest, { params }: { params: { token: stri
       notifyPortalPaperwork({ token: params.token, step: 'studio' })
     }
 
-    return NextResponse.json({ ok: true })
+    // `ok` still means "your submission was recorded", which is true either
+    // way — the row, the signature and the details are written before this
+    // line whatever the gateway said. What changes is that a decline no
+    // longer travels as unqualified success: the card reports it, and the
+    // client is asked for another one while they are still on the page
+    // (Wes 2026-09-18). Absent on every other step and on an approval, so
+    // nothing else has to know about it.
+    return NextResponse.json({
+      ok: true,
+      ...(cardApproved === false
+        ? { cardDeclined: true, cardMessage: CARD_DECLINED_AT_SUBMIT }
+        : {}),
+    })
   } catch (err: any) {
     console.error('[portal/sign]', err)
     return NextResponse.json({ error: err.message }, { status: 500 })

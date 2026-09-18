@@ -36,6 +36,19 @@ export interface CardOnFileSummary {
   authorizedAt: Date | null
   /** True when the $0 stored-credential authorization came back approved. */
   validated: boolean
+  /**
+   * Did we ever ASK the gateway about this card?
+   *
+   * `validated` alone cannot answer it: it is `authRespStat === 'A'`, so it
+   * reads false for a refused card and equally false for one stored before
+   * the $0 validation shipped (2026-09-01), which is most of the legacy
+   * paperwork rows. Staff surfaces can live with that conflation — the
+   * "Unvalidated" chip has meant both since it shipped. A CLIENT-FACING
+   * surface cannot: "your bank declined this" about a card nobody checked is
+   * a false alarm sent to a production's accounting desk. Read the two
+   * together via `clientCardWasDeclined` in lib/payments/cardAsk.ts.
+   */
+  authChecked: boolean
   /** MM/YY already past. Not a hard block — the gateway decides — but staff
    *  should see it before reaching for the card. */
   expired: boolean
@@ -122,6 +135,8 @@ export async function listCompanyCards(companyId: string): Promise<CardOnFileSum
     paymentPreference: normalizePreference(c.paymentPreference),
     authorizedAt: c.authValidatedAt ?? c.createdAt,
     validated: c.authRespStat === 'A',
+    // A recorded gateway answer, whatever it said. Null = never asked.
+    authChecked: c.authRespStat != null,
     expired: isExpiryPast(c.expiry, now),
     source: c.source,
     authorizationRef: c.authorizationRef,
@@ -142,6 +157,9 @@ export async function listCompanyCards(companyId: string): Promise<CardOnFileSum
       paymentPreference: normalizePreference(p.ccPaymentPreference),
       authorizedAt: p.ccAuthSignedAt,
       validated: p.ccAuthRespStat === 'A',
+      // Most legacy rows predate the $0 validation entirely — false here, not
+      // "declined". That is the whole point of the field.
+      authChecked: p.ccAuthRespStat != null,
       expired: isExpiryPast(p.ccCardExpiry, now),
       source: 'PAPERWORK',
       authorizationRef: null,

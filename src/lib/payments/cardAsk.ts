@@ -142,3 +142,63 @@ export function cardAskClientSentence(
   }
   return null
 }
+
+/**
+ * ── Telling the CLIENT, in their own portal ────────────────────────────
+ *
+ * Wes, 2026-09-18: "I don't understand how they were able to submit a card
+ * that was declined." They were, and the answer is deliberate on one path and
+ * a hole on another:
+ *
+ *   - Staff keying a card (/crm/[id]#cards) is REFUSED on a decline. Nothing
+ *     is stored. That is correct and unchanged.
+ *   - The client's own portal (/api/portal/[token]/sign, step cc) STORES the
+ *     row anyway, because that one statement also carries their signature,
+ *     their payment preference and their cardholder details — refusing the
+ *     card would throw all of it away with the client standing there mid-form.
+ *     That much is right.
+ *
+ * What was wrong is that the route then answered 200 and the card reported
+ * itself authorized. The client saw a green "Credit Card Authorized", believed
+ * they were done, and walked away; the desk got an email about a card only the
+ * client could replace. The one person who could fix it in ten seconds, with
+ * their wallet still open, was the one person nobody told.
+ *
+ * So the storage stays and the SUCCESS CLAIM goes.
+ *
+ * ── Why "declined" is not the same as "not validated" ──────────────────
+ *
+ * `CardOnFileSummary.validated` is `authRespStat === 'A'`, which reads FALSE
+ * for a card that was refused AND for one nobody ever checked — every card
+ * stored before the $0 validation shipped (2026-09-01) is in the second group.
+ * On a staff surface that conflation is a chip somebody shrugs at. On this one
+ * it would tell a client their perfectly good card was refused by their bank,
+ * which is worse than the silence it replaces. Hence `authChecked`: these
+ * notices fire only on a card we actually asked the gateway about and got a
+ * "no" for.
+ *
+ * Both strings say the same three things — it did not go through, nothing was
+ * charged, add a different one — and neither guesses WHY. We do not know, the
+ * client's bank will not tell us, and "insufficient funds" guessed wrong at a
+ * production's accounting desk is its own phone call.
+ */
+
+/** Shown the moment a client's card comes back declined, on the form they
+ *  just submitted. Names what survived, so nobody redoes their signature. */
+export const CARD_DECLINED_AT_SUBMIT =
+  'Your bank did not approve this card, so we cannot use it for the rental. Nothing was charged. Your signature and details are saved — please add a different card below.'
+
+/** Shown to a client who comes back later to a card that is on file and dead.
+ *  Without it the portal greets them with the same green "Authorized" panel
+ *  and the fix above lasts exactly until they refresh the page. */
+export const CARD_DECLINED_ON_FILE =
+  'Your bank did not approve this card, so we cannot charge it. Nothing was charged. Please add a different card — the one below stays on file until you do.'
+
+/** Is this card one we asked the gateway about and were told no?
+ *  False for a card that was approved, and false for one never checked. */
+export function clientCardWasDeclined(card: {
+  authChecked?: boolean | null
+  validated?: boolean | null
+}): boolean {
+  return card.authChecked === true && card.validated === false
+}
