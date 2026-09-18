@@ -34,6 +34,8 @@ interface Preview {
   deliveryRequested: boolean
   pickableCount: number
   warehouseLineCount: number
+  /** Lines added after the floor filed this order's check-out sheet. */
+  addedSincePull: Array<{ id: string; description: string; quantity: number }>
   blockers: string[]
   ready: boolean
   recipientCount: number
@@ -176,6 +178,26 @@ export function SendToWarehouseModal({
                 ))}
               </dl>
 
+              {/* The rep is looking at an order the warehouse has already
+                  pulled. Say what is actually being asked of them, and
+                  what the floor will get (Wes, 2026-09-18). */}
+              {preview.addedSincePull.length > 0 && (
+                <div className="flex gap-2.5 rounded-lg border border-chip-warn-fg/40 bg-chip-warn-bg px-3 py-2.5 text-[13px] text-chip-warn-fg">
+                  <AlertTriangle size={16} className="mt-0.5 shrink-0" aria-hidden />
+                  <div>
+                    <span className="font-semibold">
+                      This order has already been pulled — {preview.addedSincePull.length} line
+                      {preview.addedSincePull.length === 1 ? '' : 's'} added since:
+                    </span>{' '}
+                    {preview.addedSincePull.map((l) => `${l.quantity} × ${l.description}`).join(', ')}.
+                    The warehouse gets a sheet for just{' '}
+                    {preview.addedSincePull.length === 1 ? 'that line' : 'those lines'}, and the
+                    check-out sheet will show{' '}
+                    {preview.addedSincePull.length === 1 ? 'it' : 'them'} uncounted.
+                  </div>
+                </div>
+              )}
+
               {nothingToPull && (
                 <div className="text-sm text-chip-bad-fg bg-chip-bad-bg border border-chip-bad-fg/30 rounded-lg px-3 py-2">
                   Nothing to pull — every line on this order is a fee, discount or labor.
@@ -254,7 +276,13 @@ export function SendToWarehouseModal({
             className="inline-flex items-center gap-1.5 text-[13px] font-semibold px-3.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-500 text-white disabled:opacity-50"
           >
             <Send size={14} aria-hidden />
-            {sending ? 'Sending…' : preview?.lastSentAt ? 'Send updated pull order' : 'Send to warehouse'}
+            {sending
+              ? 'Sending…'
+              : preview && preview.addedSincePull.length > 0
+                ? 'Send the added gear to the warehouse'
+                : preview?.lastSentAt
+                  ? 'Send updated pull order'
+                  : 'Send to warehouse'}
           </button>
         </div>
       </div>

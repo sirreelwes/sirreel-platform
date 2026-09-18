@@ -56,6 +56,10 @@ interface QueueItem {
   }
   itemCount: number
   counts: { PENDING_PICK: number; PICKED: number; STAGED: number; LOADED: number }
+  /** Gear added to the order after its check-out sheet was filed. The
+   *  list can read STAGED or LOADED and still owe the floor a pull
+   *  (Wes 2026-09-18) — see lib/orders/addedAfterPull.ts. */
+  addedSincePull: number
 }
 
 const STATUS_BADGE: Record<QueueItem['status'], string> = {
@@ -169,6 +173,14 @@ function WarehousePickQueuePageInner() {
                           Sent over
                         </span>
                       )}
+                      {/* The status badge next to this one says the list
+                          is done. For everything that was on it when they
+                          worked it, it is — this is the part that isn't. */}
+                      {p.addedSincePull > 0 && (
+                        <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded border bg-rose-900/40 text-rose-200 border-rose-800">
+                          {p.addedSincePull} added · still to pull
+                        </span>
+                      )}
                       {p.assignedTo && (
                         <span className="text-[11px] text-zinc-400">· {p.assignedTo.name}</span>
                       )}
@@ -212,14 +224,33 @@ function WarehousePickQueuePageInner() {
                     is for. The scan session is still one click away for
                     anyone who wants it. */}
                 <div className="mt-3 pt-3 border-t border-zinc-800 flex flex-wrap items-center gap-2">
+                  {/* Added gear is its own pull, so it gets its own sheet
+                      — and it takes the loud button, because reprinting
+                      forty worked lines to find two new ones is how the
+                      new ones get missed. */}
+                  {p.addedSincePull > 0 && (
+                    <a
+                      href={`/api/orders/${p.order.id}/pick-list-pdf?added=1`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="inline-flex items-center gap-1.5 text-[12px] font-semibold rounded-lg px-3 py-2 bg-rose-700 hover:bg-rose-600 text-white"
+                    >
+                      <Printer size={14} aria-hidden />
+                      Print the {p.addedSincePull} added line{p.addedSincePull === 1 ? '' : 's'}
+                    </a>
+                  )}
                   <a
                     href={`/api/orders/${p.order.id}/pick-list-pdf`}
                     target="_blank"
                     rel="noreferrer"
-                    className="inline-flex items-center gap-1.5 text-[12px] font-semibold rounded-lg px-3 py-2 bg-amber-600 hover:bg-amber-500 text-white"
+                    className={`inline-flex items-center gap-1.5 text-[12px] font-semibold rounded-lg px-3 py-2 ${
+                      p.addedSincePull > 0
+                        ? 'border border-zinc-700 text-zinc-300 hover:bg-zinc-800'
+                        : 'bg-amber-600 hover:bg-amber-500 text-white'
+                    }`}
                   >
                     <Printer size={14} aria-hidden />
-                    Print pick list
+                    {p.addedSincePull > 0 ? 'Print the whole sheet' : 'Print pick list'}
                   </a>
                   <Link
                     href={`/reports/orders/${p.order.id}?edge=OUT`}

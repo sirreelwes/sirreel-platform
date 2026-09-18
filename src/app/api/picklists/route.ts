@@ -16,6 +16,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requirePickerRole } from '@/lib/warehouse/requirePickerRole'
+import { addedAfterPullForOrders, addedFor } from '@/lib/orders/addedAfterPull'
 
 export const dynamic = 'force-dynamic'
 
@@ -101,6 +102,12 @@ export async function GET(req: NextRequest) {
     ],
   })
 
+  // Gear added to an order the floor has already pulled. A list that
+  // reached STAGED or LOADED still reads as done — and it is done, for
+  // everything that was on it when they worked it. The new lines are a
+  // second pull, and the row has to say so (Wes, 2026-09-18).
+  const added = await addedAfterPullForOrders(rows.map((r) => r.order.id))
+
   const picklists = rows.map((r) => {
     const counts = { PENDING_PICK: 0, PICKED: 0, STAGED: 0, LOADED: 0 }
     for (const i of r.items) {
@@ -120,6 +127,9 @@ export async function GET(req: NextRequest) {
       order: r.order,
       itemCount: r.items.length,
       counts,
+      /** Lines added since the check-out sheet was filed — still to pull,
+       *  whatever this list's status says. */
+      addedSincePull: addedFor(added, r.order.id).gear.length,
     }
   })
 
