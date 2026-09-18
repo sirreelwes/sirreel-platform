@@ -61,10 +61,35 @@ export interface NegotiatedAgreement {
    * under a heading that SAYS they are additions — a client who reads this
    * document must be able to see what is their counsel's text and what is
    * not, without diffing it against their own file.
+   *
+   * ── An appended clause the client REDLINES is overridden HERE ──────────
+   * Spell the agreed body out in this array. Do NOT edit the clause in
+   * contractClauses.ts to match: `canonical('30')` is the baseline
+   * Third-Party Equipment clause, and the same body is rendered by
+   * RentalAgreementBody (the portal's readable agreement),
+   * SignedAgreementDocument (every signed copy) and the review tooling's
+   * baseline map. Editing it there renegotiates that clause for every
+   * client at once, silently, on the strength of one client's counsel.
+   *
+   * An override is `{ ...canonical('30'), ref: …, body: '<agreed text>' }`
+   * with a comment saying whose redline it came from and when. The digest in
+   * npm run test:negotiated-agreement covers these clauses too, so an edit
+   * to either side — here or in the canonical module — fails the test rather
+   * than reaching a filed contract unnoticed.
    */
   appendedClauses: CanonicalClause[]
   /** Company names this document is the master for. Filing script targets these. */
   companies: string[]
+  /**
+   * Registry name → the company's EXACT name in the DB, where the two differ.
+   *
+   * Matching stays EXACT — an alias is a human stating which row, not the
+   * lookup loosening its rule and picking a near-match. Filing a contract
+   * against the wrong company is the failure worth being rigid about, and
+   * this client is the reason: "Party Giraffes" also near-matches "Giraffe
+   * Air LLC DBA Studio Sands", which is somebody else entirely.
+   */
+  companyAliases?: Record<string, string>
   /**
    * The agreed coverage window, as YYYY-MM-DD.
    *
@@ -126,6 +151,12 @@ export const GRADUATION_DAY_2026: NegotiatedAgreement = {
     },
   ],
   companies: ['Graduation Day Productions', 'Party Giraffes'],
+  // The CRM row carries the legal entity. Confirmed against the company rows
+  // themselves — it is the name in journals/spend-rollup-2026-08-28 and
+  // journals/company-coi-expiry-sync-2026-09-09 (company
+  // 296f798c-c8d6-49af-8019-d932ce1ac9f4). Filing still matches exactly, so a
+  // renamed row refuses and names the candidates rather than guessing.
+  companyAliases: { 'Party Giraffes': 'Party Giraffes, LLC' },
   // Wes, 2026-09-15: "effective 5/15 through 12/31" — 5/15 being the date on
   // their counsel's PDF, the day the redline was settled.
   effectiveDate: '2026-05-15',
@@ -136,6 +167,27 @@ export const NEGOTIATED_AGREEMENTS: NegotiatedAgreement[] = [GRADUATION_DAY_2026
 
 export function findNegotiatedAgreement(key: string): NegotiatedAgreement | undefined {
   return NEGOTIATED_AGREEMENTS.find((a) => a.key === key)
+}
+
+/**
+ * The negotiated agreement on file for a company, matched on the name its
+ * CRM row carries — the same resolution the filing task uses, aliases
+ * included.
+ *
+ * This is what lets the account portal offer a client THEIR document for
+ * signature rather than our baseline: `offerAnnualForSignature` asks this
+ * first and only falls back to the standard agreement when the answer is
+ * nothing. Matching stays EXACT (see `companyAliases`) — a near-match here
+ * would put one client's negotiated terms in front of another.
+ */
+export function negotiatedAgreementForCompany(
+  companyName: string | null | undefined,
+): NegotiatedAgreement | undefined {
+  const name = (companyName ?? '').trim()
+  if (!name) return undefined
+  return NEGOTIATED_AGREEMENTS.find((a) =>
+    a.companies.some((registryName) => (a.companyAliases?.[registryName] ?? registryName) === name),
+  )
 }
 
 /** The appended addenda are the canonical ones, unmodified. */

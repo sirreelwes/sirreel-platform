@@ -111,6 +111,7 @@ export const kitIncompleteProvider: ActionItemProvider = {
         priority: urgent ? 'high' : 'medium',
         href: `/orders/${order.id}`,
         occurredAt: starts ?? today,
+        dueAt: starts ?? null,
         source: 'kit-incomplete',
         dismissal: { kind: 'sideRow' },
       })

@@ -164,9 +164,16 @@ export function CheckReportForm({
    * already on file keeps its numbers: those were counted by a person,
    * and re-opening one is a correction, not a re-count from nothing.
    */
+  // A filed sheet's lines start counted — somebody stood there and
+  // counted them. EXCEPT a line the sheet has no row for: that gear was
+  // added to the order after the pull, nobody has touched it, and
+  // pre-filling it as counted is exactly how a truck leaves without it
+  // (Wes, 2026-09-18). It starts at zero, like a fresh sheet's line.
   const startsCounted = (l: DraftLine) =>
     isFleetLine(l) ||
-    (draft.filed ? l.onSheet : l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note)
+    (draft.filed
+      ? l.onSheet && !l.addedAfterPull
+      : l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note)
   const [rows, setRows] = useState<Row[]>(() =>
     draft.lines.map((l) => {
       const counted = startsCounted(l)
@@ -199,11 +206,27 @@ export function CheckReportForm({
   /** Nothing files without a name — Wes, 2026-09-15: "we should require
    *  a name for any pull or checkin of items". */
   const nameMissing = !preppedBy.trim()
-  /** Lines a previous pass left for later — what "Print what's left" and
-   *  the header count as the remainder. */
+  /** Gear added to the order after this sheet was filed. Nobody pulled
+   *  it — to the floor it is a new order, so it prints on its own sheet
+   *  and counts as work still owed (lib/orders/addedAfterPull.ts). */
+  const addedSincePull = useMemo(
+    () => new Set(draft.lines.filter((l) => l.addedAfterPull).map((l) => l.orderLineItemId)),
+    [draft.lines],
+  )
+  /** How many of those the floor is actually being asked to go and get.
+   *  Zero once the truck is back — the server stops counting there, and
+   *  the uncounted rows stay uncounted (checkReports.reportDraft). */
+  const addedToPull = draft.filed?.addedSince ?? 0
+  /** Everything still to pull — what "Print what's left" and the header
+   *  count as the remainder: lines a previous pass held back, plus the
+   *  lines added since it. */
   const leftByEarlierPass = useMemo(
-    () => new Set(draft.filed?.partial ? draft.lines.filter((l) => !l.onSheet).map((l) => l.orderLineItemId) : []),
-    [draft.filed, draft.lines],
+    () =>
+      new Set([
+        ...(draft.filed?.partial ? draft.lines.filter((l) => !l.onSheet).map((l) => l.orderLineItemId) : []),
+        ...addedSincePull,
+      ]),
+    [draft.filed, draft.lines, addedSincePull],
   )
   // ── Photo of the paper ────────────────────────────────────────────
   // Wes, 2026-09-03: photograph the marked-up sheet and let HQ read it.
@@ -461,8 +484,13 @@ export function CheckReportForm({
     .map((r) => r.orderLineItemId)
   const pickedUpWhereWeLeftOff = leftByEarlierPass.size > 0 && leftIds.length > 0
   const printIds = pickedUpWhereWeLeftOff ? leftIds : onSheetIds
+  /** Only the added gear is outstanding → say so. A sheet of just the
+   *  new lines IS the "as if it were a new order" pull. */
+  const addedOnlyRemainder = !draft.filed?.partial && addedToPull > 0
   const sheetLabel = pickedUpWhereWeLeftOff
-    ? `Print what's left (${leftIds.length})`
+    ? addedOnlyRemainder
+      ? `Print the ${leftIds.length} added line${leftIds.length === 1 ? '' : 's'}`
+      : `Print what's left (${leftIds.length})`
     : offSheet.length
       ? `Print these ${onSheetIds.length} line${onSheetIds.length === 1 ? '' : 's'}`
       : 'Print a fresh sheet'
@@ -867,6 +895,23 @@ export function CheckReportForm({
             sheet anyway — it goes onto the same lines, and the agent sees whatever changed.
           </p>
         )}
+        {/* A finished sheet with gear added under it is the miss this
+            screen shipped with: the added lines used to read exactly like
+            the ones the crew counted (Wes, 2026-09-18). It is the first
+            thing the banner says now. */}
+        {addedToPull > 0 && (
+          <p className="text-[13px] text-chip-warn-fg mt-2 border border-chip-warn-fg/30 bg-chip-warn-bg rounded-lg px-3 py-2">
+            <b>
+              {addedToPull} line{addedToPull === 1 ? '' : 's'}{' '}
+              {addedToPull === 1 ? 'was' : 'were'} added to this order after the sheet was filed.
+            </b>{' '}
+            {addedToPull === 1 ? 'It has' : 'They have'} not been {isOut ? 'pulled' : 'counted'} —{' '}
+            {addedToPull === 1 ? 'it is' : "they're"} below with{' '}
+            {addedToPull === 1 ? 'an empty count' : 'empty counts'}. Print{' '}
+            {addedToPull === 1 ? 'it' : 'them'} and {isOut ? 'pull' : 'count'}{' '}
+            {addedToPull === 1 ? 'it' : 'them'} like a new order.
+          </p>
+        )}
         {draft.filed && (
           <div className="text-[13px] text-lt-fg2 mt-2 border border-lt-hairline bg-lt-card rounded-lg px-3 py-2">
             {draft.filed.partial ? (
@@ -1182,7 +1227,13 @@ export function CheckReportForm({
                   <div className="text-lt-fg2 text-[13px] truncate">
                     {r.qualifier && <span>{r.qualifier} · </span>}
                     {awaiting ? (
-                      <span className="text-lt-fg3">{isOut ? 'not pulled yet' : 'not counted yet'}</span>
+                      <span className="text-lt-fg3">
+                        {r.addedAfterPull
+                          ? `added after the sheet was filed · ${isOut ? 'not pulled yet' : 'not counted yet'}`
+                          : isOut
+                            ? 'not pulled yet'
+                            : 'not counted yet'}
+                      </span>
                     ) : carriedBy ? (
                       <span>
                         counted by <b className="font-semibold text-lt-fg">{carriedBy.name}</b>

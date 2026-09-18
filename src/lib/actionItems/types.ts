@@ -32,6 +32,14 @@ export interface ActionItem {
   priority: ActionItemPriority
   href: string | null
   occurredAt: Date
+  /** When the item stops being actionable — the pickup the work is for.
+   *  Set by providers tied to a rental going out (COI, card, kit,
+   *  replacement cost); the panel labels the row by it ("pickup in 4d")
+   *  instead of by `occurredAt`, which is when the RECORD was made and
+   *  read as urgency it never had (Wes 2026-09-17). Sorted soonest-first
+   *  inside a priority. Absent on past-event items (a quiet quote, an
+   *  untouched inquiry), which keep the "N ago" label. */
+  dueAt?: Date | null
   /** Provider id that emitted the item. */
   source: string
   /** How dismissal is persisted for THIS item:

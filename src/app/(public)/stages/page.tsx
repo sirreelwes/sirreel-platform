@@ -4,6 +4,8 @@ import type { Metadata } from 'next'
 import { STAGES } from '@/lib/site/stages'
 import { StandingSetAvailabilityForm } from '@/components/site/StandingSetAvailabilityForm'
 import { SWatermark } from '@/components/site/SWatermark'
+import { JsonLd } from '@/components/site/JsonLd'
+import { breadcrumbJsonLd, itemListJsonLd } from '@/lib/site/structuredData'
 
 /**
  * Public /stages — overview of SirReel's stage offerings (Lankershim Sound
@@ -27,8 +29,21 @@ function StagePlaceholder() {
 }
 
 export default function StagesPage() {
+  // `href` entries (Standing Sets) point at another collection and have no
+  // /stages/[slug] page of their own — the same filter the sitemap applies,
+  // for the same reason: listing a URL that 404s is worse than omitting it.
+  const listNode = itemListJsonLd(
+    STAGES.filter((s) => !s.href).map((s) => ({ name: s.name, path: `/stages/${s.slug}` })),
+    'SirReel production stages',
+  )
+  const crumbs = breadcrumbJsonLd([
+    { name: 'SirReel', path: '/' },
+    { name: 'Stages', path: '/stages' },
+  ])
+
   return (
     <>
+      <JsonLd nodes={[listNode, crumbs]} />
       {/* Hero */}
       <section className="bg-[#0c0c0d] text-white relative overflow-hidden">
         <SWatermark />

@@ -11,6 +11,9 @@
 
 import { prisma } from '@/lib/prisma'
 import { rankRecipients, type RankedRecipient } from '@/lib/email/recipients'
+import { cardAskState, type CardAskReason } from '@/lib/payments/cardAsk'
+import { resolveWalletCardForJob } from '@/lib/payments/jobCardOnFile'
+import { isExpiryPast } from '@/lib/payments/companyCards'
 import { buildCardAuthRequestEmail } from '@/lib/email/templates/cardAuthRequest'
 import { defaultEmailBody } from '@/lib/email/standardOpening'
 import { SEND_FROM } from '@/lib/email/sendAgreementEmail'
@@ -49,6 +52,13 @@ export interface CardAuthEmailCompositionOk {
   /** Already on file — the caller shows "this client has a card" rather
    *  than pretending the ask is still open. */
   cardAlreadyOnFile: boolean
+  /**
+   * Why the ask is open, read off the job's card (Wes 2026-09-18). DECLINED
+   * and EXPIRED mean a card IS on file and this email is asking for a second
+   * one; the preview strip says so, so a rep can tell at a glance that they
+   * are not about to re-ask a client who already paid attention.
+   */
+  cardAskReason: CardAskReason
 }
 
 export type CardAuthEmailComposition =
@@ -100,6 +110,7 @@ export async function composeCardAuthEmail(
       id: true,
       jobCode: true,
       name: true,
+      companyId: true,
       agent: { select: { name: true } },
       jobContacts: {
         select: {
@@ -146,12 +157,31 @@ export async function composeCardAuthEmail(
 
   // Already-authorized check. The tile hides the button once a card is on
   // file, but the modal can be open across a client's portal submission.
+  //
+  // It also decides the WORDS (Wes 2026-09-18). A card that declined is still
+  // on file — the portal stores the unapproved authorization because the
+  // client is mid-form — so this ask is a replacement, and "we need a credit
+  // card on file" is the wrong sentence to send the person who gave us one.
+  // Derived here, server-side, from the same fact the tile renders: a flag
+  // from the browser could send a client a decline notice about a card that
+  // is fine.
   const existingCard = bookingId
     ? await prisma.paperworkRequest.findFirst({
         where: { bookingId, ccCardLast4: { not: null } },
-        select: { id: true },
+        select: { id: true, ccAuthRespStat: true, ccCardExpiry: true },
       })
     : null
+  // Same precedence as /api/jobs/[id]: the booking's own authorization wins,
+  // and the company wallet answers for a job whose card was keyed from paper.
+  const walletCard = existingCard ? null : await resolveWalletCardForJob(job.companyId, job.id)
+  const cardOnFile = existingCard
+    ? {
+        onFile: true,
+        validated: existingCard.ccAuthRespStat === 'A',
+        expired: isExpiryPast(existingCard.ccCardExpiry),
+      }
+    : walletCard
+  const ask = cardAskState(cardOnFile)
 
   const { subject, html, text } = buildCardAuthRequestEmail({
     firstName: to.name.split(' ')[0] || null,
@@ -160,6 +190,7 @@ export async function composeCardAuthEmail(
     agentFirstName: (job.agent?.name || '').split(' ')[0] || null,
     personalNote: args.message ?? null,
     customBody: args.customMessage?.trim() || null,
+    cardAskReason: ask.reason,
   })
 
   const order = job.orders[0]
@@ -170,6 +201,7 @@ export async function composeCardAuthEmail(
       kind: 'card-auth',
       projectName: job.name,
       agentFirstName: (job.agent?.name || '').split(' ')[0] || null,
+      cardAskReason: ask.reason,
     }),
     to,
     alternatives: candidates,
@@ -188,6 +220,7 @@ export async function composeCardAuthEmail(
     orderId: order?.id ?? null,
     portalUrlIsTokenized: args.portalLink !== null,
     bookingId,
-    cardAlreadyOnFile: !!existingCard,
+    cardAlreadyOnFile: !!cardOnFile,
+    cardAskReason: ask.reason,
   }
 }

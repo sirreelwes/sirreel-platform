@@ -47,8 +47,16 @@
  *     it. Clears when put on the list from the order page or the line goes.
  *   - replacement-cost-missing (DERIVED) — a catalog row going out on an
  *     upcoming order with no replacement cost, so the order cannot tell
- *     the client's broker what to insure it for. One item per ROW, not
- *     per order. Clears when the row (or its RentalWorks units) is priced.
+ *     the client's broker what to insure it for. A VEHICLE row going out
+ *     inside the week is its own item; every other catalog row folds into
+ *     ONE backlog item that links to the pricing wizard (Wes 2026-09-17:
+ *     71 rows was the catalog chore, not 71 tasks). Clears when the row
+ *     (or its RentalWorks units) is priced.
+ *
+ * PICKUP WINDOW (rules.ts, Wes 2026-09-17): an item tied to a rental
+ * going out carries `dueAt` = the pickup, shows only inside
+ * PICKUP_WINDOW_DAYS of it, and is labelled by it. `occurredAt` is when
+ * the record was made and is not urgency.
  *   - kit-incomplete (DERIVED) — an upcoming order whose radios (or any
  *     kitted item) are missing the pieces the catalog says ride with
  *     them, so they never print on the pull sheet. The early half of the
@@ -94,7 +102,7 @@ import type { UserRole } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { resolveDataScope } from '@/lib/auth/scope'
 import type { ActionItem, ActionItemProvider, ProviderContext } from '@/lib/actionItems/types'
-import { PRIORITY_RANK } from '@/lib/actionItems/types'
+import { compareActionItems } from '@/lib/actionItems/rules'
 import { paymentInfoProvider } from '@/lib/actionItems/providers/paymentInfo'
 import { coiMissingProvider } from '@/lib/actionItems/providers/coiMissing'
 import { quoteAgingProvider } from '@/lib/actionItems/providers/quoteAging'
@@ -225,12 +233,9 @@ export async function getActionItemsForUser(
     items = items.filter((it) => !dismissedSet.has(it.id))
   }
 
-  // Priority, then most-recent-first.
-  items.sort((a, b) => {
-    const pr = PRIORITY_RANK[a.priority] - PRIORITY_RANK[b.priority]
-    if (pr !== 0) return pr
-    return b.occurredAt.getTime() - a.occurredAt.getTime()
-  })
+  // Priority, then soonest pickup (items that carry a dueAt), then
+  // most-recent-first — see rules.ts.
+  items.sort(compareActionItems)
 
   return { items, canSeeAll, role }
 }

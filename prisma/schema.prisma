@@ -7239,6 +7239,69 @@ model StageBookingTerms {
   @@map("sr_stage_booking_terms")
 }
 
+/// A BROKER we have dealt with — the directory behind "who is this client's
+/// broker" (Wes 2026-09-17: "Please start keeping a list of brokers").
+///
+/// Filled two ways: automatically, from the PRODUCER box of a certificate we
+/// review (src/lib/coi/broker.ts), and by hand on /admin/brokers. EMAIL is
+/// the identity, so the same agent on a second certificate updates this row
+/// instead of making another.
+///
+/// NO relations on purpose — `createdByUserId` is a plain column, like the
+/// job-Conversation tables. The table is created by additive SQL
+/// (src/lib/coi/brokerTableSql.ts), never `prisma db push`, and every read
+/// fails soft until it has run.
+model Broker {
+  id      String  @id @default(uuid())
+  /// Lowercased. The unique key — one row per broker.
+  email   String  @unique
+  /// The person in the producer block, when one is printed.
+  name    String?
+  /// The brokerage, e.g. "Worthington Insurance".
+  agency  String?
+  phone   String?
+  address String?
+  notes   String?
+
+  isActive Boolean @default(true) @map("is_active")
+
+  firstSeenAt DateTime  @default(now()) @map("first_seen_at")
+  /// Last time a certificate we reviewed named them.
+  lastSeenAt  DateTime? @map("last_seen_at")
+  /// Last time WE wrote to them (the broker review link).
+  lastContactedAt DateTime? @map("last_contacted_at")
+  timesContacted  Int       @default(0) @map("times_contacted")
+
+  createdByUserId String? @map("created_by_user_id")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+
+  @@index([agency])
+  @@map("sr_brokers")
+}
+
+/// Which of OUR clients a broker acts for. A broker serves many productions
+/// and a production changes brokers, so this is a join table rather than a
+/// column on either side. `source` records how we learned it:
+/// CERTIFICATE (their name was on a COI for this client), CONTACTED (we sent
+/// them a review link on this client's behalf) or MANUAL (someone typed it).
+model BrokerClient {
+  id          String  @id @default(uuid())
+  brokerId    String  @map("broker_id")
+  companyId   String  @map("company_id")
+  /// The insured exactly as printed, which is often not the company's name.
+  insuredName String? @map("insured_name")
+  source      String
+
+  lastSeenAt DateTime @default(now()) @map("last_seen_at")
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([brokerId, companyId])
+  @@index([companyId])
+  @@map("sr_broker_clients")
+}
+
 model CoiCheck {
   id               String @id @default(uuid())
   fileKey          String @map("file_key")

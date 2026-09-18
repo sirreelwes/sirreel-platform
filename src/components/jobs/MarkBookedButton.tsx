@@ -52,6 +52,9 @@ interface MarkBookedResult {
   paperworkMissing?: string[];
   error?: string;
   reason?: string;
+  /** Set on the unsigned-partner 409 — the key to echo back to push through. */
+  requiresConfirmation?: string;
+  partners?: { name: string; units: string[]; status: string }[];
 }
 
 export function MarkBookedButton({ orderId, orderNumber, orderStatus, onDone }: Props) {
@@ -63,6 +66,14 @@ export function MarkBookedButton({ orderId, orderNumber, orderStatus, onDone }: 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [done, setDone] = useState<MarkBookedResult | null>(null);
+  /**
+   * A partner on this order has nothing signed (Wes 2026-09-18). The server
+   * refuses once with the partner named; the second press carries
+   * `confirmUnsignedPartner` and is recorded on the audit row as an
+   * override. The rep cannot produce a countersignature, so this warns —
+   * loudly, by name — rather than blocking the booking outright.
+   */
+  const [paperWarning, setPaperWarning] = useState<MarkBookedResult | null>(null);
 
   const submit = async () => {
     if (busy) return;
@@ -72,9 +83,16 @@ export function MarkBookedButton({ orderId, orderNumber, orderStatus, onDone }: 
       const r = await fetch(`/api/orders/${orderId}/mark-booked`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: note.trim() || null }),
+        body: JSON.stringify({
+          note: note.trim() || null,
+          ...(paperWarning ? { confirmUnsignedPartner: true } : {}),
+        }),
       });
       const data: MarkBookedResult = await r.json().catch(() => ({ ok: false }));
+      if (r.status === 409 && data.error === 'unsigned partner') {
+        setPaperWarning(data);
+        return;
+      }
       if (!r.ok || !data.ok) {
         setErr(data.reason || data.error || `HTTP ${r.status}`);
         return;
@@ -146,6 +164,24 @@ export function MarkBookedButton({ orderId, orderNumber, orderStatus, onDone }: 
         placeholder="How did they say yes? e.g. call with Laura, 9/9"
         className="mt-2 w-full rounded-md border border-amber-300 bg-white px-2.5 py-1.5 text-[13px] text-lt-fg placeholder:text-lt-fg3 focus:outline-none focus:border-amber-500"
       />
+      {paperWarning && (
+        <div className="mt-2 rounded-md border border-rose-300 bg-rose-50 px-2.5 py-2 text-[12px] text-rose-900">
+          <div className="font-bold">
+            {(paperWarning.partners ?? []).length
+              ? (paperWarning.partners ?? [])
+                  .map((p) => (p.units.length ? `${p.name} (${p.units.join(', ')})` : p.name))
+                  .join('; ')
+              : 'A partner on this order'}{' '}
+            hasn’t signed their partner agreement.
+          </div>
+          <div className="mt-1 text-rose-900/90">
+            Booking commits us to supply their gear on SirReel’s terms. Their agreement is what carries
+            the condition, testing and indemnity back to them — without it, that sits with us. File it
+            on <span className="font-semibold">/crm/portals#partners</span>, or press again to book
+            anyway; the override is recorded.
+          </div>
+        </div>
+      )}
       {err && <div className="mt-1.5 text-[12px] text-rose-700">{err}</div>}
       <div className="mt-2 flex items-center gap-2">
         <button
@@ -154,7 +190,7 @@ export function MarkBookedButton({ orderId, orderNumber, orderStatus, onDone }: 
           className="inline-flex items-center gap-1.5 rounded-md bg-amber-600 px-3 py-1.5 text-[12px] font-bold text-white hover:bg-amber-500 disabled:opacity-50 transition-colors"
         >
           {busy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-          {busy ? 'Booking…' : 'Book it'}
+          {busy ? 'Booking…' : paperWarning ? 'Book it anyway' : 'Book it'}
         </button>
         <button
           onClick={() => { setOpen(false); setErr(null); }}

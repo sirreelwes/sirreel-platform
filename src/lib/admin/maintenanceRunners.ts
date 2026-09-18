@@ -13,6 +13,8 @@ import { MAINTENANCE_TASKS, type MaintenanceTaskMeta } from '@/lib/admin/mainten
 import { seedVsmPlanet, RECEIVE_METHODS, type ReceiveMethodKey } from '@/lib/sub-rentals/seedVsmPlanet'
 import { moveCargoOffLiftGate } from '@/lib/fleet/moveCargoOffLiftGate'
 import { seedDf50FluidKit } from '@/lib/inventory/seedDf50FluidKit'
+import { seedKnownBrokers } from '@/lib/coi/seedKnownBrokers'
+import { fileNegotiatedAgreement, parseAliasEntries } from '@/lib/contracts/fileNegotiatedAgreement'
 import { TaskRefused } from '@/lib/admin/taskRefused'
 import { runAdditiveDdl } from '@/lib/admin/runAdditiveDdl'
 
@@ -110,6 +112,33 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
     return { log, createdIds: [], touchedIds: r.touchedIds, headline }
   },
 
+  'file-negotiated-agreement': async ({ dryRun, params, actorUserId }) => {
+    const key = clean(params.key)
+    if (!key) {
+      throw new TaskRefused('No agreement chosen.', 'Pick which negotiated agreement to file.')
+    }
+    const r = await fileNegotiatedAgreement({
+      key,
+      dryRun,
+      aliases: parseAliasEntries(params.alias),
+      actorUserId: actorUserId ?? null,
+    })
+    const n = r.filed.length
+    const who = r.filed.map((f) => f.companyName).join(' and ')
+    const headline =
+      n === 0
+        ? `Nothing filed — ${r.skipped.length} compan${r.skipped.length === 1 ? 'y was' : 'ies were'} skipped. Read the log.`
+        : dryRun
+          ? `Dry run — would file ${r.title} for ${who}, covering through ${r.expiryDate}.`
+          : `${r.title} filed for ${who}. Their jobs are papered by it through ${r.expiryDate}.`
+    // A skip is the part a person must read — a company that quietly did
+    // not get its contract is exactly what a headline count hides.
+    const log = r.skipped.length
+      ? [...r.log, '', 'Look at:', ...r.skipped.map((sk) => `  ! ${sk.registryName}: ${sk.reason} (${sk.detail})`)]
+      : r.log
+    return { log, createdIds: r.createdIds, touchedIds: r.touchedIds, headline }
+  },
+
   'job-conversation-tables': async ({ dryRun }) => {
     const task = MAINTENANCE_TASKS.find((t) => t.id === 'job-conversation-tables')
     if (!task?.ddl) throw new TaskRefused('This task carries no statements.', 'Add `ddl` to its registry entry.')
@@ -139,6 +168,31 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
           ? 'Dry run — the table would be created.'
           : 'Table created. Clients can ask to move their dates from the portal now.'
     return { log: r.log, createdIds: [], touchedIds: r.created, headline }
+  },
+  'broker-directory-tables': async ({ dryRun }) => {
+    const task = MAINTENANCE_TASKS.find((t) => t.id === 'broker-directory-tables')
+    if (!task?.ddl) throw new TaskRefused('This task carries no statements.', 'Add `ddl` to its registry entry.')
+    const r = await runAdditiveDdl(task.ddl, { dryRun })
+    const n = dryRun ? r.missingAfter.length : r.created.length
+    const headline = r.missingAfter.length && !dryRun
+      ? `${r.missingAfter.join(', ')} still missing after the run — read the log.`
+      : n === 0
+        ? 'Both tables already exist — nothing to do.'
+        : dryRun
+          ? `Dry run — ${n} table${n === 1 ? '' : 's'} would be created.`
+          : `${n} table${n === 1 ? '' : 's'} created. The broker list works now.`
+    return { log: r.log, createdIds: [], touchedIds: r.created, headline }
+  },
+  'seed-known-brokers': async ({ dryRun }) => {
+    const r = await seedKnownBrokers({ dryRun })
+    const headline =
+      r.created === 0 && r.updated === 0
+        ? 'Every hand-named broker is already on file.'
+        : dryRun
+          ? `Dry run — ${r.created} to add, ${r.updated} to fill in.`
+          : `${r.created} broker${r.created === 1 ? '' : 's'} added, ${r.updated} filled in.`
+    const log = r.warnings.length ? [...r.log, '', 'Look at:', ...r.warnings.map((w) => `  ! ${w}`)] : r.log
+    return { log, createdIds: r.createdIds, touchedIds: r.touchedIds, headline }
   },
 }
 

@@ -7,6 +7,7 @@ import { prisma } from "@/lib/prisma";
 import { loadOrderReplacementValue } from '@/lib/coi/replacementValue';
 import { loadOrderWarehouseFlags } from "@/lib/orders/warehouseLineFlags";
 import { openRequestForOrder } from '@/lib/portal/dateChangeRequest';
+import { addedAfterPullForOrder } from "@/lib/orders/addedAfterPull";
 import { deliveryRequirementForOrder } from "@/lib/orders/requiresDelivery";
 import { can } from "@/lib/permissions";
 import { recalcOrderTotals } from "@/lib/orders";
@@ -255,7 +256,16 @@ export async function GET(_req: NextRequest, { params }: Params) {
   // exists — see lib/portal/dateChangeRequest.
   const dateChangeRequest = await openRequestForOrder(id);
 
-  return NextResponse.json({ ...order, deliveryRequirement, quotePdfStale, loadsOn, replacementValue, warehouseFlags, dateChangeRequest });
+  // Gear added after the floor already pulled this order (Wes,
+  // 2026-09-18). The rep who added it is the one who has to know the
+  // warehouse thinks this order is done — see lib/orders/addedAfterPull.
+  const addedSincePull = (await addedAfterPullForOrder(id)).gear;
+
+  return NextResponse.json({
+    ...order, deliveryRequirement, quotePdfStale, loadsOn, replacementValue, warehouseFlags,
+    dateChangeRequest,
+    addedSincePull,
+  });
 }
 
 export async function PUT(req: NextRequest, { params }: Params) {
