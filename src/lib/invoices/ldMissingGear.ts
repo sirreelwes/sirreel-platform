@@ -20,6 +20,8 @@ export interface InboundLineFacts {
   expectedQty: number
   actualQty: number
   change: OrderCheckLineChange
+  /** Came back broken. Absent on rows filed before 2026-09-18. */
+  damagedQty?: number
   /** Absent on older rows; false = this pass did not count the line. */
   onSheet?: boolean
   note?: string | null
@@ -59,11 +61,54 @@ export function missingOnCheckIn(lines: InboundLineFacts[]): MissingGear[] {
   return out
 }
 
+export interface DamagedGear {
+  orderLineItemId: string
+  description: string
+  damaged: number
+  /** What came back in total, damaged ones included. */
+  actualQty: number
+  note: string | null
+}
+
+/**
+ * Lines that came back broken.
+ *
+ * Damage is NOT a shortfall and is deliberately not derived from one: the
+ * case is on the shelf, so `actualQty` counts it. It is its own number on
+ * the row (`damagedQty`), and the two can happen on the same line — two of
+ * three stingers back, one of those two crushed.
+ *
+ * An ADDED row has no order line to bill against, and an off-sheet line
+ * was not counted at all. Same exclusions as missingOnCheckIn.
+ */
+export function damagedOnCheckIn(lines: InboundLineFacts[]): DamagedGear[] {
+  const out: DamagedGear[] = []
+  for (const l of lines) {
+    if (!l.orderLineItemId) continue
+    if (l.onSheet === false) continue
+    const damaged = l.damagedQty ?? 0
+    if (damaged <= 0) continue
+    out.push({
+      orderLineItemId: l.orderLineItemId,
+      description: l.description,
+      // Never more than came back: the row is a subset of actualQty.
+      damaged: Math.min(damaged, l.actualQty),
+      actualQty: l.actualQty,
+      note: l.note?.trim() || null,
+    })
+  }
+  return out
+}
+
 export interface MissingGearDelta {
   /** Short now and not (or less) short on the sheet as it stood before. */
   newlyMissing: MissingGear[]
   /** Short before, fewer (or none) missing now — the piece turned up. */
   turnedUp: Array<{ description: string; wasMissing: number; nowMissing: number }>
+  /** Damaged now, and not (or less) damaged on the sheet as it stood
+   *  before. Same delta rule as the missing rows, for the same reason:
+   *  saving the rest of a check-in must not re-announce it. */
+  newlyDamaged: DamagedGear[]
 }
 
 /**
@@ -94,5 +139,10 @@ export function diffMissingGear(before: InboundLineFacts[], after: InboundLineFa
     }
   }
 
-  return { newlyMissing, turnedUp }
+  const prevDamaged = new Map(damagedOnCheckIn(before).map((d) => [d.orderLineItemId, d]))
+  const newlyDamaged = damagedOnCheckIn(after).filter(
+    (d) => d.damaged > (prevDamaged.get(d.orderLineItemId)?.damaged ?? 0),
+  )
+
+  return { newlyMissing, turnedUp, newlyDamaged }
 }

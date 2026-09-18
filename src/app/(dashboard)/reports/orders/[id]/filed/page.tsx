@@ -17,6 +17,7 @@ import Link from 'next/link'
 import { Lock, ArrowLeft, Printer } from 'lucide-react'
 import { getYardUser } from '@/lib/yard/requireYardAccess'
 import { reportDraft } from '@/lib/orders/checkReports'
+import { SendCheckInReportButton } from '@/components/reports/SendCheckInReportButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -174,7 +175,7 @@ export default async function FiledSheetPage({
           <div
             key={l.orderLineItemId}
             className={`px-3 py-2.5 border-b border-lt-hairline last:border-b-0 ${
-              l.change !== 'NONE' ? 'bg-chip-warn-bg' : ''
+              l.change !== 'NONE' || (!isOut && l.damagedQty > 0) ? 'bg-chip-warn-bg' : ''
             }`}
           >
             <div className="flex items-center gap-3">
@@ -183,6 +184,9 @@ export default async function FiledSheetPage({
                 <div className="text-lt-fg2 text-[13px] truncate">
                   {l.qualifier && <span>{l.qualifier} · </span>}
                   ordered {l.expectedQty}
+                  {!isOut && l.damagedQty > 0 && (
+                    <span className="text-chip-bad-fg font-semibold"> · {l.damagedQty} back damaged</span>
+                  )}
                   {l.lane && <span className="text-lt-fg3"> · {l.lane.toLowerCase()}</span>}
                   {l.countedBy && (
                     <span>
@@ -241,6 +245,27 @@ export default async function FiledSheetPage({
           <p className="text-[14px] text-lt-fg2">
             {held.map((l) => `${l.description} (${l.expectedQty})`).join(' · ')}
           </p>
+        </div>
+      )}
+
+      {/* The report Albert sends, on the record of the sheet he is
+          reading (Wes, 2026-09-18). Read-only page, one write — and it is
+          the one act this page exists to make easy to repeat, because
+          the question "did anyone tell billing" is what brings people
+          back here weeks later. */}
+      {!isOut && (
+        <div className="border border-lt-hairline bg-lt-card rounded-xl px-3 py-4 mb-4 text-center">
+          <SendCheckInReportButton
+            orderId={id}
+            sentAt={draft.filed.reportSentAt}
+            sentTo={draft.filed.reportSentTo}
+            tone={draft.filed.reportSentAt ? 'secondary' : 'primary'}
+            blockedReason={
+              draft.filed.partial
+                ? `${held.length} line${held.length === 1 ? '' : 's'} on this order still have not been counted — finish the check-in and the report goes out with the whole picture.`
+                : null
+            }
+          />
         </div>
       )}
 

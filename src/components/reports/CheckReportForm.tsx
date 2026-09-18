@@ -47,6 +47,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { CheckoutAddOnsCard } from '@/components/orders/CheckoutAddOnsCard'
+import { SendCheckInReportButton } from '@/components/reports/SendCheckInReportButton'
 import { WALKAROUND_CREW, WAREHOUSE_CREW } from '@/lib/fleet/walkaroundCrew'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
@@ -189,6 +190,10 @@ export function CheckReportForm({
         open: l.actualQty !== l.expectedQty || !!l.substituteFor || !!l.note,
         counted,
         actualQty: counted ? l.actualQty : 0,
+        // Same rule as the count: a line nobody has counted says nothing
+        // about damage either, so it starts at zero rather than carrying
+        // a number from a sheet this pass has not looked at.
+        damagedQty: counted ? l.damagedQty : 0,
       }
     }),
   )
@@ -203,6 +208,23 @@ export function CheckReportForm({
     })),
   )
   const [preppedBy, setPreppedBy] = useState(draft.preppedBy)
+  /**
+   * "Begin Check In" — Wes, 2026-09-18: *"That needs to only be possible
+   * when the order is back."*
+   *
+   * A fresh inbound sheet opens on a door, not on forty count boxes. The
+   * two ways through it are the two things that actually happen: it all
+   * came back, or some of it didn't. Filing a check-in advances the order
+   * to Returned and takes the job off the board, so the accidental one —
+   * tapping the row above the one you meant — is worth a deliberate tap.
+   *
+   * Re-opening a sheet already on file skips the door entirely: that is a
+   * correction, and the person doing it knows what they came for.
+   */
+  const [begun, setBegun] = useState(false)
+  /** The person asserted the gate's condition anyway — it went out on
+   *  paper, or it came back early. See lib/orders/checkInReady.ts. */
+  const [gateOverridden, setGateOverridden] = useState(false)
   /** Nothing files without a name — Wes, 2026-09-15: "we should require
    *  a name for any pull or checkin of items". */
   const nameMissing = !preppedBy.trim()
@@ -462,6 +484,11 @@ export function CheckReportForm({
    *  Vehicles are never in here: they are the driver's check-out. */
   const uncounted = rows.filter((r) => r.onSheet && !r.counted && !isFleetLine(r))
   const countedRows = rows.filter((r) => r.onSheet && r.counted && !isFleetLine(r)).length
+  /** Pieces that came back broken. Not a count difference — see the Dmg
+   *  box below — so nothing else on this screen would mention it. */
+  const damagedUnits = isOut
+    ? 0
+    : rows.reduce((n, r) => (r.onSheet && r.counted ? n + (r.damagedQty || 0) : n), 0)
   /** The one-tap day: everything came off the shelf exactly as ordered. */
   const countEverything = () =>
     setRows((prev) =>
@@ -623,7 +650,7 @@ export function CheckReportForm({
    * order and emails the client). The report files PARTIAL, settles no
    * gear, and the next person opens it where this one stopped.
    */
-  async function submit(saveProgress = false) {
+  async function submit(saveProgress = false, rowsOverride?: Row[]) {
     if (nameMissing) {
       setError(`Put your name in first — every ${isOut ? 'pull' : 'check-in'} is filed under who did it.`)
       return
@@ -641,10 +668,14 @@ export function CheckReportForm({
           sheetPhotoKey: photo?.key ?? null,
           sheetPhotoUrl: photo?.url ?? null,
           lines: [
-            ...rows.map((r) => ({
+            // The override is how "Everything came back" files in one tap
+            // without waiting a render for the counts it just set.
+            ...(rowsOverride ?? rows).map((r) => ({
               orderLineItemId: r.orderLineItemId,
               description: r.description,
               actualQty: r.actualQty,
+              // Came back broken. Server-clamped to what came back.
+              damagedQty: isOut ? 0 : r.damagedQty,
               substituteFor: (r.substituteFor ?? '').trim() || null,
               note: (r.note ?? '').trim() || null,
               // A vehicle is never "left on the shelf for a later pull" —
@@ -781,7 +812,9 @@ export function CheckReportForm({
             <p className="text-lt-fg2 text-[15px]">
               {isOut
                 ? 'Everything went out as ordered — nothing to change.'
-                : 'Everything came back as expected.'}
+                : damagedUnits > 0
+                  ? `Every piece came back, ${damagedUnits} of them damaged.`
+                  : 'Everything came back as expected.'}
             </p>
           )}
           {/* Filing the inbound sheet is what closes the gear lane —
@@ -825,6 +858,30 @@ export function CheckReportForm({
             </p>
           )}
 
+          {/* The report Albert sends (Wes, 2026-09-18). It is the last
+              step of a check-in and belongs on the screen that just
+              finished one — not on a list somebody has to go back to.
+              Offered on a partial only as an explanation, because a
+              half-counted order has nothing to report yet. */}
+          {!isOut && (
+            <div className="mt-5 flex flex-col items-center gap-1">
+              <SendCheckInReportButton
+                orderId={draft.orderId}
+                blockedReason={
+                  done.partial
+                    ? `${done.offSheet} line${done.offSheet === 1 ? '' : 's'} still to count — the report goes out once the whole order has been counted back in.`
+                    : null
+                }
+              />
+              {!done.partial && (
+                <p className="text-[13px] text-lt-fg3 max-w-[52ch]">
+                  Goes to billing, the office and {draft.agentName || 'the agent'} — what came back,
+                  what didn&rsquo;t, and what came back broken. Nothing is billed by it.
+                </p>
+              )}
+            </div>
+          )}
+
           {/* The driver's receipt (Oliver, 2026-09-13: "they don't have
               the ability to print the pick list with the completed
               quantities to give to the driver. This is an important
@@ -859,6 +916,176 @@ export function CheckReportForm({
               Today&rsquo;s board
             </Link>
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  /**
+   * The one-tap return: every gear line back whole, nothing damaged.
+   *
+   * The counts are handed straight to submit rather than set on state
+   * first — a setRows followed by a submit in the same handler files the
+   * PREVIOUS render's rows, which on a fresh sheet is every line at zero.
+   * That is not a cosmetic bug: zeros on an inbound sheet are gear that
+   * did not come home.
+   */
+  function fileEverythingBack() {
+    submit(
+      false,
+      rows.map((r) =>
+        r.onSheet && !isFleetLine(r) ? { ...r, counted: true, actualQty: r.expectedQty, damagedQty: 0 } : r,
+      ),
+    )
+  }
+
+  // ── Begin Check In ────────────────────────────────────────────────
+  // The door in front of a fresh inbound sheet. See `begun` above for why
+  // it exists; a sheet already on file goes straight through, because
+  // re-opening one is a correction.
+  if (!isOut && !draft.filed && !begun) {
+    const gate = draft.checkIn
+    const blocked = !!gate && !gate.ready && !gateOverridden
+    const countable = rows.filter((r) => !isFleetLine(r)).length
+    const fleet = rows.length - countable
+    return (
+      <div className="max-w-2xl mx-auto px-1 py-2">
+        <Link
+          href="/reports/orders"
+          className="inline-flex items-center gap-1.5 text-[13px] text-lt-fg2 hover:text-amber-600 mb-3"
+        >
+          <ArrowLeft size={13} aria-hidden />
+          All reports
+        </Link>
+
+        <div className="border border-lt-hairline bg-lt-card rounded-xl p-5">
+          <div className="text-amber-600 text-[13px] font-semibold uppercase tracking-wide mb-1">Check in</div>
+          <h1 className="text-lt-fg text-2xl font-bold">{draft.jobName}</h1>
+          <p className="text-lt-fg2 text-[15px] mt-0.5">
+            <span className="font-mono">{draft.orderNumber}</span>
+            <span> · {draft.company}</span>
+            <span> · due back {fmtDay(draft.endDate)}</span>
+          </p>
+
+          {/* What the count will be made against — the sheet it went out
+              on, not the order as it was quoted. */}
+          <p className="text-lt-fg2 text-[14px] mt-3">
+            {countable} line{countable === 1 ? '' : 's'} to count
+            {fleet > 0 && (
+              <span className="text-lt-fg3">
+                {' '}· {fleet} vehicle{fleet === 1 ? '' : 's'} come back through the yard walk-around
+              </span>
+            )}
+            {draft.outSheet && (
+              <span className="text-lt-fg3">
+                {' '}· went out {fmtWhen(draft.outSheet.submittedAt)}
+                {draft.outSheet.preppedBy ? `, pulled by ${draft.outSheet.preppedBy}` : ''}
+              </span>
+            )}
+          </p>
+
+          {/* Not a wall: the reason is stated and the way through says
+              what the person is asserting. See lib/orders/checkInReady.ts. */}
+          {blocked && gate && (
+            <div className="mt-4 border border-chip-warn-fg/30 bg-chip-warn-bg rounded-lg px-3 py-3">
+              <p className="text-chip-warn-fg text-[15px] font-semibold flex items-start gap-2">
+                <AlertTriangle size={16} aria-hidden className="flex-none mt-0.5" />
+                <span>{gate.reason}</span>
+              </p>
+              <button
+                type="button"
+                onClick={() => setGateOverridden(true)}
+                className="mt-2 text-[13px] font-semibold text-lt-fg2 hover:text-amber-600 border border-lt-hairline bg-lt-card rounded-lg px-3 py-1.5"
+              >
+                {gate.override}
+              </button>
+            </div>
+          )}
+          {gateOverridden && gate && !gate.ready && (
+            <p className="mt-3 text-[13px] text-lt-fg3">{gate.override} — go ahead.</p>
+          )}
+
+          {/* The name, before either button. Every check-in is filed under
+              whoever did it (Wes, 2026-09-15), and asking here means the
+              one-tap return is still one tap for the person who typed it. */}
+          <label className="block mt-4">
+            <span className="text-[12px] uppercase tracking-wide text-lt-fg2 font-semibold">
+              Who counted it back in
+            </span>
+            <input
+              value={preppedBy}
+              onChange={(e) => setPreppedBy(e.target.value)}
+              placeholder="Name"
+              className={`mt-1 w-full bg-lt-inner border rounded-lg px-3 py-2 text-[16px] text-lt-fg placeholder:text-lt-fg3 ${
+                nameMissing ? 'border-chip-warn-fg/50' : 'border-lt-hairline'
+              }`}
+            />
+          </label>
+          {/* The floor crew, one tap each — same row as the sheet's. */}
+          <div className="mt-1.5 flex flex-wrap gap-1.5">
+            {[...WAREHOUSE_CREW, ...WALKAROUND_CREW].map((name) => (
+              <button
+                key={name}
+                type="button"
+                onClick={() => setPreppedBy(name)}
+                className={`min-h-[40px] rounded-lg border px-3 text-[14px] font-medium ${
+                  preppedBy.trim() === name
+                    ? 'border-amber-600 bg-chip-warn-bg text-lt-fg'
+                    : 'border-lt-hairline bg-lt-inner text-lt-fg2 hover:text-lt-fg'
+                }`}
+              >
+                {name}
+              </button>
+            ))}
+          </div>
+          {nameMissing && viewerName && (
+            <button
+              type="button"
+              onClick={() => setPreppedBy(viewerName)}
+              className="mt-1.5 text-[13px] font-semibold text-lt-fg2 hover:text-amber-600"
+            >
+              That&rsquo;s me — {viewerName}
+            </button>
+          )}
+
+          {error && (
+            <p className="mt-3 text-[14px] text-chip-bad-fg border border-chip-bad-fg/30 bg-chip-bad-bg rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+
+          {/* The two things that actually happen. Both are real filings —
+              the clean one is not a shortcut around the record, it is the
+              record with every line counted whole. */}
+          <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-2">
+            <button
+              type="button"
+              disabled={blocked || saving || nameMissing || countable === 0}
+              onClick={fileEverythingBack}
+              className="min-h-[60px] rounded-xl bg-amber-600 hover:bg-amber-500 disabled:opacity-40 disabled:cursor-not-allowed text-white text-[17px] font-bold inline-flex flex-col items-center justify-center"
+            >
+              {saving ? 'Filing…' : '100% returned'}
+              <span className="text-[12px] font-semibold text-white/80">
+                Everything came back, nothing damaged
+              </span>
+            </button>
+            <button
+              type="button"
+              disabled={blocked || saving}
+              onClick={() => setBegun(true)}
+              className="min-h-[60px] rounded-xl border-2 border-chip-warn-fg/40 bg-chip-warn-bg hover:border-chip-warn-fg disabled:opacity-40 disabled:cursor-not-allowed text-chip-warn-fg text-[17px] font-bold inline-flex flex-col items-center justify-center"
+            >
+              L&amp;D
+              <span className="text-[12px] font-semibold text-chip-warn-fg/80">
+                Something is missing or damaged
+              </span>
+            </button>
+          </div>
+          <p className="mt-3 text-[13px] text-lt-fg3">
+            L&amp;D opens the sheet this order went out on — every line, the extras the warehouse
+            added at the truck included — and asks how many came back and how many of those are
+            broken. {countable === 0 && 'Nothing on this order is warehouse gear, so there is nothing to count.'}
+          </p>
         </div>
       </div>
     )
@@ -1153,6 +1380,10 @@ export function CheckReportForm({
         {rows.map((r) => {
           const differs =
             r.onSheet && r.counted && (r.actualQty !== r.expectedQty || !!(r.substituteFor ?? '').trim())
+          // Three of three back and one of them crushed is not a
+          // difference in the count — and it is absolutely something the
+          // billing desk has to see. The row colours on it either way.
+          const damaged = !isOut && r.onSheet && r.counted && r.damagedQty > 0
           // Nobody has counted this line yet. The box reads zero because
           // that is what has been handled so far, NOT because the client
           // is losing the line or the gear is missing (Wes, 2026-09-14).
@@ -1219,7 +1450,7 @@ export function CheckReportForm({
           return (
             <div
               key={r.orderLineItemId}
-              className={`px-3 py-2.5 border-b border-lt-hairline last:border-b-0 ${differs ? 'bg-chip-warn-bg' : ''}`}
+              className={`px-3 py-2.5 border-b border-lt-hairline last:border-b-0 ${differs || damaged ? 'bg-chip-warn-bg' : ''}`}
             >
               <div className="flex items-center gap-3">
                 <div className="min-w-0 flex-1">
@@ -1243,6 +1474,20 @@ export function CheckReportForm({
                       <span>counted</span>
                     )}
                     {r.lane && <span className="text-lt-fg3"> · {r.lane.toLowerCase()}</span>}
+                    {/* The count is made against the sheet the gear left
+                        on, not against the order as it was quoted (Wes,
+                        2026-09-18). A line the check-out never counted
+                        says so — nothing went, so nothing is owed back. */}
+                    {!isOut && draft.outSheet && (
+                      <span className="text-lt-fg3">
+                        {' '}· {r.outQty === null ? 'not on the check-out' : `${r.outQty} went out`}
+                      </span>
+                    )}
+                    {!isOut && r.addedAtCheckOut && (
+                      <span className="ml-1.5 text-[11px] font-semibold uppercase tracking-wider text-pill-quoted-fg border border-pill-quoted-fg/25 bg-pill-quoted-bg rounded px-1.5 py-0.5">
+                        Added at the truck
+                      </span>
+                    )}
                   </div>
                   {/* Nobody can pull "2 pop-ups with sides" — say what is
                       missing where the count is being typed, not on a
@@ -1304,6 +1549,45 @@ export function CheckReportForm({
                   />
                   <span className="text-[13px] text-lt-fg2 whitespace-nowrap">of {r.expectedQty}</span>
                 </label>
+                {/* Of the ones that came back, how many are broken.
+                    Wes, 2026-09-18: *"note damaged or lost and how many
+                    were lost. Maybe it's better just to say how many were
+                    returned."* Both, in the end — and this is why: what
+                    came back is one number and what came back BROKEN is
+                    another, because a crushed case is on the shelf. Take
+                    it out of the returned count and the client is billed
+                    to replace gear we are holding; leave it out
+                    altogether and nobody is billed for a light that can
+                    never go out again. Shown only once the line has been
+                    counted, so an untouched row stays one number wide. */}
+                {!isOut && r.counted && (
+                  <label className="flex items-center gap-1.5 flex-none">
+                    <span className="text-[12px] text-lt-fg3 uppercase tracking-wide">Dmg</span>
+                    <input
+                      type="number"
+                      min={0}
+                      max={r.actualQty}
+                      inputMode="numeric"
+                      value={r.damagedQty}
+                      onChange={(e) => {
+                        // Never more than came back: a damaged one is a
+                        // returned one. The server clamps this too.
+                        const next = Math.max(0, Math.min(Number(e.target.value) || 0, r.actualQty))
+                        patch(r.orderLineItemId, {
+                          damagedQty: next,
+                          // The first damaged unit opens the note — what
+                          // is wrong with it is the thing Ana will ask.
+                          open: r.damagedQty === 0 && next > 0 ? true : r.open,
+                        })
+                      }}
+                      className={`w-16 text-center border rounded-lg px-2 py-1.5 text-[16px] ${
+                        r.damagedQty > 0
+                          ? 'border-chip-bad-fg/60 bg-chip-bad-bg text-chip-bad-fg font-semibold'
+                          : 'border-lt-hairline bg-lt-inner text-lt-fg'
+                      }`}
+                    />
+                  </label>
+                )}
                 {/* This line came off the shelf whole — one tap rather
                     than typing the number that is already on screen. */}
                 {awaiting && (
@@ -1628,6 +1912,21 @@ export function CheckReportForm({
         </p>
       )}
 
+      {/* Damage is not a count difference, so the banner below would
+          never mention it — and a sheet that records a broken light and
+          says nothing is a sheet whose consequence nobody sees. */}
+      {damagedUnits > 0 && !confirming && (
+        <p className="mb-3 text-[14px] text-chip-bad-fg border border-chip-bad-fg/30 bg-chip-bad-bg rounded-lg px-3 py-2 flex items-start gap-2">
+          <AlertTriangle size={15} aria-hidden className="flex-none mt-0.5" />
+          <span>
+            {damagedUnits} piece{damagedUnits === 1 ? '' : 's'} came back damaged. That goes to the
+            billing desk as something to look at — it is not billed here, and it does not change
+            what was rented. Say what is wrong with {damagedUnits === 1 ? 'it' : 'them'} in the
+            line note.
+          </span>
+        </p>
+      )}
+
       {/* Say what Submit will do before it does it. */}
       {diffs > 0 && !confirming && (
         <p className="mb-3 text-[14px] text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-lg px-3 py-2 flex items-start gap-2">
@@ -1735,6 +2034,24 @@ export function CheckReportForm({
             )}
           </p>
 
+          {damagedUnits > 0 && (
+            <>
+              <p className="mt-3 text-[13px] font-semibold text-chip-bad-fg">
+                Came back damaged — on the shelf, but not rentable:
+              </p>
+              <ul className="mt-1 space-y-1">
+                {rows
+                  .filter((r) => r.onSheet && r.counted && r.damagedQty > 0)
+                  .map((r) => (
+                    <li key={r.orderLineItemId} className="text-[15px] text-lt-fg font-medium">
+                      {r.damagedQty} × {r.description}
+                      {r.note?.trim() ? ` — ${r.note.trim()}` : ''}
+                    </li>
+                  ))}
+              </ul>
+            </>
+          )}
+
           {confirming === 'save' && uncounted.length > 0 && (
             <p className="mt-2 text-[13px] text-chip-warn-fg">
               The {uncounted.length} uncounted line{uncounted.length === 1 ? '' : 's'} stay open for
@@ -1773,7 +2090,7 @@ export function CheckReportForm({
             onClick={() => {
               // Nothing differs and the kit is complete → nothing to read
               // back. One tap, as before, which is most days.
-              if (diffs > 0 || shortfalls.length > 0) { setConfirming('file'); return }
+              if (diffs > 0 || shortfalls.length > 0 || damagedUnits > 0) { setConfirming('file'); return }
               void submit()
             }}
             disabled={saving || uncounted.length > 0 || nameMissing || (isOut && unnamedExtras > 0)}

@@ -51,6 +51,7 @@ export type NotificationChannelKey =
   | 'portal-cards'
   | 'portal-payments'
   | 'ld-reported'
+  | 'check-in-report'
   | 'vendor-portal'
   | 'sub-rental-conduit-cc'
   | 'driver-checkouts'
@@ -128,6 +129,13 @@ export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
     description:
       'One email the moment the yard or warehouse records loss or damage on an order: gear counted short on the check-in sheet, new damage found when a vehicle is walked around on return (or logged on the order page), damage booked to the renter from an incident\'s Bill renter, or a driver on an unattended drop-off saying they can see new damage (flagged as the driver\'s word until the yard walks it). Lists what is missing or damaged, who recorded it, the replacement cost or repair estimate where HQ holds one, and a link to the order. A re-count that finds a missing piece says so too, so it is not billed. Nothing is billed by this email — the Bill L&D button on the billing queue is still where that happens (Ana 2026-09-15: "When sales/warehouse reports L&D on an order, it\'d be great if I can get that sent to me in an email so I know what to look out for"). Defaults to billing@.',
     defaults: () => ['billing@sirreel.com'],
+  },
+  {
+    key: 'check-in-report',
+    label: 'Check-in report from the warehouse',
+    description:
+      'The report a warehouse supervisor SENDS from the check-in sheet once an order has been counted back in (Wes 2026-09-18: "Albert sends a report ... on missing items or 100% returned"). Goes out either way: everything came back, or here is what is missing and what came back damaged, with replacement cost where HQ holds one. Unlike the automatic L&D heads-up next door, this one is a person saying the count is finished — so "no email" no longer means both "all good" and "nobody has counted it". Nothing is billed by it. The order\'s own agent is added to whatever is set here. Defaults to billing plus the hq@ feed.',
+    defaults: () => ['billing@sirreel.com', hqNotifyInbox()],
   },
   {
     key: 'portal-cards',

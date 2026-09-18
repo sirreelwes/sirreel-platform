@@ -3847,6 +3847,20 @@ model OrderCheckReport {
   sheetPhotoKey String? @map("sheet_photo_key")
   sheetPhotoUrl String? @map("sheet_photo_url")
 
+  /// The inbound report Albert sends once the count is done (Wes,
+  /// 2026-09-18: "we need to then send a report ... on missing items or
+  /// 100% returned. We need to add that button"). Filing the sheet is
+  /// the RECORD; sending it is a separate, deliberate act, because the
+  /// count is often finished in passes and a report sent halfway
+  /// through would name gear that is still on the truck.
+  ///
+  /// Stamped on the report rather than derived from the email log so the
+  /// screen can say "sent 4:12 PM to ..." and so a second send is an
+  /// obvious re-send. `reportSentTo` is who it actually reached.
+  reportSentAt   DateTime? @map("report_sent_at")
+  reportSentById String?   @map("report_sent_by_id")
+  reportSentTo   String[]  @map("report_sent_to")
+
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
@@ -3875,6 +3889,20 @@ model OrderCheckReportLine {
   description String
   expectedQty Int    @map("expected_qty")
   actualQty   Int    @map("actual_qty")
+
+  /// Of the ones that CAME BACK, how many came back broken. Check-in
+  /// only, and deliberately a second number rather than a subtraction:
+  /// a damaged case is physically on the shelf, so it is not missing —
+  /// counting it as missing would bill the client a replacement for
+  /// gear we are holding, and counting it as fine would bill them
+  /// nothing for a light nobody can rent out again.
+  ///
+  ///   missing = expectedQty - actualQty      (never came back)
+  ///   damaged = damagedQty  (<= actualQty)   (came back, unusable)
+  ///
+  /// Both feed the L&D candidates on the billing queue as SUGGESTIONS.
+  /// Zero on every OUT row and on every row filed before 2026-09-18.
+  damagedQty  Int    @default(0) @map("damaged_qty")
 
   change        OrderCheckLineChange @default(NONE)
   /// False when this line was deliberately left OFF this pull — not

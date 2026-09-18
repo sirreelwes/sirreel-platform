@@ -35,8 +35,9 @@ export async function notifyMissingGear(input: {
   reportedBy: string | null
 }): Promise<boolean> {
   try {
-    const { newlyMissing, turnedUp } = input.delta
-    if (!newlyMissing.length && !turnedUp.length) return false
+    const { newlyMissing, turnedUp, newlyDamaged } = input.delta
+    const damaged = newlyDamaged ?? []
+    if (!newlyMissing.length && !turnedUp.length && !damaged.length) return false
     const to = await channelRecipients('ld-reported')
     if (!to.length) return false
 
@@ -50,9 +51,11 @@ export async function notifyMissingGear(input: {
           booking: { select: { jobName: true } },
         },
       }),
-      newlyMissing.length
+      newlyMissing.length || damaged.length
         ? prisma.orderLineItem.findMany({
-            where: { id: { in: newlyMissing.map((m) => m.orderLineItemId) } },
+            where: {
+              id: { in: [...newlyMissing.map((m) => m.orderLineItemId), ...damaged.map((d) => d.orderLineItemId)] },
+            },
             select: { id: true, inventoryItem: { select: { replacementCost: true } } },
           })
         : Promise.resolve([]),
@@ -82,6 +85,13 @@ export async function notifyMissingGear(input: {
       })),
       turnedUp,
       damage: [],
+      damagedGear: damaged.map((d) => ({
+        description: d.description,
+        damaged: d.damaged,
+        actualQty: d.actualQty,
+        note: d.note,
+        replacementCost: costByLine.get(d.orderLineItemId) ?? null,
+      })),
       orderLink: `${base()}/orders/${order.id}`,
       billingLink: `${base()}/collections`,
     })

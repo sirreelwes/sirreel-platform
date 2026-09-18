@@ -32,6 +32,7 @@ import type {
 import { prisma } from '@/lib/prisma'
 import { classifyCheckLine, describeCheckChange } from '@/lib/orders/checkLineChange'
 import { addedAfterPull, stillPullable } from '@/lib/orders/addedAfterPull'
+import { checkInReadiness, type CheckInReadiness } from '@/lib/orders/checkInReady'
 import { isPickableLine } from '@/lib/orders/lineType'
 import { attributeLines, rollupPreppedBy, summarizePasses, type PassSummary } from '@/lib/orders/checkPasses'
 import { recalcOrderTotals } from '@/lib/orders'
@@ -102,6 +103,10 @@ export interface ReportListRow {
   /** The Pacific day this edge falls on. */
   ymd: string
   lineCount: number
+  /** Whether this order can be checked IN yet — null on the OUT lane.
+   *  The row says what is in the way rather than hiding itself: the
+   *  sheet still has to have somewhere to go (checkInReady.ts). */
+  checkIn: CheckInReadiness | null
   /** Filed report for this edge, if any. */
   filed: {
     submittedAt: Date
@@ -159,9 +164,12 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
       // Ids + types, not just a count: the row has to know which lines
       // the filed sheet never spoke to (addedAfterPull.ts).
       lineItems: { select: { id: true, type: true, warehouseAddedAt: true } },
+      // Both edges on the inbound lane: whether a check-OUT sheet exists
+      // is half of "is this order back" (checkInReady.ts).
       checkReports: {
-        where: { edge },
+        where: edge === 'IN' ? {} : { edge },
         select: {
+          edge: true,
           submittedAt: true, preppedBy: true, changedOrder: true, partial: true,
           lines: { select: { orderLineItemId: true, onSheet: true } },
         },
@@ -170,9 +178,11 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
     orderBy: edge === 'OUT' ? { startDate: 'asc' } : { endDate: 'asc' },
   })
 
+  const today = pacificYmd(0)
+
   return orders.map((o) => {
     const d = edge === 'OUT' ? o.startDate : o.endDate
-    const report = o.checkReports[0] ?? null
+    const report = o.checkReports.find((r) => r.edge === edge) ?? null
     const added = addedAfterPull(
       o.lineItems,
       report ? { submittedAt: report.submittedAt, lineIds: report.lines.map((l) => l.orderLineItemId) } : null,
@@ -189,6 +199,15 @@ export async function reportListFor(edge: OrderCheckEdge): Promise<ReportListRow
       // the previous day west of Greenwich.
       ymd: d ? d.toISOString().slice(0, 10) : '',
       lineCount: o._count.lineItems,
+      checkIn:
+        edge === 'IN'
+          ? checkInReadiness({
+              status: o.status,
+              endYmd: o.endDate ? o.endDate.toISOString().slice(0, 10) : null,
+              todayYmd: today,
+              outFiled: o.checkReports.some((r) => r.edge === 'OUT'),
+            })
+          : null,
       filed: report
         ? {
             submittedAt: report.submittedAt,
@@ -314,6 +333,21 @@ export interface DraftLine {
   expectedQty: number
   /** What a previously filed report recorded, when re-opening one. */
   actualQty: number
+  /** Check-IN only: how many of the ones that came back are broken.
+   *  A second number, not a subtraction — see the schema comment. */
+  damagedQty: number
+  /** Check-IN only: what the check-OUT sheet counted onto the truck for
+   *  this line, so the person counting it back is reading the sheet it
+   *  went out on (Wes, 2026-09-18: "he will then be able to see the
+   *  original checkout and anything that was added into that order").
+   *  Null when no check-out was ever filed, and when the out sheet
+   *  deliberately left this line off (nothing went, nothing is owed). */
+  outQty: number | null
+  /** The warehouse wrote this line onto the order itself — a last-minute
+   *  add at the truck, not something sales quoted. Named on the inbound
+   *  sheet so the count covers what actually left, including the extras
+   *  (Wes, 2026-09-18). */
+  addedAtCheckOut: boolean
   change: OrderCheckLineChange
   substituteFor: string | null
   note: string | null
@@ -364,6 +398,10 @@ export interface ReportDraft {
     passes: PassSummary[]
     /** Gear added to the order SINCE it was filed — still to pull. */
     addedSince: number
+    /** When the inbound report was last emailed out, and to whom (Wes,
+     *  2026-09-18). Null on every OUT sheet and on one nobody has sent. */
+    reportSentAt: string | null
+    reportSentTo: string[]
   } | null
   /** The name box's starting value. EMPTY once a sheet is on file: the
    *  person opening it again is usually somebody else picking up the
@@ -372,6 +410,13 @@ export interface ReportDraft {
   preppedBy: string
   notes: string
   lines: DraftLine[]
+  /** Check-IN only: can this be started at all, and if not, why not.
+   *  Null on the OUT edge. See lib/orders/checkInReady.ts. */
+  checkIn: CheckInReadiness | null
+  /** Check-IN only: the check-OUT sheet this order left on. The inbound
+   *  screen names it so the count is made against what actually went,
+   *  not against what was ordered. */
+  outSheet: { submittedAt: string; preppedBy: string | null; partial: boolean } | null
   /** Rows a previous report ADDED that are not order lines. */
   extras: Array<{
     description: string; actualQty: number; note: string | null; filed?: boolean
@@ -416,16 +461,22 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         },
         orderBy: { sortOrder: 'asc' },
       },
+      // On the inbound edge both sheets are read: the check-OUT one is
+      // what actually went on the truck, and counting gear back against
+      // the ORDER instead of against that is how a line that never left
+      // gets written up as missing.
       checkReports: {
-        where: { edge },
+        where: edge === 'IN' ? {} : { edge },
         select: {
+          edge: true,
           submittedAt: true, preppedBy: true, notes: true, changedOrder: true,
           partial: true, sheetPhotoUrl: true,
+          reportSentAt: true, reportSentTo: true,
           lines: {
             select: {
               orderLineItemId: true, description: true, expectedQty: true,
-              actualQty: true, change: true, substituteFor: true, note: true,
-              onSheet: true, countedBy: true, countedAt: true,
+              actualQty: true, damagedQty: true, change: true, substituteFor: true,
+              note: true, onSheet: true, countedBy: true, countedAt: true,
             },
             orderBy: { createdAt: 'asc' },
           },
@@ -448,7 +499,15 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
     order.lineItems.map((l) => ({ id: l.id, inventoryItemId: l.inventoryItemId })),
   )
 
-  const prior = order.checkReports[0] ?? null
+  const prior = order.checkReports.find((r) => r.edge === edge) ?? null
+  // The sheet the gear left on — read on the IN edge only, where it is
+  // both the gate ("did this ever go out") and the baseline.
+  const outReport = edge === 'IN' ? order.checkReports.find((r) => r.edge === 'OUT') ?? null : null
+  const outByLine = new Map(
+    (outReport?.lines ?? [])
+      .filter((l) => l.orderLineItemId && l.onSheet)
+      .map((l) => [l.orderLineItemId as string, l.actualQty]),
+  )
   const priorByLine = new Map(
     (prior?.lines ?? []).filter((l) => l.orderLineItemId).map((l) => [l.orderLineItemId as string, l]),
   )
@@ -506,6 +565,24 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
           // so the count stops — the per-line uncounted state stays,
           // because "nobody counted this" is true either way.
           addedSince: stillPullable(order.status) ? addedIds.size : 0,
+          reportSentAt: prior.reportSentAt?.toISOString() ?? null,
+          reportSentTo: prior.reportSentTo ?? [],
+        }
+      : null,
+    checkIn:
+      edge === 'IN'
+        ? checkInReadiness({
+            status: order.status,
+            endYmd: ymd(order.endDate),
+            todayYmd: pacificYmd(0),
+            outFiled: !!outReport,
+          })
+        : null,
+    outSheet: outReport
+      ? {
+          submittedAt: outReport.submittedAt.toISOString(),
+          preppedBy: outReport.preppedBy,
+          partial: outReport.partial,
         }
       : null,
     preppedBy: '',
@@ -521,6 +598,13 @@ export async function reportDraft(orderId: string, edge: OrderCheckEdge): Promis
         // Pre-filled to "it all went" — the supervisor only touches the
         // exceptions. A blank column would make every line a decision.
         actualQty: p ? p.actualQty : li.quantity,
+        damagedQty: p?.damagedQty ?? 0,
+        // What the check-out sheet put on the truck. `undefined` from the
+        // map means the out sheet never counted this line — either it was
+        // added afterwards or it was held back — and null is how the
+        // screen says "nothing went out on this one".
+        outQty: edge === 'IN' ? outByLine.get(li.id) ?? null : null,
+        addedAtCheckOut: !!li.warehouseAddedAt,
         change: p ? p.change : 'NONE',
         // Re-opening a partial: the lines that stayed on the shelf come
         // back still off the sheet, so the second pull starts where the
@@ -566,6 +650,16 @@ export interface SubmitLineInput {
   description: string
   expectedQty: number
   actualQty: number
+  /**
+   * Check-IN only: how many of the ones that came back are broken.
+   *
+   * Never subtracted from `actualQty` — a damaged case is on the shelf,
+   * so it came back. Clamped to what came back below, because a sheet
+   * saying 2 back and 3 damaged is a typo, and the safe reading of a
+   * typo is the smaller loss. Ignored on the OUT edge: gear we know is
+   * broken does not get loaded.
+   */
+  damagedQty?: number
   substituteFor?: string | null
   note?: string | null
   /**
@@ -654,10 +748,16 @@ export async function submitCheckReport(opts: {
   // concludes the client didn't get it.
   const classified = lines.map((l) => {
     const onSheet = l.onSheet !== false
+    const actualQty = onSheet ? l.actualQty : l.expectedQty
     return {
       ...l,
       onSheet,
-      actualQty: onSheet ? l.actualQty : l.expectedQty,
+      actualQty,
+      // A line nobody counted says nothing about damage either.
+      damagedQty:
+        edge === 'IN' && onSheet
+          ? Math.max(0, Math.min(Math.trunc(l.damagedQty ?? 0), actualQty))
+          : 0,
       change: onSheet ? classifyCheckLine(l) : ('NONE' as OrderCheckLineChange),
     }
   })
@@ -835,6 +935,7 @@ export async function submitCheckReport(opts: {
         description: l.description,
         expectedQty: l.expectedQty,
         actualQty: l.actualQty,
+        damagedQty: l.damagedQty,
         change: l.change,
         onSheet: l.onSheet,
         substituteFor: l.substituteFor?.trim() || null,

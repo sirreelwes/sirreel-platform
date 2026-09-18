@@ -33,9 +33,9 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { missingOnCheckIn } from '@/lib/invoices/ldMissingGear'
+import { damagedOnCheckIn, missingOnCheckIn } from '@/lib/invoices/ldMissingGear'
 
-export type LdCandidateSource = 'CHECK_IN_SHORT' | 'VEHICLE_DAMAGE'
+export type LdCandidateSource = 'CHECK_IN_SHORT' | 'CHECK_IN_DAMAGED' | 'VEHICLE_DAMAGE'
 
 export interface LdCandidate {
   /** Stable within one response — the composer keys its rows on it. */
@@ -103,6 +103,7 @@ export async function buildLdCandidates(orderId: string): Promise<LdCandidateSet
           note: true,
           orderLineItemId: true,
           onSheet: true,
+          damagedQty: true,
         },
       },
     },
@@ -118,10 +119,29 @@ export async function buildLdCandidates(orderId: string): Promise<LdCandidateSet
     })),
   )
 
+  // Gear that came back BROKEN. It is not a shortfall — the case is on the
+  // shelf — so it never appears above, and until it was its own number on
+  // the sheet (2026-09-18) the billing desk had no record of it at all:
+  // the light came back, the count balanced, and nobody was billed for a
+  // fixture nobody can rent out again. Deduped by order line, keeping the
+  // largest count: a re-count replaces the sheet, but a partial return can
+  // leave several inbound reports and the same line must not bill twice.
+  const damagedByLine = new Map<string, ReturnType<typeof damagedOnCheckIn>[number] & { id: string }>()
+  for (const r of reports) {
+    for (const d of damagedOnCheckIn(r.lines)) {
+      const row = { ...d, id: r.lines.find((l) => l.orderLineItemId === d.orderLineItemId)!.id }
+      const seen = damagedByLine.get(d.orderLineItemId)
+      if (!seen || d.damaged > seen.damaged) damagedByLine.set(d.orderLineItemId, row)
+    }
+  }
+  const damagedLines = Array.from(damagedByLine.values())
+
   // Price the short gear at what it costs to replace. One query for every
   // line at once — the composer is opened from a queue row and must not
   // wait on a fan-out.
-  const orderLineIds = shortLines.map((l) => l.orderLineItemId).filter((v): v is string => !!v)
+  const orderLineIds = [...shortLines, ...damagedLines]
+    .map((l) => l.orderLineItemId)
+    .filter((v): v is string => !!v)
   const orderLines = orderLineIds.length
     ? await prisma.orderLineItem.findMany({
         where: { id: { in: orderLineIds } },
@@ -150,6 +170,25 @@ export async function buildLdCandidates(orderId: string): Promise<LdCandidateSet
       note: l.note || `${l.actualQty} of ${l.expectedQty} came back`,
     }
   })
+
+  for (const l of damagedLines) {
+    const inv = byLineId.get(l.orderLineItemId)?.inventoryItem
+    const cost = inv?.replacementCost == null ? null : Number(inv.replacementCost)
+    candidates.push({
+      key: `damaged:${l.id}`,
+      source: 'CHECK_IN_DAMAGED',
+      description: `Came back damaged — ${l.description}`,
+      category: inv?.description ?? inv?.code ?? null,
+      qty: l.damaged,
+      // Replacement cost is a SUGGESTION and often the wrong one — plenty
+      // of damage is a repair, not a write-off. Ana prices it; the figure
+      // is here so she is not looking it up.
+      unitPrice: cost ?? 0,
+      priced: cost != null && cost > 0,
+      priceBasis: cost != null && cost > 0 ? 'replacement cost' : null,
+      note: l.note || `${l.damaged} of the ${l.actualQty} returned came back damaged`,
+    })
+  }
 
   // Vehicle damage keeps its existing route into an LD invoice; it is listed
   // here too so ONE composer covers both halves of "loss and damage" and Ana

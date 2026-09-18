@@ -105,6 +105,7 @@
     "test:unit-scans": "tsx tests/warehouse/unit-scans.test.ts",
     "test:kit-checklists": "tsx tests/warehouse/kit-checklists.test.ts",
     "test:yard": "tsx tests/yard/board-grouping.test.ts",
+    "test:check-in-sheet": "tsx tests/orders/check-in-sheet.test.ts",
     "test:check-report": "tsx tests/orders/check-report-classify.test.ts",
     "test:check-passes": "tsx tests/orders/check-passes.test.ts",
     "test:annual-coverage": "tsx tests/agreements/annual-coverage.test.ts",

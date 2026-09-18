@@ -40,6 +40,7 @@ scripts/*
 !scripts/add-collector-columns.ts
 !scripts/add-unit-scan-table.ts
 !scripts/add-unit-checks-columns.ts
+!scripts/add-check-in-report-columns.ts
 !scripts/add-warehouse-line-columns.ts
 !scripts/add-booking-assignment-line-column.ts
 !scripts/seed-unit-checks.ts

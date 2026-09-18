@@ -105,6 +105,11 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       return NextResponse.json({ error: 'every actualQty must be a non-negative whole number' }, { status: 400 })
     }
     const description = typeof raw.description === 'string' ? raw.description.trim() : ''
+    // Came back broken. Non-negative whole number; the lib clamps it to
+    // what actually came back, since "3 back, 5 damaged" is a typo and
+    // the safe reading of a typo is the smaller loss.
+    const damagedRaw = Number(raw.damagedQty ?? 0)
+    const damaged = Number.isInteger(damagedRaw) && damagedRaw > 0 ? damagedRaw : 0
     if (lineId) {
       const li = byId.get(lineId)
       if (!li) return NextResponse.json({ error: `line ${lineId} is not on this order` }, { status: 400 })
@@ -113,6 +118,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
         description: description || li.description,
         expectedQty: li.quantity,
         actualQty: actual,
+        damagedQty: damaged,
         substituteFor: typeof raw.substituteFor === 'string' ? raw.substituteFor : null,
         note: typeof raw.note === 'string' ? raw.note : null,
         // Off-sheet = this line was not part of this pull. Absent means
@@ -175,7 +181,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
           where: { report: { orderId: id, edge: 'IN' } },
           select: {
             orderLineItemId: true, description: true, expectedQty: true,
-            actualQty: true, change: true, onSheet: true, note: true,
+            actualQty: true, damagedQty: true, change: true, onSheet: true, note: true,
           },
         })
       : []
@@ -240,7 +246,7 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
       where: { reportId: result.reportId },
       select: {
         orderLineItemId: true, description: true, expectedQty: true,
-        actualQty: true, change: true, onSheet: true, note: true,
+        actualQty: true, damagedQty: true, change: true, onSheet: true, note: true,
       },
     }).catch(() => null)
     if (filed) {

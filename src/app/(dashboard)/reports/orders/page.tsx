@@ -106,7 +106,16 @@ export default async function OrderReportsPage() {
       <OrderReportSearch />
       <CheckEdgeTabs
         outDue={out.filter((r) => !r.filed || r.filed.partial || r.filed.addedSince > 0).length}
-        backDue={back.filter((r) => !r.filed || r.filed.partial || r.filed.addedSince > 0).length}
+        // An order nobody could check in yet is not work waiting at this
+        // end — counting it made the tab read four-due on a quiet morning
+        // when three of them were still on set (Wes, 2026-09-18).
+        backDue={
+          back.filter((r) =>
+            r.filed
+              ? r.filed.partial || r.filed.addedSince > 0
+              : r.checkIn?.ready ?? true,
+          ).length
+        }
         out={
           <Lane
             title="Check out — going out"
@@ -236,9 +245,19 @@ function Lane({
                         {r.filed.preppedBy && <span className="text-chip-good-fg/70 font-normal">· {r.filed.preppedBy}</span>}
                       </span>
                     )
+                  ) : edge === 'IN' && r.checkIn && !r.checkIn.ready ? (
+                    /* Wes, 2026-09-18: a check-in is "only possible when
+                       the order is back". The row still opens — the sheet
+                       on a supervisor's desk always has to have somewhere
+                       to go — but it stops looking like work that is due,
+                       and the door on the page names what is in the way.
+                       See lib/orders/checkInReady.ts. */
+                    <span className="text-[12px] font-semibold text-lt-fg3 border border-lt-hairline rounded-md px-2 py-1">
+                      {r.checkIn.block === 'never-went-out' ? 'Never went out' : 'Not back yet'}
+                    </span>
                   ) : (
                     <span className="text-[12px] font-semibold text-chip-warn-fg border border-chip-warn-fg/30 bg-chip-warn-bg rounded-md px-2 py-1">
-                      Not entered
+                      {edge === 'IN' ? 'Begin check in' : 'Not entered'}
                     </span>
                   )}
 

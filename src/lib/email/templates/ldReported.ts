@@ -28,6 +28,23 @@ export interface LdMissingRow {
   replacementCost: number | null
 }
 
+/**
+ * GEAR that came back broken — the warehouse's second number on a
+ * check-in line (Wes, 2026-09-18). Deliberately not an LdDamageRow: that
+ * one is vehicle-shaped (a unit, a location on it, a severity from a
+ * walk-around), and a crushed stinger has none of those. What it has is
+ * a count and what it costs to replace.
+ */
+export interface LdGearDamageRow {
+  description: string
+  damaged: number
+  /** What came back in total, the damaged ones included. */
+  actualQty: number
+  note: string | null
+  /** Per unit, from inventory. null = HQ holds no figure. */
+  replacementCost: number | null
+}
+
 export interface LdDamageRow {
   unitName: string | null
   location: string
@@ -52,6 +69,8 @@ export interface LdReportedEmailInput {
   missing: LdMissingRow[]
   turnedUp: Array<{ description: string; wasMissing: number; nowMissing: number }>
   damage: LdDamageRow[]
+  /** Gear the check-in sheet counted back broken. */
+  damagedGear?: LdGearDamageRow[]
   /** Set with source DRIVER_RETURN: a driver on an unattended drop ticked
    *  "I can see new damage". No DamageItem exists yet — just their word,
    *  their note and their close-ups — so it renders as its own section. */
@@ -132,6 +151,14 @@ function damageLine(d: LdDamageRow): string {
   return `${where}${lower(d.damageType)} (${lower(d.severity)}) at ${d.location}${est}${route}${d.notes ? `. Note: ${d.notes}` : ''}`
 }
 
+function gearDamageLine(d: LdGearDamageRow): string {
+  const cost =
+    d.replacementCost != null && d.replacementCost > 0
+      ? ` — ${usd(d.replacementCost * d.damaged)} to replace${d.damaged > 1 ? ` (${usd(d.replacementCost)} each)` : ''}`
+      : ' — no replacement cost on file'
+  return `${d.damaged} × ${d.description} back damaged (of ${d.actualQty} returned)${cost}${d.note ? `. Note: ${d.note}` : ''}`
+}
+
 function turnedUpLine(t: LdReportedEmailInput['turnedUp'][number]): string {
   return t.nowMissing === 0
     ? `${t.description} — all accounted for now (was ${t.wasMissing} missing)`
@@ -155,8 +182,11 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
   const tail = `${orderRef}${account ? ` · ${account}` : ''}`
 
   const missingUnits = i.missing.reduce((n, m) => n + m.missing, 0)
+  const gearDamage = i.damagedGear ?? []
+  const damagedUnits = gearDamage.reduce((n, d) => n + d.damaged, 0)
   const dr = i.driverReport ?? null
-  const onlyGoodNews = !i.missing.length && !i.damage.length && !dr && i.turnedUp.length > 0
+  const onlyGoodNews =
+    !i.missing.length && !i.damage.length && !gearDamage.length && !dr && i.turnedUp.length > 0
 
   const what: string[] = []
   if (missingUnits) what.push(`${missingUnits} item${missingUnits === 1 ? '' : 's'} not returned`)
@@ -164,6 +194,7 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
     const units = Array.from(new Set(i.damage.map((d) => d.unitName).filter(Boolean)))
     what.push(`new damage${units.length ? ` on ${units.join(', ')}` : ''}`)
   }
+  if (damagedUnits) what.push(`${damagedUnits} item${damagedUnits === 1 ? '' : 's'} back damaged`)
   if (dr) what.push(`driver reported new damage${dr.unitName ? ` on ${dr.unitName}` : ''}`)
   const subject = onlyGoodNews
     ? `L&D update: missing gear turned up — ${tail}`
@@ -171,10 +202,12 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
 
   const knownValue =
     i.missing.reduce((n, m) => n + (m.replacementCost && m.replacementCost > 0 ? m.replacementCost * m.missing : 0), 0) +
-    i.damage.reduce((n, d) => n + (d.estimate && d.estimate > 0 ? d.estimate : 0), 0)
+    i.damage.reduce((n, d) => n + (d.estimate && d.estimate > 0 ? d.estimate : 0), 0) +
+    gearDamage.reduce((n, d) => n + (d.replacementCost && d.replacementCost > 0 ? d.replacementCost * d.damaged : 0), 0)
   const unpriced =
     i.missing.filter((m) => !(m.replacementCost && m.replacementCost > 0)).length +
-    i.damage.filter((d) => !(d.estimate && d.estimate > 0)).length
+    i.damage.filter((d) => !(d.estimate && d.estimate > 0)).length +
+    gearDamage.filter((d) => !(d.replacementCost && d.replacementCost > 0)).length
 
   const surface =
     i.source === 'CHECK_IN'
@@ -218,6 +251,7 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
     detailTable(rows),
     i.missing.length ? p('<strong>Not returned</strong>') + list(i.missing.map(missingLine)) : '',
     i.damage.length ? p('<strong>New damage</strong>') + list(i.damage.map(damageLine)) : '',
+    gearDamage.length ? p('<strong>Came back damaged</strong>') + list(gearDamage.map(gearDamageLine)) : '',
     dr
       ? p('<strong>Driver-reported damage</strong>') +
         list(driverLines(dr)) +
@@ -243,6 +277,7 @@ export function buildLdReportedEmail(i: LdReportedEmailInput) {
     '',
     ...(i.missing.length ? ['NOT RETURNED', ...i.missing.map((m) => `- ${missingLine(m)}`), ''] : []),
     ...(i.damage.length ? ['NEW DAMAGE', ...i.damage.map((d) => `- ${damageLine(d)}`), ''] : []),
+    ...(gearDamage.length ? ['CAME BACK DAMAGED', ...gearDamage.map((d) => `- ${gearDamageLine(d)}`), ''] : []),
     ...(dr ? ['DRIVER-REPORTED DAMAGE', ...driverLines(dr).map((l) => `- ${l}`), `Photos: ${dr.photosLink}`, ''] : []),
     ...(i.turnedUp.length ? ['TURNED UP SINCE THE LAST COUNT', ...i.turnedUp.map((t) => `- ${turnedUpLine(t)}`), ''] : []),
     onlyGoodNews
