@@ -30,6 +30,7 @@ import {
   type CardAskReason,
 } from '../../src/lib/payments/cardAsk'
 import { defaultEmailBody } from '../../src/lib/email/standardOpening'
+import { buildCardDeclinedEmail } from '../../src/lib/email/templates/cardDeclined'
 
 const failures: string[] = []
 
@@ -287,6 +288,57 @@ assert(
 assert(
   replacementNeeded([REFUSED, UNCHECKED]) === false,
   'a refused card beside an unchecked one clears — we cannot say the other is dead',
+)
+
+console.log('\nThe email the client actually receives\n')
+
+const declinedMail = buildCardDeclinedEmail({
+  firstName: 'Joelle',
+  jobName: 'Party Giraffes',
+  last4: '4242',
+  link: 'https://tsx.sirreel.com/portal/v2/tok123',
+})
+
+for (const [form, body] of [
+  ['html', declinedMail.html],
+  ['text', declinedMail.text],
+] as const) {
+  assert(/not approved by your bank/i.test(body), `${form}: says the BANK did not approve it`)
+  // The sentence that stops the phone call. A decline notice without it
+  // reads as a failed payment.
+  assert(/nothing was charged/i.test(body), `${form}: says nothing was charged`)
+  assert(/\$0/.test(body), `${form}: explains the $0 verification, so the figure is not a mystery`)
+  assert(/different card/i.test(body), `${form}: asks for a different card`)
+  assert(/saved/i.test(body), `${form}: says the rest of their paperwork survived`)
+  assert(body.includes('tok123'), `${form}: carries their own portal link back to the form`)
+  assert(/4242/.test(body), `${form}: names which card, so they can tell it from another`)
+  // Never a guess at the cause — and never "call your bank", which is advice
+  // about a cause we have not established.
+  assert(
+    !/insufficient|expired|fraud|frozen|stolen|limit|call your bank|contact your bank/i.test(body),
+    `${form}: does NOT guess why, and does not send them to their bank`,
+  )
+}
+
+assert(
+  declinedMail.subject === "Your card didn't go through — Party Giraffes",
+  'the subject names the production',
+)
+const noJob = buildCardDeclinedEmail({ link: 'https://x/y' })
+assert(
+  noJob.subject === "Your card didn't go through",
+  'no job on the paperwork → the subject still reads cleanly',
+)
+assert(/^Hi,/m.test(noJob.text), 'no first name → a plain "Hi," rather than "Hi undefined"')
+assert(!/ending/.test(noJob.text), 'no last4 recorded → the card is not named at all')
+// Both optional slots empty is the shape most likely to leave an artifact
+// ("The card  you just added  for  was not…"), so pin the whole sentence
+// rather than probing for one.
+assert(
+  noJob.text.includes(
+    "The card you just added was not approved by your bank, so we can't use it for the rental.",
+  ),
+  'no job and no last4 → the sentence still reads cleanly, no double spaces or dangling "for"',
 )
 
 console.log('')

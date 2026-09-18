@@ -109,6 +109,7 @@ export function systemLabel(label: string | null | undefined): string {
   if (l.startsWith('resend-quote-on-change')) return 'Updated quote sent'
   if (l.startsWith('card-auth-request')) return 'Card authorization sent'
   if (l.startsWith('card-auth-handoff')) return 'Card authorization handed to a colleague'
+  if (l.startsWith('card-declined-client')) return 'Card declined — client asked for another'
   if (l.startsWith('self-serve')) return 'What happens next'
   if (l.startsWith('thank-you')) return 'Thank-you sent'
   if (l.startsWith('orders/agreement/resend-link') || l.startsWith('portal/resend-link')) return 'Portal link re-sent'
