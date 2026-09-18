@@ -4,6 +4,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { parseMoney } from "@/lib/pricing/resolveRate";
+import { LIVE_ORDER_STATUSES } from "@/lib/coi/replacementValue";
 
 export const dynamic = "force-dynamic";
 
@@ -118,6 +119,34 @@ export async function GET(req: NextRequest) {
   const id = searchParams.get("id");
   if (id) { where.id = id; delete where.isActive; }
 
+  // `?upcoming=1` — the replacement-cost backlog (Action Items → the
+  // wizard): rows on a live, not-yet-returned order that NOTHING can
+  // value — no catalog cost and no priced RentalWorks unit. Ordered by
+  // the soonest order start so the wizard prices what goes out first.
+  // Same predicate the action-items provider counts, minus the fleet
+  // fallback for vehicle classes (a row is still the catalog's to price
+  // even when one truck's fleet record covers it).
+  const upcoming = searchParams.get("upcoming") === "1";
+  const today = new Date();
+  today.setUTCHours(0, 0, 0, 0);
+  if (upcoming) {
+    where.AND = [
+      { OR: [{ replacementCost: null }, { replacementCost: { lte: 0 } }] },
+      { units: { none: { inactive: false, replacementCost: { gt: 0 } } } },
+      {
+        lineItems: {
+          some: {
+            order: {
+              status: { in: [...LIVE_ORDER_STATUSES] },
+              OR: [{ endDate: null }, { endDate: { gte: today } }],
+              job: { status: { not: "LOST" }, archivedAt: null },
+            },
+          },
+        },
+      },
+    ];
+  }
+
   if (categoryId) where.categoryId = categoryId;
   if (search) {
     where.OR = [
@@ -137,6 +166,32 @@ export async function GET(req: NextRequest) {
       orderBy: [{ category: { sortOrder: "asc" } }, { code: "asc" }],
       skip: (page - 1) * limit,
       take: limit,
+    }).then(async (rows) => {
+      if (!upcoming || rows.length === 0) return rows;
+      // Soonest pickup first. Prisma cannot order a row by the min of a
+      // relation, so read the rows' live lines once and sort the PAGE —
+      // the wizard pulls the whole queue in one page (limit=1000), so
+      // the page is the set.
+      const lines = await prisma.orderLineItem.findMany({
+        where: {
+          inventoryItemId: { in: rows.map((r) => r.id) },
+          order: {
+            status: { in: [...LIVE_ORDER_STATUSES] },
+            OR: [{ endDate: null }, { endDate: { gte: today } }],
+          },
+        },
+        select: { inventoryItemId: true, order: { select: { startDate: true } } },
+      });
+      const soonest = new Map<string, number>();
+      for (const l of lines) {
+        if (!l.inventoryItemId || !l.order.startDate) continue;
+        const t = l.order.startDate.getTime();
+        const cur = soonest.get(l.inventoryItemId);
+        if (cur === undefined || t < cur) soonest.set(l.inventoryItemId, t);
+      }
+      return [...rows].sort(
+        (a, b) => (soonest.get(a.id) ?? Infinity) - (soonest.get(b.id) ?? Infinity) || a.code.localeCompare(b.code),
+      );
     }),
     prisma.inventoryItem.count({ where }),
     prisma.inventoryCategory.findMany({
