@@ -46,12 +46,12 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { planUnitRelease } from '@/lib/scheduling/holdRelease'
+import { planUnitRelease, planRowRelease } from '@/lib/scheduling/holdRelease'
 
 // Re-exported so callers that already reach for the release recipe get
 // the addressing helpers from the same place.
-export { holdRowId, parseHoldRowId, planUnitRelease } from '@/lib/scheduling/holdRelease'
-export type { ParsedHoldRowId, ReleasePlan } from '@/lib/scheduling/holdRelease'
+export { holdRowId, parseHoldRowId, planUnitRelease, planRowRelease } from '@/lib/scheduling/holdRelease'
+export type { ParsedHoldRowId, ReleasePlan, RowReleasePlan } from '@/lib/scheduling/holdRelease'
 
 const ACTIVE_ASSIGNMENT_STATUSES = ['ASSIGNED', 'CHECKED_OUT'] as const
 
@@ -64,6 +64,20 @@ export interface ReleaseOptions {
    * no longer see.
    */
   assetIds?: string[]
+  /**
+   * Release exactly these ASSIGNMENT ROWS — the precise form, for a
+   * caller that knows which rows are its own (an order line does:
+   * `liveUnitsForLine` returns the assignment id).
+   *
+   * Takes precedence over `assetIds`, and exists because an asset id is
+   * NOT a unique key on a BookingItem: one van sits on one hold twice
+   * whenever an order carries two date blocks of the same class, and the
+   * `assetIds` write is an `updateMany` on `assetId IN (…)` that takes
+   * both rows. Wes 2026-09-19 — a hold reading "0 of 1 assigned" with two
+   * SWAPPED Sprinter 2 rows on it and a live line still quoting the van.
+   * See `planRowRelease` for the quantity floor this mode needs.
+   */
+  assignmentIds?: string[]
   /**
    * Also drop this many UNASSIGNED slots off the line (the "2 more, no
    * unit picked" remainder row on the job's release list). Defaults to 0.
@@ -111,6 +125,8 @@ export type ReleaseOutcome =
       status: 'REQUESTED' | 'ASSIGNED' | 'UNFULFILLED'
       /** Asked-for assets that weren't actively assigned to this item. */
       unmatchedAssetIds: string[]
+      /** Row mode only: asked-for rows this item is not holding. */
+      unmatchedAssignmentIds?: string[]
     }
   | { ok: false; reason: string; code: 'NOT_FOUND' | 'TERMINAL' }
 
@@ -203,7 +219,20 @@ export async function releaseBookingItem(
     }
   }
 
-  const named = options.assetIds ?? null
+  // Rows win over assets: a caller that named rows knows precisely which
+  // of the item's assignments are its own, and that is the only form that
+  // can tell two trips of one van apart.
+  const namedRows = options.assignmentIds ?? null
+  const rowPlan = namedRows
+    ? planRowRelease({
+        quantity: item.quantity,
+        activeAssignmentIds: item.assignments.map((a) => a.id),
+        releaseAssignmentIds: namedRows,
+        pooledSlots: options.pooledSlots,
+      })
+    : null
+
+  const named = namedRows ? null : options.assetIds ?? null
   const plan = named
     ? planUnitRelease({
         quantity: item.quantity,
@@ -212,6 +241,58 @@ export async function releaseBookingItem(
         pooledSlots: options.pooledSlots,
       })
     : null
+
+  // ── Named ROWS, and something survives on the line ───────────────────
+  if (rowPlan && rowPlan.mode === 'UNITS') {
+    if (rowPlan.releaseAssignmentIds.length === 0 && (options.pooledSlots ?? 0) === 0) {
+      return {
+        ok: true,
+        alreadyReleased: true,
+        bookingItemId: item.id,
+        swappedAssignmentCount: 0,
+        mode: 'UNITS',
+        quantity: item.quantity,
+        status: item.status as 'REQUESTED' | 'ASSIGNED',
+        unmatchedAssetIds: [],
+        unmatchedAssignmentIds: rowPlan.unmatchedAssignmentIds,
+      }
+    }
+    const swapped = await prisma.$transaction(async (tx) => {
+      const res = await tx.bookingAssignment.updateMany({
+        // By ROW id. The asset path's `assetId IN (…)` is what took a
+        // sibling line's trip on the same van.
+        where: {
+          bookingItemId: item.id,
+          id: { in: rowPlan.releaseAssignmentIds },
+          status: { in: [...ACTIVE_ASSIGNMENT_STATUSES] },
+        },
+        data: { status: 'SWAPPED' },
+      })
+      await tx.bookingItem.update({
+        where: { id: item.id },
+        data: { quantity: rowPlan.newQuantity, status: rowPlan.newStatus },
+      })
+      return res.count
+    })
+    const outcome = {
+      ok: true as const,
+      alreadyReleased: false,
+      bookingItemId: item.id,
+      swappedAssignmentCount: swapped,
+      mode: 'UNITS' as const,
+      quantity: rowPlan.newQuantity,
+      status: rowPlan.newStatus,
+      unmatchedAssetIds: [],
+      unmatchedAssignmentIds: rowPlan.unmatchedAssignmentIds,
+    }
+    // The trail still names TRUCKS — an audit row listing assignment ids
+    // is unreadable to the person asking which van came off.
+    const releasedAssetIds = item.assignments
+      .filter((a) => rowPlan.releaseAssignmentIds.includes(a.id))
+      .map((a) => a.assetId)
+    await recordRelease({ item, actor: options.actor, outcome, releasedAssetIds })
+    return outcome
+  }
 
   // ── Named units, and something survives on the line ──────────────────
   if (plan && plan.mode === 'UNITS') {

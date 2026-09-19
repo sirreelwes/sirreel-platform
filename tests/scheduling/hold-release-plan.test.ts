@@ -15,7 +15,7 @@
  *   · too NARROW — the truck is freed but the line keeps its quantity,
  *     so the category still reads as booked and nobody can rent it
  */
-import { holdRowId, parseHoldRowId, planUnitRelease } from '../../src/lib/scheduling/holdRelease'
+import { holdRowId, parseHoldRowId, planUnitRelease, planRowRelease } from '../../src/lib/scheduling/holdRelease'
 
 const failures: string[] = []
 function eq(got: unknown, want: unknown, why: string): void {
@@ -97,6 +97,85 @@ eq(
   planUnitRelease({ quantity: 2, assignedAssetIds: ['cube10', 'cube12'], releaseAssetIds: ['cube10'], pooledSlots: 1 }),
   { mode: 'ITEM', releaseAssetIds: ['cube10'], unmatchedAssetIds: [], newQuantity: 0, newStatus: 'REQUESTED' },
   'a pooled ask bigger than the line has left still lands on the whole-line release, never a negative quantity',
+)
+
+// ── BY ROW — two trips of ONE van (Wes 2026-09-19) ──────────────────────
+// An asset id is not a unique key on a BookingItem. An order carries two
+// date blocks of the same class as a matter of routine, so the same van
+// sits on the hold TWICE; the asset path dedupes its list and its write is
+// an `updateMany` on `assetId IN (…)`, so removing ONE line took the
+// sibling line's trip with it and left the hold reading "0 of 1 assigned"
+// over two SWAPPED rows — with a live line still quoting the van.
+eq(
+  planRowRelease({
+    quantity: 2,
+    activeAssignmentIds: ['a-sep17', 'a-sep20'],
+    releaseAssignmentIds: ['a-sep20'],
+  }),
+  { mode: 'UNITS', releaseAssignmentIds: ['a-sep20'], unmatchedAssignmentIds: [], newQuantity: 1, newStatus: 'ASSIGNED' },
+  'releasing ONE trip of a van that is on the hold twice leaves the other trip bound',
+)
+// The trap the floor exists for: the quantity is the PEAK, so two
+// NON-overlapping trips of one van are quantity 1 with two rows. Without
+// the floor this reaches 0, degrades to the whole-item release, and swaps
+// the trip that was staying — the exact bug, by a different door.
+eq(
+  planRowRelease({
+    quantity: 1,
+    activeAssignmentIds: ['a-sep17', 'a-sep24'],
+    releaseAssignmentIds: ['a-sep24'],
+  }),
+  { mode: 'UNITS', releaseAssignmentIds: ['a-sep24'], unmatchedAssignmentIds: [], newQuantity: 1, newStatus: 'ASSIGNED' },
+  'a peak-quantity hold never degrades to the whole line while a truck is still bound',
+)
+eq(
+  planRowRelease({
+    quantity: 1,
+    activeAssignmentIds: ['a-sep17'],
+    releaseAssignmentIds: ['a-sep17'],
+  }),
+  { mode: 'ITEM', releaseAssignmentIds: ['a-sep17'], unmatchedAssignmentIds: [], newQuantity: 0, newStatus: 'REQUESTED' },
+  'the last truck off a one-truck line is still the whole-line release',
+)
+eq(
+  planRowRelease({
+    quantity: 3,
+    activeAssignmentIds: ['a1', 'a2'],
+    releaseAssignmentIds: ['a1'],
+    pooledSlots: 1,
+  }),
+  { mode: 'UNITS', releaseAssignmentIds: ['a1'], unmatchedAssignmentIds: [], newQuantity: 1, newStatus: 'ASSIGNED' },
+  'a row and a spare slot: 3 -> 1, the other truck still covers it',
+)
+eq(
+  planRowRelease({
+    quantity: 2,
+    activeAssignmentIds: ['a1', 'a2'],
+    releaseAssignmentIds: ['gone'],
+  }),
+  { mode: 'UNITS', releaseAssignmentIds: [], unmatchedAssignmentIds: ['gone'], newQuantity: 2, newStatus: 'ASSIGNED' },
+  'a row this line no longer holds is reported, never widened into a release',
+)
+eq(
+  planRowRelease({
+    quantity: 2,
+    activeAssignmentIds: ['a1', 'a2'],
+    releaseAssignmentIds: ['a1', 'a1'],
+  }),
+  { mode: 'UNITS', releaseAssignmentIds: ['a1'], unmatchedAssignmentIds: [], newQuantity: 1, newStatus: 'ASSIGNED' },
+  'a double-click naming one ROW twice still subtracts one',
+)
+// The asset path is UNCHANGED, and this is the state Wes photographed.
+// Two Sprinter 2 rows on one hold of quantity 2: the plan dedupes to one
+// asset, so the quantity comes down by ONE to 1 — and the write behind it
+// (`updateMany` on assetId) then swaps BOTH rows. Hold left reading
+// "0 of 1 assigned" over two SWAPPED rows, with the line still quoting the
+// van. The arithmetic is not what is wrong here; addressing a ROW by its
+// asset is, which is why the line path releases rows instead.
+eq(
+  planUnitRelease({ quantity: 2, assignedAssetIds: ['sprinter2', 'sprinter2'], releaseAssetIds: ['sprinter2'] }),
+  { mode: 'UNITS', releaseAssetIds: ['sprinter2'], unmatchedAssetIds: [], newQuantity: 1, newStatus: 'REQUESTED' },
+  'by ASSET, one van on the hold twice deducts one and sheds two — the screenshot, and why the line path stopped using it',
 )
 
 console.log('')

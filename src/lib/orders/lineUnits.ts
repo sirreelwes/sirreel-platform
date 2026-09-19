@@ -186,8 +186,13 @@ export async function releaseLineUnits(args: {
     const keep = Math.max(0, Math.floor(args.keep ?? 0))
     const going = [...units].reverse().slice(0, Math.min(count, Math.max(0, units.length - keep)))
     const pooledSlots = Math.max(0, count - going.length)
+    // BY ROW, not by asset. `liveUnitsForLine` already picked the exact
+    // assignments this line holds, and an asset id cannot tell them apart:
+    // an order routinely carries two date blocks of one class, so the same
+    // van sits on the hold twice and `assetIds` took both (Wes 2026-09-19 —
+    // one line removed, the SIBLING line's Sprinter 2 swapped with it).
     const rel = await releaseBookingItem(item.id, {
-      assetIds: going.map((u) => u.assetId),
+      assignmentIds: going.map((u) => u.assignmentId),
       pooledSlots,
       actor: args.actor,
     })

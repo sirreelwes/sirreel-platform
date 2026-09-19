@@ -56,6 +56,79 @@ export function parseHoldRowId(rowId: string): ParsedHoldRowId {
   return { bookingItemId, assetId: null, pooled: false, wholeLine: true }
 }
 
+/**
+ * A ROW release plan — the same arithmetic addressed at ASSIGNMENT ROWS
+ * instead of assets.
+ *
+ * WHY AN ASSET ID IS NOT ENOUGH (Wes 2026-09-19). An asset id is not a
+ * unique key on a BookingItem: one van can sit on one hold TWICE, because
+ * an order routinely carries two date blocks of the same class
+ * (assignWindow.ts is built around exactly that). `planUnitRelease` dedupes
+ * its lists — right for a double-click that names one truck twice, wrong
+ * for two genuine trips — and the write behind it is an `updateMany` on
+ * `assetId IN (…)` with no date and no line filter. So releasing ONE line's
+ * Sprinter 2 swapped the SIBLING line's Sprinter 2 as well, while the
+ * quantity came down by one. The hold was left reading "0 of 1 assigned"
+ * with two SWAPPED rows on it and a live line still quoting the van.
+ *
+ * A line knows exactly which rows are its own (`liveUnitsForLine` returns
+ * the assignment id), so it releases those rows and nothing else.
+ *
+ * THE TRAP, and why `newQuantity` takes a floor: degrading to the
+ * whole-item release when the quantity hits zero is right for an asset
+ * release and catastrophic here. The quantity is the PEAK
+ * (`holdOnQuoteSend` sets it), so a van on the hold twice for two
+ * non-overlapping trips is quantity 1 with TWO rows — and releasing one
+ * trip would take the quantity to 0, fall into the whole-item branch, and
+ * swap the trip that was staying. **The line never holds fewer units than
+ * it has trucks bound**, so the quantity floors at the rows that survive
+ * and ITEM mode is reachable only when nothing is left bound.
+ */
+export interface RowReleasePlan {
+  mode: 'ITEM' | 'UNITS'
+  /** Assignment rows whose status gets swapped. */
+  releaseAssignmentIds: string[]
+  /** Asked-for rows this line is not actually holding. */
+  unmatchedAssignmentIds: string[]
+  newQuantity: number
+  newStatus: 'REQUESTED' | 'ASSIGNED'
+}
+
+export function planRowRelease(input: {
+  quantity: number
+  activeAssignmentIds: string[]
+  releaseAssignmentIds: string[]
+  pooledSlots?: number
+}): RowReleasePlan {
+  const active = new Set(input.activeAssignmentIds)
+  const asked = Array.from(new Set(input.releaseAssignmentIds))
+  const matched = asked.filter((id) => active.has(id))
+  const unmatched = asked.filter((id) => !active.has(id))
+  const pooled = Math.max(0, input.pooledSlots ?? 0)
+  const remaining = active.size - matched.length
+  // The floor: never fewer units than trucks still bound. Without it a
+  // peak-quantity hold with two trips of one van releases the trip that
+  // was meant to stay.
+  const newQuantity = Math.max(input.quantity - matched.length - pooled, remaining)
+
+  if (newQuantity <= 0) {
+    return {
+      mode: 'ITEM',
+      releaseAssignmentIds: matched,
+      unmatchedAssignmentIds: unmatched,
+      newQuantity: 0,
+      newStatus: 'REQUESTED',
+    }
+  }
+  return {
+    mode: 'UNITS',
+    releaseAssignmentIds: matched,
+    unmatchedAssignmentIds: unmatched,
+    newQuantity,
+    newStatus: remaining >= newQuantity ? 'ASSIGNED' : 'REQUESTED',
+  }
+}
+
 export interface ReleasePlan {
   /** ITEM = the whole line comes down. UNITS = named units only. */
   mode: 'ITEM' | 'UNITS'

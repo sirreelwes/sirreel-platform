@@ -2006,6 +2006,52 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   before this, tying the truck up by hand was not actually reachable from
   the order page.
 
+### Removing one line released the SIBLING line's van (2026-09-19 — Wes)
+- The Assign-units screenshot settled it, and **corrected the reading
+  above**: that hold is not carrying a truck the line cannot claim. It
+  reads **"0 of 1 assigned · Needs units"** over **two SWAPPED Sprinter 2
+  rows**, so there is nothing live on it at all and "Held · no unit" was
+  telling the truth. The picker was not saying the block was full either.
+- **SWAPPED is written by RELEASE, never by the swap path** (`assignUnit`
+  creates the replacement and deletes the outgoing row). So both Sprinter 2
+  assignments were RELEASED — which is what removing the second cargo-van
+  line did, via `releaseLineUnits`.
+- **An asset id is NOT a unique key on a BookingItem.** An order routinely
+  carries two date blocks of one class (`assignWindow.ts` exists for that),
+  so the same van sits on one hold TWICE. `releaseLineUnits` passed
+  `assetIds`, `planUnitRelease` **dedupes** its lists (right for a
+  double-click, wrong for two trips) so the quantity came down by ONE, and
+  the write is an `updateMany` on `assetId IN (…)` **with no date and no
+  line filter** — so it swapped BOTH rows. Quantity 1, zero live
+  assignments, a live line still quoting the van. Exactly the screenshot.
+  This is the 2026-09-10 "release by asset specific" fix's blind spot: it
+  stopped a release taking a DIFFERENT asset's row, not a second row of the
+  SAME asset.
+- **`releaseBookingItem` takes `assignmentIds` now** and `releaseLineUnits`
+  passes them — `liveUnitsForLine` already returns the assignment id, so
+  the line always knew exactly which rows were its own and was throwing
+  that away. Rows win over assets when both are passed. **The `assetIds`
+  path is byte-for-byte unchanged**: on the board, ticking a van off a
+  release list does mean every row of that van, and `holdRowId` can only
+  address `<itemId>::asset:<assetId>` anyway.
+- **`planRowRelease` needs a quantity FLOOR, and this is the subtle half.**
+  The quantity is the PEAK (`holdOnQuoteSend` sets it), so two
+  NON-overlapping trips of one van are quantity 1 with TWO rows. Subtracting
+  one would hit 0, degrade to the whole-item release, and swap the trip that
+  was staying — the same bug through a different door. So
+  `newQuantity = max(quantity - rows - pooled, rowsRemaining)`: **the line
+  never holds fewer units than it has trucks bound**, and ITEM mode is
+  reachable only when nothing is left bound.
+- `npm run test:release-plan` pins both paths, including the asset path's
+  deduct-one-shed-two arithmetic as the screenshot's own numbers.
+- **Still open, and NOT this bug:** where Cargo 35 actually is (it is on
+  neither the hold nor the visible candidates), and that the class is fully
+  committed for those days — available 0 · tight 1 · booked 14, every
+  candidate disabled, so the only offered action is "Release this hold".
+  The board's own single-bar release keeps the same ambiguity: `holdRowId`
+  names an ASSET, so releasing one Gantt bar still takes that van's other
+  trip on the same hold. Fixing that means a row-addressed hold id.
+
 ## Lost because of insurance — a reason of its own (2026-09-18 — Wes)
 - Wes: "We've lost a couple of jobs because of improper insurance from the
   Production. I'd like to have this as an option." The Mark-lost picker had
