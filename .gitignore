@@ -17,6 +17,11 @@ node_modules/
 next-env.d.ts
 .env*.local
 *.bak.*
+# Editor/paste backups. Two of these were committed and sat in the tree for
+# months (layout.tsx.save, autoAssign.ts.save) — neither was valid TypeScript,
+# both opened with pasted shell commands, and the layout one sat directly
+# beside the real staff-shell layout where a search could land in it.
+*.save
 scripts/*
 # Reusable scripts (re-runnable, ship with repo) — exempt from the
 # blanket scripts/ ignore.
