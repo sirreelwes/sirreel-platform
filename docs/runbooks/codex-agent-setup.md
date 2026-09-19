@@ -164,15 +164,16 @@ comment first** — this codebase records dated rulings there.
 
 In order, easiest to hardest:
 
-1. **A warm-up with a real answer.** Two stale `.save` backups are committed
-   — `src/app/(dashboard)/layout.tsx.save` and `src/lib/autoAssign.ts.save` —
-   and `.gitignore` has no `*.save` rule. Small, safe, verifiable, and it
-   removes a stale copy sitting beside the real staff-shell layout.
-2. **An efficiency read of one hot path**, report-only — `/api/jobs` or the
-   portal data route. Zero risk, and it tells you how good its judgement is
-   before you let it write anything.
-3. **A real bug when one appears.** The pure tests give it a genuine
-   reproduction loop with no credentials, which is where it is strongest.
+1. **An efficiency read of one hot path**, report-only — `/api/jobs` or the
+   portal data route. Start here: zero risk, and it tells you how good its
+   judgement is before you let it write anything. Read the findings for
+   whether it checked `CLAUDE.md` before calling something redundant; that
+   one habit is most of what separates useful from dangerous here.
+2. **A real bug when one appears.** The pure tests give it a genuine
+   reproduction loop with no credentials, which is where it is strongest —
+   and the stale-test lesson above is the thing to watch for in its answer.
+3. **A scoped simplify** of one file you already know well, so you can judge
+   the diff quickly.
 4. **Only then** anything that edits broadly.
 
 Do not start by asking it to "clean up the codebase". This repo's oddities

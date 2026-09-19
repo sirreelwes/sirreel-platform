@@ -472,13 +472,14 @@ The fastest route, in order:
 
 Honest inventory, so nobody mistakes these for things to fix in passing:
 
-- **Two stale `.save` backups are COMMITTED to the repo**, and `.gitignore`
-  has no rule for `*.save` (it only covers `.bak.*`):
-  `src/app/(dashboard)/layout.tsx.save` and `src/lib/autoAssign.ts.save`.
-  The first sits directly beside the real staff-shell layout, so a `grep` for
-  shell markup can land you in a stale copy. Read the real file. Removing
-  them and adding the ignore rule is a genuine small cleanup — but it is a
-  cleanup nobody has asked for, so propose it rather than doing it in passing.
+- ~~Two stale `.save` backups committed to the repo.~~ **Fixed 2026-09-19.**
+  Both deleted and `*.save` added to `.gitignore` beside the existing
+  `*.bak.*` rule. Worth knowing what they were, because it is the shape of
+  the next one: neither was a backup of working code — each was a **paste
+  accident**, opening with literal shell commands (`cd ~/Downloads/...`,
+  `sed -i ''`) or markdown fences, with an older copy of the file below.
+  Neither was valid TypeScript. The layout one sat directly beside the real
+  staff-shell layout, where a `grep` for shell markup could land in it.
 - **Only 5 migration files exist for 178 models.** That is the concrete shape
   of the "migration history has known drift from the live DB" rule: the
   migration directory is emphatically *not* the record of how the database got
