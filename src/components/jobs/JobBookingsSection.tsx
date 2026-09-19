@@ -82,6 +82,26 @@ export function isPlanyoOrigin(b: JobBooking): boolean {
 /** Terminal states the rest of the app filters out — shown greyed, not hidden. */
 const DEAD = ['CANCELLED', 'ARCHIVED']
 
+/** Pacific "today" — the day the yard is standing in, not the browser's. */
+function pacificToday(): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date())
+}
+
+/**
+ * Over: the gear is back, or the reservation was cancelled. Collapsed by
+ * default once the units nest inside the row (Wes 2026-09-19) — a job with
+ * three bookings otherwise stacks three tile grids, and the two nobody is
+ * working on are the ones taking up the room. Past is NOT hidden: a rep
+ * looking for "which van did they have in July" has to be able to open it,
+ * and the row still names its number, window and units while closed.
+ */
+export function isPastBooking(b: JobBooking, today = pacificToday()): boolean {
+  if (DEAD.includes(b.status)) return true
+  return b.endDate.slice(0, 10) < today
+}
+
 const STATUS_TONE: Record<string, string> = {
   REQUEST: 'bg-zinc-100 text-zinc-700 border-zinc-300',
   PENDING_APPROVAL: 'bg-amber-50 text-amber-700 border-amber-200',
@@ -170,6 +190,18 @@ export function JobBookingsSection({
   renderUnits?: (bookingId: string) => ReactNode
 }) {
   const [busyId, setBusyId] = useState<string | null>(null)
+  // Past rows the rep has opened by hand. Opt-IN rather than a collapsed
+  // set, so a booking that ages out overnight closes itself without anyone
+  // having to remember it.
+  const [openedPast, setOpenedPast] = useState<Set<string>>(new Set())
+  const togglePast = useCallback((id: string) => {
+    setOpenedPast((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }, [])
   const [err, setErr] = useState<string | null>(null)
   const [msg, setMsg] = useState<string | null>(null)
 
@@ -215,8 +247,14 @@ export function JobBookingsSection({
   )
 
   if (bookings.length === 0) return null
+  const today = pacificToday()
   const twins = findDuplicateHolds(bookings)
-  const liveCount = bookings.filter((b) => !DEAD.includes(b.status)).length
+  // Counted on the same test that collapses a row, so the header explains
+  // why two of three reservations are shut rather than contradicting it.
+  // (It used to count non-CANCELLED/ARCHIVED, which called a rental that
+  // ended in July "live".)
+  const pastCount = bookings.filter((b) => isPastBooking(b, today)).length
+  const currentCount = bookings.length - pastCount
   // One warning per RENTAL held twice, not per booking involved.
   const dupCount = findDuplicateGroups(bookings).length
 
@@ -234,7 +272,7 @@ export function JobBookingsSection({
         </h2>
         <div className="flex items-center gap-3">
           <span className="text-[12px] text-zinc-700">
-            {liveCount} live{bookings.length !== liveCount && ` · ${bookings.length - liveCount} closed`}
+            {currentCount} live{pastCount > 0 && ` · ${pastCount} past`}
           </span>
           {headerRight}
         </div>
@@ -259,6 +297,8 @@ export function JobBookingsSection({
       <div className="mt-3 space-y-2">
         {bookings.map((b) => {
           const dead = DEAD.includes(b.status)
+          const past = isPastBooking(b, today)
+          const showUnits = !past || openedPast.has(b.id)
           const twin = twins.get(b.id)
           // Same rule as the row's tiles: a released truck is history, not
           // a unit on this reservation. Wes 2026-09-18, after holding two
@@ -313,11 +353,12 @@ export function JobBookingsSection({
                   <div className="mt-1 text-[12px] text-zinc-700 font-mono">
                     {day(b.startDate)} – {day(b.endDate)}
                   </div>
-                  {/* With the tiles nested below, this line would be the
-                      same sentence twice — the tiles name the class and the
-                      unit, with a picture. Kept verbatim for a caller that
-                      renders no tiles. */}
-                  {!renderUnits && (
+                  {/* Alongside the tiles this line would be the same
+                      sentence twice — they name the class and the unit,
+                      with a picture. So it renders exactly when they do
+                      not: a caller that passes no tiles, and a past
+                      reservation collapsed to its summary. */}
+                  {!showUnits && (
                     <div className="mt-0.5 text-[12px] text-zinc-600 truncate">
                       {cats.join(', ') || 'no equipment'}
                       {units.length > 0 && <span className="text-zinc-600"> · {units.join(', ')}</span>}
@@ -331,6 +372,23 @@ export function JobBookingsSection({
                     </div>
                   )}
                 </div>
+                {past && renderUnits && (
+                  <button
+                    type="button"
+                    onClick={() => togglePast(b.id)}
+                    aria-expanded={showUnits}
+                    title={
+                      showUnits
+                        ? 'Collapse this past reservation'
+                        : dead
+                          ? 'This reservation was cancelled — open it to see which units it held'
+                          : 'This rental is over — open it to see which units went out'
+                    }
+                    className="shrink-0 rounded border border-zinc-300 px-2 py-1 text-[11px] font-semibold text-zinc-600 hover:border-amber-400 hover:text-amber-700"
+                  >
+                    {showUnits ? 'Hide units' : units.length > 0 ? `${units.length} unit${units.length === 1 ? '' : 's'} ▾` : 'Show ▾'}
+                  </button>
+                )}
                 {!dead && (
                   <button
                     type="button"
@@ -343,7 +401,7 @@ export function JobBookingsSection({
                   </button>
                 )}
               </div>
-              {renderUnits?.(b.id)}
+              {showUnits && renderUnits?.(b.id)}
             </div>
           )
         })}

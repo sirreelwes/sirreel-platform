@@ -16,6 +16,7 @@ import {
   findDuplicateHolds,
   findDuplicateGroups,
   isPlanyoOrigin,
+  isPastBooking,
   type JobBooking,
 } from '@/components/jobs/JobBookingsSection'
 
@@ -144,6 +145,26 @@ t = findDuplicateHolds([
   planyo('P', '1', '2026-08-27', '2026-08-31', 'Cargo Van w/ Liftgate'),
 ])
 eq('ISO timestamps still pair', t.get('N')?.bookingNumber, 'P')
+
+// Which rows the card collapses (Wes 2026-09-19: "collapse past bookings by
+// default"). Now that the units nest inside the booking, three reservations
+// mean three tile grids — and the two nobody is working on are the ones
+// taking the room. The test is a PACIFIC day compare, pinned here so it does
+// not drift with the machine's clock.
+const TODAY = '2026-09-19'
+const dated = (id: string, status: string, start: string, end: string): JobBooking => ({
+  id, bookingNumber: id, status, startDate: start, endDate: end,
+  planyoCartId: null, source: 'AGENT_DIRECT', items: [],
+})
+eq('ended yesterday → past', isPastBooking(dated('A', 'CONFIRMED', '2026-09-17', '2026-09-18'), TODAY), true)
+// A rental that comes back TODAY is still out — the yard has not seen it yet.
+eq('ends today → still current', isPastBooking(dated('B', 'CONFIRMED', '2026-09-17', '2026-09-19'), TODAY), false)
+eq('starts tomorrow → current', isPastBooking(dated('C', 'CONFIRMED', '2026-09-20', '2026-09-22'), TODAY), false)
+// Cancelled is past whatever its dates say — nothing is going out on it.
+eq('cancelled future booking → past', isPastBooking(dated('D', 'CANCELLED', '2026-09-20', '2026-09-22'), TODAY), true)
+eq('archived future booking → past', isPastBooking(dated('E', 'ARCHIVED', '2026-09-20', '2026-09-22'), TODAY), true)
+// Timestamps must not defeat this compare either.
+eq('ISO timestamp ending today → current', isPastBooking(dated('F', 'CONFIRMED', '2026-09-17T00:00:00.000Z', '2026-09-19T00:00:00.000Z'), TODAY), false)
 
 console.log(fail === 0 ? '\nall duplicate-hold checks passed' : `\n${fail} FAILED`)
 process.exit(fail === 0 ? 0 : 1)
