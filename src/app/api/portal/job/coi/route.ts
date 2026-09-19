@@ -12,6 +12,7 @@ import { scheduleOneShotCadenceEvent } from '@/lib/cadence/scheduler'
 // One canonical review for every COI surface — see src/lib/coi/reviewCoi.ts.
 import { runCoiAiReview } from '@/lib/coi/reviewCoi'
 import { coiCheckWriteFields, coiFlags } from '@/lib/coi/checks'
+import { COI_DOCUMENT_KIND_LABEL, coiDocumentKind } from '@/lib/coi/coverageKind'
 import { COI_SCOPE_SELECT, deriveCoiScope } from '@/lib/coi/jobScope'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { notifyHqDocument } from '@/lib/email/notifyHqDocument'
@@ -134,6 +135,16 @@ export async function POST(req: NextRequest) {
   // until someone opened the job. Same named-insured check the drop link
   // runs, so a wrong-production certificate is flagged in the email rather
   // than discovered at review time. Fire-and-forget — the row is written.
+  // Workers' comp arrives through this same box on purpose — the job portal
+  // has no separate one, and asking a client to find a second door for the
+  // second certificate is what sent Christopher Helmic hunting for an upload
+  // section that did not exist (2026-09-18). Read off the review, never the
+  // filename (lib/coi/coverageKind), and it changes NOTHING about how the row
+  // is stored: `newestFullCoi` already steps past a workers' comp certificate
+  // so it can never govern a rental in place of the real one.
+  const documentKind = coiDocumentKind(aiResponse)
+  const isWorkersComp = documentKind === 'WORKERS_COMP'
+
   const insured = evaluateInsuredMatch(
     typeof aiResponse.namedInsured === 'string' ? aiResponse.namedInsured : null,
     [order.company?.name, order.job?.name],
@@ -148,6 +159,7 @@ export async function POST(req: NextRequest) {
       { label: 'Company', value: order.company?.name || '—' },
       { label: 'Order', value: order.orderNumber || '—' },
       { label: 'File', value: `${file.name} (${(file.size / 1024 / 1024).toFixed(2)} MB)` },
+      { label: 'Document', value: COI_DOCUMENT_KIND_LABEL[documentKind] },
       { label: 'Named insured', value: aiFields.namedInsured || '—' },
       {
         label: 'Policy expiry',
@@ -156,13 +168,27 @@ export async function POST(req: NextRequest) {
           : '—',
       },
       { label: 'AI risk', value: check.aiRiskLevel || '—' },
-      { label: 'Required checks', value: check.coverageVerified ? 'PASS' : 'REVIEW' },
+      {
+        label: 'Required checks',
+        // A workers' comp certificate carries no general liability and no
+        // auto, so the COI checklist "fails" it by construction. Reporting
+        // that as REVIEW reads like a defective certificate.
+        value: isWorkersComp
+          ? 'n/a — workers’ comp certificate'
+          : check.coverageVerified
+            ? 'PASS'
+            : 'REVIEW',
+      },
       { label: 'Source', value: 'Client portal upload' },
     ],
     document: { filename: file.name, content: buffer },
     href: order.jobId ? `${APP_URL}/jobs/${order.jobId}#coi` : undefined,
     replyTo: order.jobContact?.email ?? undefined,
-    warning: insured.needsAttention ? insured.message : null,
+    // Suppressed for workers' comp: that certificate is issued by the payroll
+    // company (EP, Cast & Crew), so the named insured is SUPPOSED to be
+    // somebody other than the production — flagging it is a false alarm on
+    // every one of them.
+    warning: !isWorkersComp && insured.needsAttention ? insured.message : null,
     label: 'portal/job',
   })
 

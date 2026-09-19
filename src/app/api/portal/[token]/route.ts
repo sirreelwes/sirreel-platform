@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { resolveDisplayJobName } from '@/lib/jobs/displayName'
 import { healPaperworkRequestBooking } from '@/lib/paperwork/livePaperworkBooking'
+import { resolveInsuranceOnFile } from '@/lib/portal/insuranceOnFile'
 
 const bookingInclude = {
   company: true,
@@ -54,12 +55,31 @@ export async function GET(req: NextRequest, { params }: { params: { token: strin
         companyName: source?.company?.name,
       }),
     }
+    // What insurance this client still owes, computed on READ over every
+    // certificate on the job and the account — not off this row's two
+    // booleans. Both paperwork portals used to ask for a certificate the
+    // job portal had already taken, and could never close the step for a
+    // client whose workers' comp rides on their COI. See
+    // src/lib/portal/insuranceOnFile.ts. Best-effort: the step falls back
+    // to the flags rather than failing the whole portal load.
+    const insurance = await resolveInsuranceOnFile({
+      coiReceived: request.coiReceived,
+      wcReceived: request.wcReceived,
+      requestCoiReview: request.coi_ai_review,
+      jobId: source?.jobId ?? null,
+      companyId: source?.companyId ?? null,
+    }).catch((err) => {
+      console.error('[portal] insurance-on-file failed:', err instanceof Error ? err.message : err)
+      return null
+    })
+
     // `request.booking` has always mirrored the top-level booking; keep
     // that true after a heal rather than shipping two different bookings
     // in one payload.
     return NextResponse.json({
       booking,
       request: { ...request, bookingId: liveBookingId, booking: source },
+      insurance,
     })
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 })

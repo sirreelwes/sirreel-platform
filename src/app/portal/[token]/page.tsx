@@ -4,6 +4,7 @@ import { AHA_SMS_DISPLAY, AHA_SMS_HREF } from '@/lib/support/lines'
 import { LCDW_ELIGIBILITY_NOTE } from '@/components/portal-v2/terms'
 import { LcdwElection, useLcdwCoverage, lcdwApplies } from '@/components/portal-v2/LcdwElection'
 import { portalLockReason, type PortalLockReason } from '@/lib/bookings/status';
+import type { InsuranceStepState } from '@/lib/portal/insuranceRules';
 import type { ReactNode } from 'react'
 import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'next/navigation';
@@ -131,6 +132,11 @@ export default function ClientPortal() {
   const [coiFile, setCoiFile] = useState<File | null>(null);
   const [coiReview, setCoiReview] = useState<any>(null);
   const [coiReviewing, setCoiReviewing] = useState(false);
+  // What the client already owes us, over every certificate on the job and
+  // the account — not just what came through this portal's own two routes.
+  // See src/lib/portal/insuranceOnFile.ts.
+  const [insurance, setInsurance] = useState<InsuranceStepState | null>(null);
+  const [coiReplacing, setCoiReplacing] = useState(false);
 
   // Workers Comp
   const [wcFile, setWcFile] = useState<File | null>(null);
@@ -254,13 +260,21 @@ export default function ClientPortal() {
         setSignerEmail(data.booking.person?.email || '');
         if (data.booking.depositAmount) setCcChargeEstimate(String(data.booking.depositAmount));
         const req = data.request as any;
+        const ins = (data.insurance as InsuranceStepState | null) ?? null;
+        setInsurance(ins);
         setDone({
           agreement: req?.rentalAgreement || false,
           // A DECISION, not an acceptance — declining LCDW completes the
           // step. Reading the accepted-only mirror left every client who
           // declined staring at an unfinished checklist forever.
           lcdw: !!req?.lcdwDecision || req?.lcdwAccepted || false,
-          coi: (req?.coiReceived && req?.wcReceived) || false,
+          // What is ON FILE, not what this row's two booleans say. They
+          // counted a certificate the job portal had already taken as
+          // missing, and `wc_received` could only ever be set by the
+          // separate-WC upload — so the step never closed for a client whose
+          // workers' comp rides on their COI, which is most of them.
+          // See src/lib/portal/insuranceOnFile.ts.
+          coi: ins ? ins.complete : (req?.coiReceived && req?.wcReceived) || false,
           cc: req?.creditCardAuth || false,
           studio: req?.studioContractSigned || false,
         });
@@ -1210,7 +1224,15 @@ export default function ClientPortal() {
 
         {/* COI */}
         {activeTab === 'coi' && locked && renderLockedCard('Insurance Documents')}
-        {activeTab === 'coi' && !locked && done.coi && !coiReview && !wcReview && renderDoneCard('Insurance Documents Approved', 'COI and Workers Comp on file')}
+        {/* "Approved" only when it IS approved. The step closes on what is on
+            file — which now includes a certificate still in our review queue
+            — and telling a client their insurance was approved before a
+            reviewer has looked is worse than asking them for it twice. */}
+        {activeTab === 'coi' && !locked && done.coi && !coiReview && !wcReview && (
+          insurance && !insurance.coi.verified
+            ? renderDoneCard('Insurance documents received', 'With SirReel for review — we’ll be in touch if anything is missing.')
+            : renderDoneCard('Insurance Documents Approved', 'COI and Workers Comp on file')
+        )}
         {activeTab === 'coi' && !locked && (!done.coi || coiReview || wcReview) && (
           <div className="space-y-4">
             <div className="bg-white rounded-2xl border border-gray-200 p-5">
@@ -1224,7 +1246,26 @@ export default function ClientPortal() {
               </div>
               <p className="text-sm text-gray-500 mb-3">Upload your COI and our team will review it against SirReel's requirements.</p>
               <div className="bg-gray-50 rounded-xl p-3 mb-4 text-xs text-gray-600"><div className="font-semibold text-gray-700 mb-0.5">Certificate holder must read:</div><div>SirReel Production Vehicles Inc. · 8500 Lankershim Blvd, Sun Valley, CA 91352</div></div>
-              {!coiReview ? (
+              {!coiReview && insurance?.coi.satisfied && !coiReplacing ? (
+                // Already on file — from the job page, the drop link, staff,
+                // or the account. This branch did not exist, so the portal
+                // printed an empty drop zone at a client who had already sent
+                // the certificate (2026-09-18).
+                <div className="space-y-3">
+                  <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-start gap-3">
+                    <span className="text-emerald-500 mt-0.5"><CheckCircle2 size={20} aria-hidden /></span>
+                    <div>
+                      <div className="text-sm font-bold text-emerald-800">Certificate on file</div>
+                      <div className="text-xs text-emerald-700 mt-0.5">
+                        {insurance.coi.note || 'Your certificate of insurance is on file with SirReel — there is nothing to upload here.'}
+                      </div>
+                    </div>
+                  </div>
+                  <button onClick={() => setCoiReplacing(true)} className="w-full py-2.5 border border-gray-200 rounded-xl text-sm font-semibold text-gray-600 hover:bg-gray-50">
+                    Upload a newer certificate
+                  </button>
+                </div>
+              ) : !coiReview ? (
                 <div className="space-y-3">
                   <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setCoiFile(f); }} onClick={() => document.getElementById('coi-file')?.click()}
                     className={`border-2 border-dashed rounded-xl p-6 text-center cursor-pointer ${coiFile ? 'border-emerald-300 bg-emerald-50' : 'border-gray-300 hover:border-gray-400 bg-gray-50'}`}>
@@ -1284,8 +1325,12 @@ export default function ClientPortal() {
                 {wcReview && <span className={`text-[10px] font-bold px-2 py-0.5 rounded-lg ${wcReview.pass ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-600'}`}>{wcReview.pass ? 'Approved' : 'Issues'}</span>}
               </div>
               <p className="text-sm text-gray-500 mb-3">If Workers Comp is on your main COI it will be reviewed automatically. If provided separately by your payroll company (ADP, Entertainment Partners, Cast & Crew, etc.), upload it here.</p>
-              {coiReview?.workersComp?.pass ? (
-                <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl"><span className="text-emerald-500"><Check size={16} aria-hidden /></span><span className="text-sm text-emerald-700">Workers Comp found on main COI — no separate upload needed.</span></div>
+              {coiReview?.workersComp?.pass || (!wcReview && insurance?.wc.satisfied) ? (
+                // `wc_received` is written by the separate-WC upload alone, so
+                // before the server-side read this branch could only be
+                // reached by a certificate uploaded in THIS session — a client
+                // coming back found the ask again, with no way to answer it.
+                <div className="flex items-start gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-xl"><span className="text-emerald-500 mt-0.5"><Check size={16} aria-hidden /></span><span className="text-sm text-emerald-700">{coiReview?.workersComp?.pass ? 'Workers Comp found on main COI — no separate upload needed.' : insurance?.wc.note || 'Workers Comp on file — no separate upload needed.'}</span></div>
               ) : !wcReview ? (
                 <div className="space-y-3">
                   <div onDragOver={e => e.preventDefault()} onDrop={e => { e.preventDefault(); const f = e.dataTransfer.files[0]; if (f) setWcFile(f); }} onClick={() => document.getElementById('wc-file')?.click()}
@@ -1320,9 +1365,17 @@ export default function ClientPortal() {
               )}
             </div>
 
-            <button onClick={() => setActiveTab('cc')} className={`w-full rounded-xl py-4 font-semibold text-sm transition-colors ${(coiReview?.overallPass || coiReview?.requiresAdminApproval) && (coiReview?.workersComp?.pass || wcReview?.pass) ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
-              {(coiReview?.overallPass || coiReview?.requiresAdminApproval) ? 'Continue to CC Auth →' : 'Skip for now →'}
-            </button>
+            {(() => {
+              // A certificate already on file counts here too — otherwise a
+              // client with nothing left to do was shown "Skip for now".
+              const coiOk = !!(coiReview?.overallPass || coiReview?.requiresAdminApproval || insurance?.coi.satisfied);
+              const wcOk = !!(coiReview?.workersComp?.pass || wcReview?.pass || insurance?.wc.satisfied);
+              return (
+                <button onClick={() => setActiveTab('cc')} className={`w-full rounded-xl py-4 font-semibold text-sm transition-colors ${coiOk && wcOk ? 'bg-gray-900 text-white hover:bg-gray-800' : 'bg-gray-200 text-gray-600 hover:bg-gray-300'}`}>
+                  {coiOk ? 'Continue to CC Auth →' : 'Skip for now →'}
+                </button>
+              );
+            })()}
           </div>
         )}
 

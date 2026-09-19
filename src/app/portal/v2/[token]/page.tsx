@@ -16,6 +16,7 @@ import {
   type V2Booking,
   type V2Done,
   type V2DocKey,
+  type V2Insurance,
   type V2Intake,
   type V2Paperwork,
 } from '@/components/portal-v2/types'
@@ -48,6 +49,7 @@ export default function ClientPortalV2() {
   const [booking, setBooking] = useState<V2Booking | null>(null)
   const [paperwork, setPaperwork] = useState<V2Paperwork | null>(null)
   const [intake, setIntake] = useState<V2Intake>(EMPTY_INTAKE)
+  const [insurance, setInsurance] = useState<V2Insurance>(null)
   const [intakePersisted, setIntakePersisted] = useState(false)
   const [agreementState, setAgreementState] = useState<V2AgreementState | null>(null)
   const [done, setDone] = useState<V2Done>({ agreement: false, lcdw: false, studio: false, coi: false, cc: false })
@@ -70,13 +72,20 @@ export default function ClientPortalV2() {
         }
         const bk: V2Booking = data.booking
         const req: V2Paperwork = data.request
+        const ins: V2Insurance = data.insurance ?? null
         setBooking(bk)
         setPaperwork(req)
+        setInsurance(ins)
         setDone({
           agreement: !!req?.rentalAgreement,
           lcdw: !!req?.lcdwAccepted,
           studio: !!req?.studioContractSigned,
-          coi: !!(req?.coiReceived && req?.wcReceived),
+          // The insurance step closes on what is ON FILE, not on this row's
+          // two booleans (src/lib/portal/insuranceOnFile.ts). Those counted a
+          // certificate taken by the job portal as missing, and could never
+          // count workers' comp carried on the COI at all — so the step sat
+          // outstanding for a client who had sent everything.
+          coi: ins ? ins.complete : !!(req?.coiReceived && req?.wcReceived),
           cc: !!req?.creditCardAuth,
         })
         // Lock read-only ONLY for genuinely terminal bookings. The
@@ -374,6 +383,7 @@ export default function ClientPortalV2() {
         <CoiCard
           token={token}
           paperwork={paperwork}
+          insurance={insurance}
           done={done.coi}
           locked={locked}
           open={openKey === 'coi'}

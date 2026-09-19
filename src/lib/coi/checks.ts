@@ -292,6 +292,26 @@ export function coiAdditionalInsured(ai: CoiAiResponse | null | undefined): bool
 }
 
 /**
+ * Does this certificate itself carry Workers Compensation?
+ *
+ * Most ACORD 25s do — the WC box is on the same page as general liability —
+ * and a payroll company's separate certificate is the exception, not the
+ * rule. Read through the checklist rather than off `ai.workersComp.pass`
+ * directly so the four review generations are judged alike, and so an
+ * UNKNOWN (a review that never asked) stays what it is: not a pass.
+ *
+ * Why this exists (2026-09-18, Christopher Helmic on Pilot Pen): nothing
+ * anywhere turned "the COI shows workers' comp" into "workers' comp is on
+ * file". `PaperworkRequest.wc_received` was written by ONE route — the
+ * separate-WC upload — so the insurance step of the paperwork portal could
+ * never complete for the ordinary client whose WC sits on their COI, and it
+ * went on asking for a document they had already sent.
+ */
+export function coiCarriesWorkersComp(ai: CoiAiResponse | null | undefined): boolean {
+  return coiChecklist(ai).some((r) => r.key === 'workersComp' && r.status === 'PASS')
+}
+
+/**
  * The CoiCheck columns a fresh review writes. Four routes persisted this by
  * hand and had already drifted on which field decided "accept" — here the
  * recommendation follows the CRITICAL checks, so an alert-only gap (no
