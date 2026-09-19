@@ -31,6 +31,7 @@
     "test:planyo-names": "tsx tests/scheduling/planyoNameNormalizer.test.ts",
     "test:catalog-match": "tsx tests/sales/catalog-match.test.ts",
     "test:tent-first": "tsx tests/sales/tent-first.test.ts",
+    "test:company-activity": "tsx tests/crm/company-activity.test.ts",
     "test:structured-data": "tsx tests/site/structured-data.test.ts",
     "test:line-type": "tsx tests/orders/line-type.test.ts",
     "test:bug-triage": "tsx tests/bugs/triage-invariants.test.ts",

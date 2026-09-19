@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { RW_VOID } from "@/lib/rentalworks/arStatus";
 import { getServerSession } from "next-auth";
+import {
+  clientMatchAddresses,
+  fromAddressMatches,
+  scopeEmailsToCompany,
+} from "@/lib/crm/companyEmailScope";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -43,44 +48,87 @@ export async function GET(_req: NextRequest, { params }: Params) {
   if (!company) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   // Outbound emails this company has been part of — see the matching
-  // notes on /api/crm/people/[id]; same union-of-three-signals
-  // approach, fanned out across every affiliated person's email.
-  // Limited to currentish + historical affiliations to be inclusive.
-  const peopleEmails = company.affiliations
-    .map((a) => a.person?.email)
-    .filter((e): e is string => !!e);
-  const allEmailCandidates = Array.from(
-    new Set(peopleEmails.flatMap((e) => [e, e.toLowerCase()])),
+  // notes on /api/crm/people/[id]; same union-of-signals approach,
+  // fanned out across every affiliated person's email. Limited to
+  // currentish + historical affiliations to be inclusive.
+  //
+  // SCOPED, because a person is not (Wes 2026-09-19: the Party Giraffes
+  // feed was carrying two other productions' invoices). The rules live
+  // in lib/crm/companyEmailScope.ts — read the header there before
+  // widening any of this:
+  //   · @sirreel.com addresses are never match keys. Outbound
+  //     toAddresses carries the Cc: header, and every job-thread send
+  //     Cc's jobs+<code>@ plus the team copy, so one internal address
+  //     among a company's contacts matches every client email HQ has
+  //     ever sent.
+  //   · a thread filed to ANOTHER company's Job is that company's, and
+  //     a contact match never outranks it.
+  //   · a thread filed to THIS company's Job belongs here whoever it
+  //     was addressed to — that is the quote/invoice case.
+  const matchAddresses = clientMatchAddresses(
+    company.affiliations.map((a) => a.person?.email),
   );
 
-  let threadIds: string[] = [];
-  if (allEmailCandidates.length > 0) {
+  // Threads this company's own Jobs own. Phase 1 (2026-09-17) files an
+  // anchored thread to its Job at ingest, so this is the strong signal.
+  const companyJobIds = (
+    await prisma.job.findMany({ where: { companyId: id }, select: { id: true } })
+  ).map((j) => j.id);
+  const ownJobThreadIds =
+    companyJobIds.length > 0
+      ? (
+          await prisma.emailThread.findMany({
+            where: { jobId: { in: companyJobIds } },
+            select: { id: true },
+            orderBy: { lastMessageAt: 'desc' },
+            take: 400,
+          })
+        ).map((t) => t.id)
+      : [];
+
+  // Threads a contact of this company started. `contains` is a
+  // substring test over a display-name From: header, so the rows come
+  // back and are re-checked exactly before their thread ids are used.
+  let contactThreadIds: string[] = [];
+  if (matchAddresses.length > 0) {
     const inboundFromAnyone = await prisma.emailMessage.findMany({
       where: {
         direction: 'inbound',
         duplicateOfId: null,
         threadId: { not: null },
-        OR: allEmailCandidates.map((e) => ({
+        OR: matchAddresses.map((e) => ({
           fromAddress: { contains: e, mode: 'insensitive' as const },
         })),
       },
-      select: { threadId: true },
-      distinct: ['threadId'],
-      take: 400,
+      // Not `distinct: ['threadId']` — the exact re-check below needs
+      // the From: header, and a distinct pick could hand back the one
+      // row on a thread whose address only matched as a substring.
+      select: { threadId: true, fromAddress: true },
+      orderBy: { sentAt: 'desc' },
+      take: 600,
     });
-    threadIds = inboundFromAnyone
-      .map((r) => r.threadId)
-      .filter((t): t is string => !!t);
+    contactThreadIds = Array.from(
+      new Set(
+        inboundFromAnyone
+          .filter((r) => fromAddressMatches(r.fromAddress, matchAddresses))
+          .map((r) => r.threadId)
+          .filter((t): t is string => !!t),
+      ),
+    );
   }
 
-  const outboundEmails = await prisma.emailMessage.findMany({
+  const threadIds = Array.from(new Set([...ownJobThreadIds, ...contactThreadIds]));
+
+  // Over-fetch: the scope pass below drops the rows that turn out to
+  // belong to another company's job, and the feed still wants 50.
+  const outboundCandidates = await prisma.emailMessage.findMany({
     where: {
       direction: 'outbound',
       duplicateOfId: null,
       OR: [
         ...(threadIds.length > 0 ? [{ threadId: { in: threadIds } }] : []),
-        ...(allEmailCandidates.length > 0
-          ? [{ toAddresses: { hasSome: allEmailCandidates } }]
+        ...(matchAddresses.length > 0
+          ? [{ toAddresses: { hasSome: matchAddresses } }]
           : []),
         { companyId: id },
       ],
@@ -93,10 +141,43 @@ export async function GET(_req: NextRequest, { params }: Params) {
       fromAddress: true,
       toAddresses: true,
       threadId: true,
+      companyId: true,
     },
     orderBy: { sentAt: 'desc' },
-    take: 50,
+    take: 200,
   });
+
+  // Whose job is each of those threads on? Resolved only for the
+  // threads that actually came back, so this stays two bounded reads.
+  const candidateThreadIds = Array.from(
+    new Set(outboundCandidates.map((m) => m.threadId).filter((t): t is string => !!t)),
+  );
+  const threadCompanyId = new Map<string, string | null>();
+  if (candidateThreadIds.length > 0) {
+    const threads = await prisma.emailThread.findMany({
+      where: { id: { in: candidateThreadIds } },
+      select: { id: true, jobId: true },
+    });
+    const jobIds = Array.from(
+      new Set(threads.map((t) => t.jobId).filter((j): j is string => !!j)),
+    );
+    const jobs =
+      jobIds.length > 0
+        ? await prisma.job.findMany({
+            where: { id: { in: jobIds } },
+            select: { id: true, companyId: true },
+          })
+        : [];
+    const jobCompany = new Map(jobs.map((j) => [j.id, j.companyId]));
+    for (const t of threads) {
+      threadCompanyId.set(t.id, t.jobId ? jobCompany.get(t.jobId) ?? null : null);
+    }
+  }
+
+  const outboundEmails = scopeEmailsToCompany(outboundCandidates, {
+    companyId: id,
+    threadCompanyId,
+  }).slice(0, 50);
 
   // RW rollup so the client header doesn't read "0 orders" for clients
   // whose history lives in RentalWorks.
