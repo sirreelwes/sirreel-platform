@@ -98,13 +98,20 @@ export function BugReportBox({ myReports }: { myReports: MyReport[] }) {
 
   return (
     <section className="bg-lt-card border border-lt-hairline rounded-xl p-5 sm:p-6 mb-8">
-      <div className="flex items-start gap-3">
-        <div className="mt-0.5 shrink-0 rounded-lg bg-amber-600/10 p-2">
+      {/*
+        The icon sits with the HEADING, not beside the whole card. Beside the
+        card it eats a fixed ~44px off every line at phone width, which left
+        the body copy about 25 characters wide and the textarea cramped —
+        and warehouse and fleet report from handhelds.
+      */}
+      <div className="flex items-center gap-3">
+        <div className="shrink-0 rounded-lg bg-amber-600/10 p-2">
           <Bug className="w-5 h-5 text-amber-600" />
         </div>
-        <div className="min-w-0 flex-1">
-          <h2 className="text-[17px] font-semibold text-lt-fg">Did you find a bug in the system?</h2>
-          <p className="text-sm text-lt-fg2 mt-1 max-w-[62ch] leading-relaxed">
+        <h2 className="text-[17px] font-semibold text-lt-fg">Did you find a bug in the system?</h2>
+      </div>
+      <div className="min-w-0">
+          <p className="text-sm text-lt-fg2 mt-3 max-w-[62ch] leading-relaxed">
             Tell us in your own words — no form, no ticket number. Something that didn&apos;t save,
             a button that did nothing, a screen that reads wrong, anything that made you go
             &ldquo;huh?&rdquo;. It gets read straight away and you&apos;ll hear back right here.
@@ -163,7 +170,7 @@ export function BugReportBox({ myReports }: { myReports: MyReport[] }) {
               <button
                 type="button"
                 onClick={() => setShowMine((v) => !v)}
-                className="inline-flex items-center gap-2 text-xs font-semibold text-lt-fg2 hover:text-lt-fg"
+                className="inline-flex items-start gap-2 text-left text-xs font-semibold text-lt-fg2 hover:text-lt-fg"
               >
                 <ListTodo className="w-3.5 h-3.5" />
                 {showMine ? 'Hide' : 'What happened to'} the {myReports.length} thing
@@ -191,7 +198,6 @@ export function BugReportBox({ myReports }: { myReports: MyReport[] }) {
             </div>
           )}
         </div>
-      </div>
     </section>
   )
 }
