@@ -20,7 +20,9 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import { prisma } from '@/lib/prisma'
 import { BugBoard, type BoardReport } from '@/components/admin/BugBoard'
+import { BugStatsRail } from '@/components/admin/BugStatsRail'
 import { SEVERITY_RANK } from '@/lib/bugs/vocab'
+import { bugStats, EMPTY_STATS } from '@/lib/bugs/stats'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +37,10 @@ export default async function BugBoardPage() {
 
   let reports: BoardReport[] = []
   let setupNeeded = false
+  // Computed alongside the list rather than inside BugBoard: the board is a
+  // client component, and shipping a second copy of every row to the browser
+  // just to count them would be silly.
+  const stats = await bugStats()
   try {
     const rows = await prisma.bugReport.findMany({
       orderBy: { createdAt: 'desc' },
@@ -92,5 +98,23 @@ export default async function BugBoardPage() {
     setupNeeded = true
   }
 
-  return <BugBoard reports={reports} setupNeeded={setupNeeded} />
+  return (
+    <div className="max-w-[1180px] mx-auto">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-lt-fg">Reported issues</h1>
+        <p className="text-sm text-lt-fg2 mt-1 max-w-[74ch]">
+          Everything typed into the bug box on HQ Help, sorted by an agent that reads each one as
+          it lands: how bad, whether the mechanics are broken or the screen is just wrong about
+          them, and whether it needed Wes. Repeats fold into the report they repeat.
+        </p>
+      </div>
+
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_230px] lg:items-start">
+        <div className="min-w-0">
+          <BugBoard reports={reports} setupNeeded={setupNeeded} />
+        </div>
+        <BugStatsRail stats={setupNeeded ? EMPTY_STATS : stats} />
+      </div>
+    </div>
+  )
 }

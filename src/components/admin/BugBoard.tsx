@@ -126,16 +126,12 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
   const list = buckets[tab]
 
   return (
-    <div className="max-w-[1000px] mx-auto">
-      <div className="mb-6">
-        <h1 className="text-2xl font-semibold text-lt-fg">Reported issues</h1>
-        <p className="text-sm text-lt-fg2 mt-1 max-w-[74ch]">
-          Everything typed into the bug box on HQ Help, sorted by an agent that reads each one as
-          it lands: how bad, whether the mechanics are broken or the screen is just wrong about
-          them, and whether it needed Wes. Repeats fold into the report they repeat.
-        </p>
-      </div>
-
+    // No width cap here — the PAGE owns the width now that the tally rail
+    // sits beside this column (BugStatsRail). A max-width on both fights
+    // the grid and strands the list left of its own rail.
+    // The page owns the heading (it sits above the list|rail grid) — with it
+    // in here, the stats rail stacked ABOVE the page title on a phone.
+    <div>
       {setupNeeded && (
         <div className="mb-6 flex items-start gap-2 rounded-xl bg-chip-warn-bg px-4 py-3 text-sm text-chip-warn-fg">
           <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
