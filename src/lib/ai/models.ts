@@ -62,5 +62,19 @@ export const COLLECTIONS_EVIDENCE_MODEL = 'claude-opus-5'
  */
 export const REDLINE_EXTRACTION_MODEL = 'claude-opus-5'
 
+/**
+ * Reading what someone typed into the "Did you find a bug?" box on HQ Help
+ * and deciding what it actually is: the mechanics being broken, or the
+ * screen being wrong about mechanics that work — then how bad, and whether
+ * it goes on the fix list or straight to Wes.
+ *
+ * Review tier rather than a cheap one: the input is one unedited sentence
+ * from someone mid-task ("the send button didn't work"), with no steps and
+ * no error text, and the job is to tell a blocked invoice apart from a
+ * disabled button that was disabled for a good reason. Runs once per
+ * report, so the tier costs nothing at this volume.
+ */
+export const BUG_TRIAGE_MODEL = 'claude-sonnet-4-5-20250929'
+
 /** Minimal-cost API health probe. */
 export const HEALTH_CHECK_MODEL = 'claude-haiku-4-5-20251001'

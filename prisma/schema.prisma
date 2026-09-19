@@ -10634,3 +10634,147 @@ model JobEmailSignal {
   @@index([jobId, status])
   @@map("sr_job_email_signals")
 }
+
+// ═══════════════════════════════════════
+// BUG REPORTS — "Did you find a bug?"
+// ═══════════════════════════════════════
+/// One thing someone told us was wrong, from the box at the top of HQ Help
+/// (/guides). The person types one paragraph in their own words — no
+/// severity picker, no category dropdown, no "steps to reproduce". Wes
+/// 2026-09-18: "make it seem really friendly… they can start typing."
+///
+/// Everything structured on this row is written by the triage agent
+/// (src/lib/bugs/triage.ts), not by the reporter: what KIND of problem it
+/// is (a design/UX miss vs the mechanics actually being broken), how bad,
+/// and where it goes next:
+///   ANSWERED  — not broken; the agent answered it on the spot and closed it.
+///   QUEUED    — a real flaw; it sits on the to-do board at /admin/bugs.
+///   ESCALATED — blocking, money, data loss or client-facing; Wes is emailed now.
+///
+/// `duplicateOfId` is what makes the board a to-do list rather than an
+/// inbox: the fourth person to report the same broken button joins the
+/// first report instead of opening a fourth row, and the number of joined
+/// reports is what tells you it is worth fixing first.
+model BugReport {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // ── What they told us ──────────────────────────────
+  /// Verbatim. Never rewritten by the agent — the triage summary lives in
+  /// `title`, so the reporter's own words survive for whoever fixes it.
+  body String
+
+  /// Who hit it. Kept denormalised as well as linked: the email/name are
+  /// what the fixer needs to go ask a follow-up question, and they must
+  /// survive the user row being deactivated.
+  reportedById    String? @map("reported_by_id")
+  reportedByEmail String  @map("reported_by_email")
+  reportedByName  String  @map("reported_by_name")
+  reportedByRole  String? @map("reported_by_role")
+
+  /// Where they were standing when they wrote it, and on what. Neither is
+  /// asked for — the page path comes from the client, the user agent from
+  /// the request — because asking is the friction that stops people
+  /// reporting at all.
+  pagePath  String? @map("page_path")
+  userAgent String? @map("user_agent")
+
+  // ── What the triage agent made of it ───────────────
+  severity BugSeverity @default(UNTRIAGED)
+  kind     BugKind     @default(UNTRIAGED)
+  routing  BugRouting  @default(PENDING)
+  status   BugStatus   @default(OPEN)
+
+  /// The agent's one-line name for the issue — what the board shows.
+  title String?
+  /// The part of HQ it lives in ("Orders", "Check-out", "Client portal").
+  area String?
+  /// Why it landed on this severity/kind/routing, in a sentence or two.
+  reasoning String?
+  /// ANSWERED: the answer the reporter is shown. Otherwise: what the agent
+  /// believes the fix is, written for whoever picks the to-do up.
+  response String?
+  /// Files/routes the agent thinks are involved — a starting point for the
+  /// fix, never authoritative.
+  suspects String[] @default([])
+
+  triagedAt   DateTime? @map("triaged_at")
+  triageModel String?   @map("triage_model")
+  /// Set when triage itself failed. The row still lands, at UNTRIAGED —
+  /// a report is never lost because the model was down.
+  triageError String?   @map("triage_error")
+
+  /// Joined to an existing open report instead of opening its own row.
+  duplicateOfId String?     @map("duplicate_of_id")
+  duplicateOf   BugReport?  @relation("BugDuplicates", fields: [duplicateOfId], references: [id], onDelete: SetNull)
+  duplicates    BugReport[] @relation("BugDuplicates")
+
+  /// Escalations are emailed once. Stamped so a re-triage can't re-send.
+  escalatedAt DateTime? @map("escalated_at")
+
+  // ── Working it ─────────────────────────────────────
+  resolvedAt      DateTime? @map("resolved_at")
+  resolvedByEmail String?   @map("resolved_by_email")
+  resolutionNote  String?   @map("resolution_note")
+
+  @@index([status, severity])
+  @@index([createdAt])
+  @@index([duplicateOfId])
+  @@map("sr_bug_reports")
+}
+
+/// How badly it hurts. The agent picks one; the board sorts on it.
+enum BugSeverity {
+  UNTRIAGED
+  /// Nobody can do the work — it blocks a job, a payment or a client.
+  BLOCKER
+  /// Broken, with a workaround that costs real time.
+  HIGH
+  /// Wrong, but the work still gets done.
+  MEDIUM
+  /// Cosmetic, or a nicety.
+  LOW
+}
+
+/// Is the system wrong, or is the screen wrong about the system? The
+/// distinction Wes asked for: "true UI and UX design, or an actual flaw in
+/// the mechanics."
+enum BugKind {
+  UNTRIAGED
+  /// The mechanics are broken — it saved nothing, sent nothing, computed
+  /// the wrong number, 500'd.
+  MECHANICAL
+  /// The mechanics work; the screen did not say so, or made it look like
+  /// they hadn't. Wrong label, no feedback on click, a disabled button
+  /// with no reason given.
+  DESIGN
+  /// Works as built; the person expected it to work differently.
+  HOW_TO
+  /// A thing we don't do yet.
+  FEATURE_REQUEST
+  /// Not about the software.
+  OTHER
+}
+
+/// Where the agent sent it.
+enum BugRouting {
+  PENDING
+  /// Answered on the spot and closed — nothing was broken.
+  ANSWERED
+  /// On the to-do board.
+  QUEUED
+  /// Wes emailed immediately.
+  ESCALATED
+}
+
+enum BugStatus {
+  OPEN
+  IN_PROGRESS
+  FIXED
+  WONT_FIX
+  /// Folded into another report (see duplicateOfId).
+  DUPLICATE
+  /// Closed by the agent's answer.
+  ANSWERED
+}

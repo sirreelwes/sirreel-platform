@@ -849,6 +849,12 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // page, and badgeCounts is keyed by nav id — sharing it would light
         // this row up with a count of trucks due for service.
         { id: 'run-task', label: 'Run a Task', icon: 'Terminal', href: '/admin/maintenance' },
+        // Everything anyone typed into the bug box on HQ Help, already
+        // sorted by the triage agent (Wes 2026-09-18). High in Admin
+        // because a list of what is broken that nobody opens is the same
+        // as no list — and because the box promises the reporter someone
+        // is looking.
+        { id: 'bug-reports', label: 'Reported Issues', icon: 'Bug', href: '/admin/bugs' },
         { id: 'cois', label: 'COIs', icon: 'ShieldCheck', href: '/admin/cois' },
         // The people behind those certificates (Wes 2026-09-17: "start
         // keeping a list of brokers"). Directly under COIs — it is the
