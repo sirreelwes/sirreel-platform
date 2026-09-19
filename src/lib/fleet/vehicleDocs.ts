@@ -35,18 +35,85 @@ export type VehicleDocKind = 'registration' | 'bit-certificate'
 
 export const VEHICLE_DOC_KINDS: readonly VehicleDocKind[] = ['registration', 'bit-certificate']
 
+// ── Which inspection a class actually carries ─────────────────────────────
+
 /**
- * What people CALL these documents. The kind key stays `bit-certificate` —
- * it is a wire value in URLs and a column name — but the words on every
- * screen are Julian's (2026-09-18): the trucks carry a DOT ANNUAL inspection
- * and the passenger vans a CHP BIT, so "BIT" was simply the wrong name on
- * most of the fleet. "DOT inspection" is the umbrella he uses and is correct
- * for both; a per-class label would need a mapping for every category on the
- * roster, which nobody has given us.
+ * WHICH document this is depends on the VEHICLE, not on the slot it is filed
+ * in. Julian, 2026-09-18: the trucks carry a federal DOT ANNUAL inspection
+ * (49 CFR 396.17) and the passenger vans a CHP BIT (Biennial Inspection of
+ * Terminals — CVC 34501, which reaches anything built to carry 10+
+ * passengers, i.e. our 12- and 15-seat vans).
+ *
+ * That day the label swung from "BIT" on the whole fleet to "DOT inspection"
+ * on the whole fleet, because "BIT" was wrong on the cubes and the umbrella
+ * is at least true of both. The file header's own note said a per-class
+ * label "would need a mapping for every category on the roster, which nobody
+ * has given us." Wes, 2026-09-19, gave us the half that matters: "where is
+ * the BIT Inspections? For pass vans that is what is needed." A van's
+ * certificate says BIT across the top, Julian files it under BIT and the CHP
+ * asks for it by that name, so a screen that will only say "DOT inspection"
+ * is a screen he cannot find it on.
+ *
+ * So: NAME the regime we were told about, and keep the umbrella everywhere
+ * else. This is a TABLE, not an inference — the same posture as
+ * SANDBAGS_BY_SIZE. A class nobody has ruled on reads "DOT inspection",
+ * which is correct-but-vague, rather than a guess that is confidently wrong
+ * on a document somebody has to hand to an inspector.
+ *
+ * DELIBERATELY NOT CLASSIFIED: ProScout / VTR (the LCDW note calls it a
+ * "VTR/PeopleMover" van, so it may well be a BIT vehicle — but "may well be"
+ * is not a ruling, and a wrong BIT label is worse than a vague right one).
+ * Add a pattern here the day Julian says so.
+ */
+export type InspectionRegime = 'bit' | 'dot'
+
+/**
+ * Matched against `AssetCategory.name`. A regex rather than an exact-name set
+ * on purpose: this family has already been renamed once — "Passenger Van"
+ * split into "12-Passenger Van" and "15-Passenger Van" on 2026-09-09 — and
+ * an exact list would have silently gone back to saying DOT that afternoon.
+ * "passenger" is the discriminator; no other vehicle class on the roster
+ * carries the word (Cargo Van, PopVan, Camera Cube, Stakebed, DLUX...).
+ */
+const BIT_CLASS_PATTERNS: readonly RegExp[] = [/\bpassenger\b/i]
+
+/** Which inspection a class carries. An unknown class gets the umbrella. */
+export function inspectionRegimeForClass(categoryName?: string | null): InspectionRegime {
+  const name = String(categoryName ?? '')
+  return BIT_CLASS_PATTERNS.some((re) => re.test(name)) ? 'bit' : 'dot'
+}
+
+/** The words on screen for each regime, and the short form for a chip. */
+export const INSPECTION_LABEL: Record<InspectionRegime, string> = {
+  bit: 'BIT inspection',
+  dot: 'DOT inspection',
+}
+export const INSPECTION_SHORT_LABEL: Record<InspectionRegime, string> = {
+  bit: 'BIT',
+  dot: 'DOT',
+}
+
+/**
+ * What people CALL these documents when the vehicle's class is NOT known.
+ * The kind key stays `bit-certificate` — it is a wire value in URLs and half
+ * a column name. Prefer `vehicleDocLabel(kind, categoryName)`; this map is
+ * the fallback it reads, so the two can never disagree.
  */
 export const VEHICLE_DOC_LABEL: Record<VehicleDocKind, string> = {
   registration: 'Registration',
-  'bit-certificate': 'DOT inspection',
+  'bit-certificate': INSPECTION_LABEL.dot,
+}
+
+/** The label for a document ON A PARTICULAR UNIT — "BIT inspection" on a van. */
+export function vehicleDocLabel(kind: VehicleDocKind, categoryName?: string | null): string {
+  if (kind === 'registration') return VEHICLE_DOC_LABEL.registration
+  return INSPECTION_LABEL[inspectionRegimeForClass(categoryName)]
+}
+
+/** The same, short enough for a chip in a fleet row — "Reg" / "BIT" / "DOT". */
+export function vehicleDocShortLabel(kind: VehicleDocKind, categoryName?: string | null): string {
+  if (kind === 'registration') return 'Reg'
+  return INSPECTION_SHORT_LABEL[inspectionRegimeForClass(categoryName)]
 }
 
 /** Narrow a path segment / query value to a kind, or null. Never throws. */
@@ -141,14 +208,24 @@ export function portalDocHref(assetId: string, kind: VehicleDocKind): string {
   return `/api/portal/job/vehicle-doc?assetId=${encodeURIComponent(assetId)}&kind=${kind}`
 }
 
-/** Filename a downloaded copy lands under — unit first, so a folder sorts. */
+/**
+ * Filename a downloaded copy lands under — unit first, so a folder sorts.
+ * `categoryName` is optional and only changes the inspection's word, so a
+ * van's certificate saves as `Pass-3_BIT-inspection_...` — which is what it
+ * says across the top and how Julian's folder is already organised. Omitted,
+ * it keeps the umbrella, so no existing caller changes.
+ */
 export function vehicleDocFilename(args: {
   unitName: string
   kind: VehicleDocKind
   expiresAt?: Date | string | null
+  categoryName?: string | null
 }): string {
   const slug = (s: string) => s.replace(/[^A-Za-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'unit'
-  const kindPart = args.kind === 'registration' ? 'registration' : 'DOT-inspection'
+  const kindPart =
+    args.kind === 'registration'
+      ? 'registration'
+      : `${INSPECTION_SHORT_LABEL[inspectionRegimeForClass(args.categoryName)]}-inspection`
   const at = args.expiresAt ? new Date(args.expiresAt) : null
   const exp = at && !Number.isNaN(at.getTime()) ? `_exp-${at.toISOString().slice(0, 10)}` : ''
   return `${slug(args.unitName)}_${kindPart}${exp}.pdf`

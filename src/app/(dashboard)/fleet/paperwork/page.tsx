@@ -21,7 +21,9 @@ import Link from 'next/link';
 import { AlertTriangle, Check, Upload } from 'lucide-react';
 import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 
-type Unit = { id: string; unitName: string };
+import { vehicleDocLabel } from '@/lib/fleet/vehicleDocs';
+
+type Unit = { id: string; unitName: string; categoryName?: string | null };
 type Row = {
   index: number;
   filename: string;
@@ -49,6 +51,10 @@ const PROBLEM_TEXT: Record<string, string> = {
 function FleetPaperworkInner() {
   const [files, setFiles] = useState<File[]>([]);
   const [units, setUnits] = useState<Unit[]>([]);
+  // Which inspection a row is about depends on the unit it lands on. No unit
+  // picked yet => undefined => the umbrella "DOT inspection".
+  const unitClass = (unitId: string | null | undefined) =>
+    unitId ? units.find((u) => u.id === unitId)?.categoryName ?? null : null;
   const [rows, setRows] = useState<Row[] | null>(null);
   const [summary, setSummary] = useState('');
   const [fixes, setFixes] = useState<Record<number, Correction>>({});
@@ -362,7 +368,7 @@ function FleetPaperworkInner() {
                       {r.ready ? (
                         <div className="text-[10px] text-emerald-600 font-semibold mt-0.5 inline-flex items-center gap-1">
                           <Check size={10} aria-hidden />
-                          {r.unitName} · {r.kind === 'registration' ? 'Registration' : `DOT inspection ${r.inspectionDate}`}
+                          {r.unitName} · {r.kind === 'registration' ? 'Registration' : `${vehicleDocLabel('bit-certificate', unitClass(r.unitId))} ${r.inspectionDate}`}
                           {r.expiresAt ? ` · expires ${r.expiresAt}` : ' · no expiry'}
                         </div>
                       ) : (
@@ -399,7 +405,9 @@ function FleetPaperworkInner() {
                       >
                         <option value="">— kind —</option>
                         <option value="registration">Registration</option>
-                        <option value="bit-certificate">DOT inspection</option>
+                        {/* Named for the picked unit once there is one — a
+                            van's certificate says BIT across the top. */}
+                        <option value="bit-certificate">{vehicleDocLabel('bit-certificate', unitClass(r.unitId))}</option>
                       </select>
 
                       {r.kind === 'bit-certificate' && (

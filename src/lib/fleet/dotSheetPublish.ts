@@ -53,19 +53,28 @@ export interface DotUnitGap {
  * Model is NOT required: plenty of units are a make and a year with no model
  * on the registration, and a page is not less useful for it.
  */
+import { vehicleDocLabel } from './vehicleDocs'
+
 export function missingDotFields(unit: {
   vin?: string | null
   licensePlate?: string | null
   year?: number | null
   make?: string | null
   hasBitInspection: boolean
+  /**
+   * Optional, and only changes what the inspection is CALLED: a passenger
+   * van owes a CHP BIT, everything else the DOT annual. Omitted, the gap
+   * reads "DOT inspection" — the umbrella, true of both.
+   */
+  categoryName?: string | null
 }): string[] {
   const missing: string[] = []
   if (!unit.vin) missing.push('VIN')
   if (!unit.licensePlate) missing.push('license plate')
   if (!unit.year) missing.push('year')
   if (!unit.make) missing.push('make')
-  if (!unit.hasBitInspection) missing.push('DOT inspection')
+  // Not lowercased: the acronym is the name, and 'VIN' above is uppercase too.
+  if (!unit.hasBitInspection) missing.push(vehicleDocLabel('bit-certificate', unit.categoryName))
   return missing
 }
 

@@ -20,12 +20,15 @@ import {
   VEHICLE_DOC_KINDS,
   VEHICLE_DOC_LABEL,
   docExpiryState,
+  inspectionRegimeForClass,
   isUploadableKind,
   narrowAssignmentsToOrder,
   parseVehicleDocKind,
   portalDocHref,
   shouldStampCurrentBit,
   vehicleDocFilename,
+  vehicleDocLabel,
+  vehicleDocShortLabel,
 } from '../../src/lib/fleet/vehicleDocs'
 
 const failures: string[] = []
@@ -126,6 +129,67 @@ check('the wire value is unchanged', parseVehicleDocKind('bit-certificate') === 
 check(
   'an unparseable expiry is dropped rather than written as Invalid Date',
   vehicleDocFilename({ unitName: 'Cube 27', kind: 'registration', expiresAt: 'nope' }) === 'Cube-27_registration.pdf',
+)
+
+// ── Which inspection a class carries ──────────────────────────────────────
+// Julian 2026-09-18: a truck's is the federal DOT annual, a passenger van's
+// is the CHP BIT. That day the word swung to "DOT inspection" on the WHOLE
+// fleet, and Wes 2026-09-19 asked the obvious question back — "where is the
+// BIT Inspections? For pass vans that is what is needed." Both directions
+// are expensive: "BIT" on a cube is wrong to an inspector, and a van whose
+// screen will only say "DOT" is a screen Julian cannot find his BIT on.
+console.log('\ninspection regime')
+check('a passenger van owes the CHP BIT', inspectionRegimeForClass('Passenger Van') === 'bit')
+// The family was renamed under us once already (the 2026-09-09 split), which
+// is why this is a pattern and not a list of exact category names.
+check(
+  'both halves of the 12-/15- split too',
+  inspectionRegimeForClass('12-Passenger Van') === 'bit' && inspectionRegimeForClass('15-Passenger Van') === 'bit',
+)
+check('case does not matter', inspectionRegimeForClass('passenger van') === 'bit')
+// The discriminator is the word "passenger". Every one of these also ends in
+// "Van" or is a van-shaped thing, so a looser match would have swept them in
+// and put BIT on a cube — the exact error 2026-09-18 was fixing.
+check(
+  'a cargo van is NOT a passenger van',
+  inspectionRegimeForClass('Cargo Van w/ Liftgate') === 'dot' && inspectionRegimeForClass('Cargo Van w/o Liftgate') === 'dot',
+)
+check(
+  'nor is anything else on the roster',
+  ['SuperCube Truck', 'Cube Truck', 'PopVan', 'Camera Cube', 'Stakebed', 'DLUX', 'Scissor Lift', 'ProScout / VTR']
+    .every((c) => inspectionRegimeForClass(c) === 'dot'),
+)
+// An unknown class gets the umbrella, which is correct-but-vague, rather
+// than a guess that is confidently wrong on a document handed to the CHP.
+check(
+  'an unknown or absent class falls back to the umbrella',
+  inspectionRegimeForClass(null) === 'dot' && inspectionRegimeForClass(undefined) === 'dot' && inspectionRegimeForClass('') === 'dot',
+)
+
+console.log('\nlabels')
+check('a van reads BIT', vehicleDocLabel('bit-certificate', '15-Passenger Van') === 'BIT inspection')
+check('a cube reads DOT', vehicleDocLabel('bit-certificate', 'SuperCube Truck') === 'DOT inspection')
+check('the registration is the registration on both', vehicleDocLabel('registration', '15-Passenger Van') === 'Registration')
+check(
+  'the chip form is the bare acronym',
+  vehicleDocShortLabel('bit-certificate', 'Passenger Van') === 'BIT' &&
+    vehicleDocShortLabel('bit-certificate', 'Cube Truck') === 'DOT' &&
+    vehicleDocShortLabel('registration', 'Passenger Van') === 'Reg',
+)
+// The constant map is what every caller WITHOUT a class in hand reads, so it
+// and the function must not be able to disagree.
+check(
+  'the class-free map is the same answer as a class-free call',
+  VEHICLE_DOC_LABEL['bit-certificate'] === vehicleDocLabel('bit-certificate', null),
+)
+check(
+  "a van's saved copy is filed under BIT",
+  vehicleDocFilename({ unitName: 'Pass 3', kind: 'bit-certificate', expiresAt: '2027-06-30', categoryName: '15-Passenger Van' }) ===
+    'Pass-3_BIT-inspection_exp-2027-06-30.pdf',
+)
+check(
+  'and an unclassed one keeps the name it always had',
+  vehicleDocFilename({ unitName: 'Cargo 22', kind: 'bit-certificate', expiresAt: null }) === 'Cargo-22_DOT-inspection.pdf',
 )
 
 if (failures.length) {

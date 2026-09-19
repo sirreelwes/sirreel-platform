@@ -113,7 +113,9 @@ export async function POST(req: NextRequest) {
   // filename can never match a retired truck nobody expected to be a target.
   const units = await prisma.asset.findMany({
     where: { isActive: true, category: { department: 'VEHICLES' } },
-    select: { id: true, unitName: true },
+    // categoryName only so the page can NAME the document it is about to
+    // file — a passenger van's is a CHP BIT, a truck's the DOT annual.
+    select: { id: true, unitName: true, category: { select: { name: true } } },
     orderBy: { unitName: 'asc' },
   })
 
@@ -131,7 +133,8 @@ export async function POST(req: NextRequest) {
   const rows = planPaperworkImport(inputs, units)
 
   if (mode !== 'commit') {
-    return NextResponse.json({ ok: true, mode: 'plan', summary: planSummary(rows), units, rows })
+    const unitList = units.map((u) => ({ id: u.id, unitName: u.unitName, categoryName: u.category?.name ?? null }))
+    return NextResponse.json({ ok: true, mode: 'plan', summary: planSummary(rows), units: unitList, rows })
   }
 
   // ── commit ──────────────────────────────────────────────────────────────
