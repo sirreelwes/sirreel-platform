@@ -206,7 +206,7 @@ export async function GET(req: NextRequest) {
         },
         select: {
           id: true, code: true, description: true, trackingMode: true,
-          department: true, dailyRate: true, weeklyRate: true,
+          department: true, dailyRate: true, weeklyRate: true, type: true,
         },
         take: TENT_COMPANION_TAKE,
         orderBy: [{ trackingMode: 'asc' }, { qtyOwned: 'desc' }],
@@ -240,7 +240,7 @@ export async function GET(req: NextRequest) {
           },
           select: {
             id: true, code: true, description: true, trackingMode: true,
-            department: true, dailyRate: true, weeklyRate: true,
+            department: true, dailyRate: true, weeklyRate: true, type: true,
           },
           // Over-fetch so the name-relevance pass below has something to
           // rank; the slice back to `limit` happens after sorting.
@@ -385,6 +385,12 @@ export async function GET(req: NextRequest) {
         trackingMode: i.trackingMode,
         name: i.description || i.code,
         department: i.department,
+        // What the CATALOG ROW says this is. `department` alone cannot
+        // answer it — a per-vehicle FEE and a truck both sit in VEHICLES —
+        // so without this every picker had to guess, and resolveLineType's
+        // no-catalog-type fallback is EQUIPMENT. That is how a cargo van
+        // added from the inventory box landed as an EQUIPMENT line.
+        lineType: i.type,
         // What the line should bill at for this client.
         dailyRate: deal?.daily ?? listDaily,
         weeklyRate: deal?.weekly ?? listWeekly,

@@ -70,6 +70,10 @@ export interface CatalogHit {
   listWeeklyRate?: number
   /** True when this client's rate card priced the row. */
   negotiated?: boolean
+  /** The catalog row's OWN LineItemType — present on INVENTORY hits.
+   *  The line's stored `type` is derived from it (lib/orders/lineType.ts);
+   *  a picker that drops it makes every vehicle fall through to EQUIPMENT. */
+  lineType?: 'VEHICLE' | 'EQUIPMENT' | 'EXPENDABLE' | 'LABOR' | 'FEE' | 'DISCOUNT' | null
   /** True when the damage waiver may be offered on this item. Computed
    *  server-side from the rental agreement's exclusions so the picker
    *  and the order page cannot disagree about what is coverable. */

@@ -65,6 +65,36 @@ check(
   'a vehicle catalog row wins over its department',
   resolveLineType('INVENTORY', 'VEHICLES', 'VEHICLE') === 'VEHICLE',
 )
+
+// ── The gap this file had until 2026-09-19 ───────────────────────────────
+// Nothing pinned what an INVENTORY row under VEHICLES answers with NO
+// catalog type, and the answer is EQUIPMENT — correct as a rule (department
+// must not mint VEHICLE; see the PRO_SUPPLIES case above) and catastrophic
+// as a default, because two callers were reaching it for real trucks:
+// the order page's row editor passed no third argument at all, so every
+// catalog-bound van flipped to EQUIPMENT the first time anyone saved an
+// edit; and the "+ Add Item" form left its EQUIPMENT default standing when
+// a van was picked out of the Search Inventory box. Vehicles have been
+// InventoryItem rows since the department flattening, so both were ordinary
+// paths, not edge cases. The rule is unchanged — the fix was to SUPPLY the
+// catalog row's type at both doors, and to re-derive it server-side in the
+// line-item POST/PUT so no future door can forget.
+check(
+  'an INVENTORY row with no catalog type falls through to EQUIPMENT — even under VEHICLES',
+  resolveLineType('INVENTORY', 'VEHICLES') === 'EQUIPMENT',
+)
+check(
+  'so a vehicle is only VEHICLE when the catalog row is actually read',
+  resolveLineType('INVENTORY', 'VEHICLES') !== resolveLineType('INVENTORY', 'VEHICLES', 'VEHICLE'),
+)
+check(
+  'the legacy vehicle-class binding still answers VEHICLE without one',
+  resolveLineType('ASSET_CATEGORY', 'VEHICLES') === 'VEHICLE',
+)
+check(
+  'a per-vehicle FEE row under VEHICLES stays a FEE, so department is never the answer',
+  resolveLineType('INVENTORY', 'VEHICLES', 'FEE') === 'FEE',
+)
 check(
   'a VEHICLE row left under PRO_SUPPLIES by the department re-flattening is NOT retyped',
   resolveLineType('INVENTORY', 'PRO_SUPPLIES', 'VEHICLE') === 'VEHICLE',

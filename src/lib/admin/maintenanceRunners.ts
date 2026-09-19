@@ -14,6 +14,7 @@ import { seedVsmPlanet, RECEIVE_METHODS, type ReceiveMethodKey } from '@/lib/sub
 import { moveCargoOffLiftGate } from '@/lib/fleet/moveCargoOffLiftGate'
 import { seedDf50FluidKit } from '@/lib/inventory/seedDf50FluidKit'
 import { moveDf50Cord } from '@/lib/inventory/moveDf50Cord'
+import { retypeCatalogLines } from '@/lib/orders/retypeCatalogLines'
 import { seedKnownBrokers } from '@/lib/coi/seedKnownBrokers'
 import { fileNegotiatedAgreement, parseAliasEntries } from '@/lib/contracts/fileNegotiatedAgreement'
 import { offerAnnualToSigner } from '@/lib/portal/offerAnnualToSigner'
@@ -121,6 +122,22 @@ const RUNNERS: Record<string, MaintenanceRunner> = {
         : `${parts(moved, folded)}.`
     // Warnings are the part a person must read, so they ride at the END of
     // the log where a phone screen lands.
+    const log = r.warnings.length ? [...r.log, '', 'Look at:', ...r.warnings.map((w) => `  ! ${w}`)] : r.log
+    return { log, createdIds: [], touchedIds: r.touchedIds, headline }
+  },
+
+  'retype-catalog-lines': async ({ dryRun, actorUserId }) => {
+    const r = await retypeCatalogLines({ dryRun, actorUserId: actorUserId ?? null })
+    const n = dryRun ? r.changes.length : r.touchedIds.length
+    // "0 lines changed" is the GOOD answer here and must not read as a
+    // failure — every bound line already agreeing with the catalog is
+    // exactly the state this task exists to reach.
+    const headline =
+      r.changes.length === 0
+        ? `Every catalog-bound line already matches the catalog \u2014 nothing to re-type (${r.inStep} checked).`
+        : dryRun
+          ? `Dry run \u2014 ${n} line${n === 1 ? '' : 's'} would be re-typed. ${r.inStep} already in step.`
+          : `${n} line${n === 1 ? '' : 's'} re-typed. ${r.inStep} were already in step.`
     const log = r.warnings.length ? [...r.log, '', 'Look at:', ...r.warnings.map((w) => `  ! ${w}`)] : r.log
     return { log, createdIds: [], touchedIds: r.touchedIds, headline }
   },

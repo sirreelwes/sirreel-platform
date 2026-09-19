@@ -145,6 +145,10 @@ type LineItem = {
     /** The AssetCategory a unit-tracked catalog row holds against — how a
      *  VEHICLE line finds ITS hold on the booking. */
     legacyAssetCategoryId?: string | null;
+    /** What the catalog says this row IS. The row editor re-derives the
+     *  line's `type` on save and needs the same fact the add path uses;
+     *  without it a bound vehicle re-saved as EQUIPMENT. */
+    type?: LineItemType | null;
   } | null;
 };
 
@@ -504,6 +508,11 @@ type InvItem = {
   dailyRate: string;
   weeklyRate: string | null;
   category: { id: string; name: string };
+  // Same pair AssetCat carries, for the same reason: the line's type comes
+  // from the ROW, never from which box the rep searched in. Vehicles are
+  // InventoryItem rows since the flattening, so they arrive through here.
+  department?: LineItemDepartment | null;
+  lineType?: LineItemType | null;
 };
 
 // Order status pill — reuses the cadence palette so the pill reads
@@ -733,6 +742,12 @@ export default function OrderDetailPage() {
   const [editInvItemId, setEditInvItemId] = useState<string | null>(null);
   const [editAssetCatId, setEditAssetCatId] = useState<string | null>(null);
   const [editCatalogType, setEditCatalogType] = useState<'INVENTORY' | 'ASSET_CATEGORY' | null>(null);
+  /** The bound catalog row's OWN LineItemType. Without it the save below
+   *  re-derived the line's type from the department alone, and an INVENTORY
+   *  row outside STAGES/EXPENDABLES falls through to EQUIPMENT — so every
+   *  catalog-bound VEHICLE line flipped to EQUIPMENT the first time anyone
+   *  edited its rate, quantity, dates or note. */
+  const [editCatalogLineType, setEditCatalogLineType] = useState<LineItemType | null>(null);
   const [editMatchedName, setEditMatchedName] = useState<string | null>(null);
   // Snapshot the line's rateType at edit-start so applyEditMatch can
   // pass it to pickRate (daily vs weekly fallback). The inline editor
@@ -2256,6 +2271,17 @@ export default function OrderDetailPage() {
 
   const selectInventoryItem = (item: InvItem) => {
     setLiInvItemId(item.id);
+    // The ROW says what it is, not the box it was found in. Vehicles are
+    // InventoryItem rows since the flattening, so "Cargo Van w/ Liftgate"
+    // comes back from the Search Inventory combobox like any other catalog
+    // hit — and this never touched the type, so the form's EQUIPMENT
+    // default stood and a real truck was written as an EQUIPMENT line
+    // (the department still read VEHICLES off the catalog server-side,
+    // which is why it filed under Vehicles and looked half-right).
+    // EQUIPMENT also hid the which-truck picker below, gated on VEHICLE.
+    if (item.lineType) {
+      setLiType(resolveLineType('INVENTORY', (item.department || 'PRO_SUPPLIES') as LineItemDepartment, item.lineType));
+    }
     maybeAutoFillDesc(item.description || item.code);
     // Auto-fill the rate field from the catalog — matches what
     // selectAssetCategory has always done, and what reps were silently
@@ -2575,11 +2601,13 @@ export default function OrderDetailPage() {
       setEditInvItemId(li.inventoryItem.id);
       setEditAssetCatId(null);
       setEditCatalogType('INVENTORY');
+      setEditCatalogLineType(li.inventoryItem.type ?? null);
       setEditMatchedName(li.inventoryItem.description || li.inventoryItem.code);
     } else {
       setEditInvItemId(null);
       setEditAssetCatId(null);
       setEditCatalogType(null);
+      setEditCatalogLineType(null);
       setEditMatchedName(null);
     }
   };
@@ -2592,7 +2620,7 @@ export default function OrderDetailPage() {
   // Package hits aren't supported inline (would need row expansion);
   // we scope them out via the combobox's `types` prop too, this is
   // just defense.
-  const applyEditMatch = (hit: { id: string; type: CatalogHitType; name: string; department: string; dailyRate: number; weeklyRate: number }) => {
+  const applyEditMatch = (hit: { id: string; type: CatalogHitType; name: string; department: string; dailyRate: number; weeklyRate: number; lineType?: LineItemType | null }) => {
     if (hit.type === 'PACKAGE') {
       alert('Packages can\u2019t be applied via the inline editor — delete this line and add the package from the catalog.');
       return;
@@ -2607,6 +2635,7 @@ export default function OrderDetailPage() {
     setEditDesc(hit.name);
     setEditDept(hit.department as LineItemDepartment);
     setEditCatalogType(hit.type);
+    setEditCatalogLineType(hit.lineType ?? null);
     setEditMatchedName(hit.name);
     if (hit.type === 'INVENTORY') {
       setEditInvItemId(hit.id);
@@ -2709,8 +2738,22 @@ export default function OrderDetailPage() {
     // come out a different type than the door it arrived through made it
     // (src/lib/orders/lineType.ts). Unbound rows keep whatever type they
     // have: `type` is simply not sent.
-    if (editCatalogType) {
-      body.type = resolveLineType(editCatalogType, (editDept || 'PRO_SUPPLIES') as LineItemDepartment);
+    //
+    // The catalog row's OWN type is the third argument and it is NOT
+    // optional here (2026-09-19): an INVENTORY row outside STAGES /
+    // EXPENDABLES with no type to read falls through to EQUIPMENT, and
+    // vehicles are INVENTORY rows since the flattening. So this line
+    // used to retype every catalog-bound VEHICLE to EQUIPMENT on any
+    // save — a rate tweak was enough. An ASSET_CATEGORY binding still
+    // resolves without one (the rule answers VEHICLE from the kind);
+    // an INVENTORY row whose type we could not read sends nothing and
+    // keeps what it has, because a guess here rewrites a stored fact.
+    if (editCatalogType === 'ASSET_CATEGORY' || editCatalogLineType) {
+      body.type = resolveLineType(
+        editCatalogType,
+        (editDept || 'PRO_SUPPLIES') as LineItemDepartment,
+        editCatalogLineType,
+      );
     }
     const putLine = async (extra?: Record<string, unknown>) => fetch(`/api/orders/${order?.id}/line-items/${lineId}`, {
       method: "PUT",
@@ -2956,6 +2999,7 @@ export default function OrderDetailPage() {
               setEditInvItemId(null);
               setEditAssetCatId(null);
               setEditCatalogType(null);
+              setEditCatalogLineType(null);
               setEditMatchedName(null);
             }}
             // Packages don't apply inline (would need row
@@ -4508,6 +4552,8 @@ export default function OrderDetailPage() {
                         dailyRate: String(hit.dailyRate),
                         weeklyRate: hit.weeklyRate ? String(hit.weeklyRate) : null,
                         category: { id: '', name: hit.department.replace(/_/g, ' ') },
+                        department: hit.department as LineItemDepartment,
+                        lineType: hit.lineType ?? null,
                       })
                       setInvSearch(hit.name)
                     }}

@@ -17,6 +17,7 @@ import { checkHoldFeasibility, syncHoldOnLineDelete } from "@/lib/orders/holdsSy
 import { holdOnQuoteSend, holdCategoryForLine, planHoldSyncOnLineEdit, categoryStillQuoted } from "@/lib/orders/holdOnQuoteSend";
 import { holdCategoryIdForLine, liveUnitsForLine, namesInWords, releaseLineUnits } from "@/lib/orders/lineUnits";
 import { assignUnitsForLine, type UnitAssignmentOutcome } from "@/lib/orders/assignUnitsForLine";
+import { resolveLineType } from "@/lib/orders/lineType";
 import { releaseBookingItem } from "@/lib/scheduling/releaseBookingItem";
 import { syncReservationToLineDates, type FollowOutcome } from "@/lib/scheduling/followLineDates";
 import { resolveLineRate, logRateOverride } from "@/lib/pricing/resolveRate";
@@ -270,7 +271,7 @@ export async function PUT(req: NextRequest, { params }: Params) {
       where: { id: lineId },
       include: {
         assetCategory: { select: { department: true } },
-        inventoryItem: { select: { department: true, trackingMode: true, legacyAssetCategoryId: true } },
+        inventoryItem: { select: { department: true, trackingMode: true, legacyAssetCategoryId: true, type: true } },
       },
     });
     if (!fullExisting) {
@@ -302,6 +303,32 @@ export async function PUT(req: NextRequest, { params }: Params) {
               })
             : null,
         });
+
+    // The line's `type` is settled from the catalog row it is BOUND to, not
+    // from the request — the same rule the POST applies, for the same
+    // reason: the client is the one place that can forget. This is what a
+    // catalog-bound vehicle needed: the order page's row editor re-derived
+    // the type on every save without the row's own type to read, and an
+    // INVENTORY row outside STAGES / EXPENDABLES falls through to
+    // EQUIPMENT, so a rate or date tweak silently retyped a real truck.
+    //
+    // A package member / header keeps its expansion-time type, and an
+    // unbound line (free-typed, or a partner's unit, which carries no
+    // catalog FK) keeps whatever the caller sent.
+    if (!fullExisting.isPackageHeader && !fullExisting.packageInstanceId && !fullExisting.feeItemId) {
+      const boundType = nextInventoryItemId
+        ? (nextInventoryItemId === fullExisting.inventoryItemId
+            ? fullExisting.inventoryItem?.type ?? null
+            : (await prisma.inventoryItem.findUnique({
+                where: { id: nextInventoryItemId }, select: { type: true },
+              }))?.type ?? null)
+        : null;
+      if (nextInventoryItemId && boundType) {
+        data.type = resolveLineType('INVENTORY', newDept, boundType);
+      } else if (nextAssetCategoryId) {
+        data.type = resolveLineType('ASSET_CATEGORY', newDept);
+      }
+    }
     const holdPlan = planHoldSyncOnLineEdit({ oldCategoryId, newCategoryId, oldQty, newQty });
     let holdsAuditNote: string | null = null;
 

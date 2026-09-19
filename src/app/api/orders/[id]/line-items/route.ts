@@ -1,6 +1,6 @@
 import { defaultReceiveMethodFor } from "@/lib/sub-rentals/partnerKind";
 import { NextRequest, NextResponse } from "next/server";
-import { Prisma, type LineItemDepartment, type RateType } from "@prisma/client";
+import { Prisma, type LineItemDepartment, type LineItemType, type RateType } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { catalogIdForAssetCategory } from "@/lib/catalog/resolve";
 import { getServerSession } from "next-auth";
@@ -18,6 +18,7 @@ import { resolveLineRate, resolveFeeLineRate, resolveRate, logRateOverride, type
 import { syncOrderWindowSafe } from '@/lib/orders/syncOrderWindow'
 import { orderableWalkieLine } from '@/lib/catalog/walkiePool'
 import { assignUnitsForLine, parseUnitAssignment, type UnitAssignmentOutcome } from '@/lib/orders/assignUnitsForLine'
+import { resolveLineType } from '@/lib/orders/lineType'
 
 // PARKING LOT (Phase 2.x — warehouse PickList sync): if a line item is
 // added/removed AFTER the order has been BOOKED (allowed during
@@ -259,21 +260,39 @@ export async function POST(req: NextRequest, { params }: Params) {
     // Department is required by the new billing rules. If the client
     // didn't pass one, try to lift it from the catalog product; final
     // fallback is PRO_SUPPLIES (matches the schema default).
+    //
+    // The same read also lifts the row's own LineItemType, whether or not
+    // the client passed a department: the catalog row is the authority on
+    // what a bound line IS (src/lib/orders/lineType.ts), and the server is
+    // the only place every door passes through. Until 2026-09-19 `type`
+    // was written from the request verbatim, so a picker that forgot to
+    // set it wrote the form's default instead — which is how a cargo van
+    // reached a live order as an EQUIPMENT line sitting in VEHICLES.
     let resolvedDepartment: LineItemDepartment = (department as LineItemDepartment) || 'PRO_SUPPLIES';
-    if (!department) {
+    let catalogBinding: 'INVENTORY' | 'ASSET_CATEGORY' | null = null;
+    let catalogLineType: LineItemType | null = null;
+    if (!feeItemId) {
       if (inventoryItemId) {
         const inv = await prisma.inventoryItem.findUnique({
-          where: { id: inventoryItemId }, select: { department: true },
+          where: { id: inventoryItemId }, select: { department: true, type: true },
         });
-        if (inv) resolvedDepartment = inv.department;
+        if (inv) {
+          catalogBinding = 'INVENTORY';
+          catalogLineType = inv.type;
+          if (!department) resolvedDepartment = inv.department;
+        }
       } else if (assetCategoryId) {
         const acId = await catalogIdForAssetCategory(assetCategoryId)
         const ac = acId
           ? await prisma.inventoryItem.findUnique({
-              where: { id: acId }, select: { department: true },
+              where: { id: acId }, select: { department: true, type: true },
             })
           : null;
-        if (ac) resolvedDepartment = ac.department;
+        if (ac) {
+          catalogBinding = 'ASSET_CATEGORY';
+          catalogLineType = ac.type;
+          if (!department) resolvedDepartment = ac.department;
+        }
       }
     }
 
@@ -477,6 +496,15 @@ export async function POST(req: NextRequest, { params }: Params) {
     }
     if (!rateResolution) {
       return NextResponse.json({ error: "invalid rate" }, { status: 400 });
+    }
+
+    // What the line IS, settled from the catalog row rather than from the
+    // request. A package header is EQUIPMENT by its own rule and a fee is
+    // already forced to FEE above, so neither is re-derived here; an
+    // unbound line (free-typed, or a partner's unit, which has no catalog
+    // FK) keeps exactly the type the caller sent.
+    if (catalogBinding && catalogLineType && !isPackageHeader) {
+      effectiveType = resolveLineType(catalogBinding, resolvedDepartment, catalogLineType);
     }
 
     // computeLineTotal returns 0 when days is NULL — see billing.ts.

@@ -1905,6 +1905,59 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 - Still NOT done: nothing chases the client a second time if they ignore it —
   the `card-declined` action item puts it on a rep's list and sends nothing.
 
+## A vehicle filed as EQUIPMENT (2026-09-19 — Wes)
+- Wes, on an order carrying two identical cargo-van lines — one typed
+  VEHICLE, its twin typed EQUIPMENT, both correctly under VEHICLES: "How did
+  this end up as an equipment line? Obviously it should always be a vehicle
+  line." **`department` was right on both; `type` was not.** Two doors wrote
+  it wrong, for the same missing fact: **the catalog row's own `type` never
+  reached the order page at all** — not on `/api/catalog/search`'s hits, not
+  on the order GET's `inventoryItem`. So both had to guess, and
+  `resolveLineType`'s fallback for an INVENTORY row outside STAGES /
+  EXPENDABLES is EQUIPMENT.
+  - **"+ Add Item" → Search Inventory.** The form opens on EQUIPMENT and the
+    combobox only ever flipped that for an ASSET_CATEGORY or a partner hit.
+    **Vehicles are InventoryItem rows since the department flattening**, so
+    picking "Cargo Van w/ Liftgate" out of that box left the default
+    standing — and EQUIPMENT also hides the which-truck picker, which is
+    gated on `liType === 'VEHICLE'`.
+  - **The inline row editor.** `saveEditLine` re-derived the type on every
+    save and passed NO catalog type, so `resolveLineType('INVENTORY',
+    'VEHICLES')` answered EQUIPMENT. **A correctly-typed van flipped the
+    first time anyone edited its rate, quantity, dates or note.** This is
+    the 2026-09-14 stage bug ("the row argued with itself") running in the
+    opposite direction, and `tests/orders/line-type.test.ts` pinned
+    `('INVENTORY','VEHICLES','VEHICLE')` but never the no-type call the
+    editor actually made.
+- **`resolveLineType` is UNCHANGED and must stay that way.** Do not teach it
+  to read VEHICLE off the VEHICLES department: a per-vehicle FEE sits there
+  too, and the 2026-09-14 rule already refuses to let the department mint a
+  type (live catalog rows still carry VEHICLE under PRO_SUPPLIES). The fix
+  is to SUPPLY the row's type, never to infer it.
+- **The durable half is server-side.** The line-item **POST and PUT now
+  derive `type` from the catalog row the line is BOUND to** rather than
+  writing what the request sent — `/api/orders/from-parse` was already the
+  only route doing this, which is why /orders/new never had the bug. A
+  client is the one place that can forget, and a door written next year
+  would forget again. Untouched: an UNBOUND line (free-typed, or a partner's
+  unit — no catalog FK), a FEE, a package header and every package member,
+  each of which is typed by what made it.
+- **The rows already written are corrected by a task, not by hand:**
+  /admin/maintenance → **"Re-type order lines from the catalog"**
+  (`retype-catalog-lines`), or `npx tsx scripts/retype-catalog-lines.ts
+  [--write]`. `src/lib/orders/retypeCatalogLines.ts` is the work; dry run is
+  the default and names every line with its order number and both types.
+  It is a RE-DERIVATION through the same rule, so it converges and a second
+  run changes nothing. Per-line AuditLog `order_line_item.retyped_from_catalog`
+  carries the old type, so a wrong call is reversible by id from a phone run
+  with no journal file.
+- **No price moves.** `computeLineTotal` prices on department, rate type,
+  quantity and days and reads `type` nowhere. What the type decides is which
+  controls the row offers, whether the truck is in the COI's vehicle scope
+  and the replacement-value total, and whether the unit picker appears at
+  all — which is why it is worth correcting on orders that already shipped.
+- `npm run test:line-type` now pins the fallback in both directions.
+
 ## Lost because of insurance — a reason of its own (2026-09-18 — Wes)
 - Wes: "We've lost a couple of jobs because of improper insurance from the
   Production. I'd like to have this as an option." The Mark-lost picker had

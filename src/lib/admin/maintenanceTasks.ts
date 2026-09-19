@@ -126,6 +126,17 @@ export const MAINTENANCE_TASKS: readonly MaintenanceTaskMeta[] = [
     cliEquivalent: 'npx tsx scripts/cargo-vans-no-lift-gate.ts',
   },
   {
+    id: 'retype-catalog-lines',
+    title: 'Re-type order lines from the catalog',
+    summary:
+      'Puts every catalog-bound line back to what the catalog row says it is \u2014 which is how a cargo van filed as an EQUIPMENT line becomes a VEHICLE line again.',
+    detail:
+      'Wes 2026-09-19, on an order carrying two identical cargo-van lines, one typed VEHICLE and its twin typed EQUIPMENT: "Obviously it should always be a vehicle line." Two doors wrote it wrong and both are closed now \u2014 the "+ Add Item" form opens on EQUIPMENT and only flipped that for the old vehicle-class picker (vehicles are ordinary catalog rows since the department flattening, so picking one out of the Search Inventory box left the default standing), and the inline row editor re-derived the type on every save without the catalog row\u2019s own type to read, so a correctly-typed van flipped the first time anyone edited its rate or dates. This fixes the rows already written: each line is re-typed to exactly what the shared rule answers from the catalog row it is bound to, the same answer both routes now write. It never guesses \u2014 an unbound line (free-typed, or a partner\u2019s unit, which has no catalog row), a fee, a package header and every package member are left alone, and so is a bound row whose catalog type cannot be read. No price moves: totals are computed from department, rate, quantity and days and never from the type. Run the dry run first \u2014 it names every line it would change, with the order number and both types. Running it twice changes nothing.',
+    category: 'backfill',
+    writes: 'order_line_items (the `type` column only) \u00b7 audit_log (one row per line, carrying the old type)',
+    cliEquivalent: 'npx tsx scripts/retype-catalog-lines.ts',
+  },
+  {
     id: 'file-negotiated-agreement',
     title: 'File a negotiated agreement as the client\u2019s annual master',
     summary:
