@@ -156,8 +156,21 @@ check(
 )
 check(
   'nor is anything else on the roster',
-  ['SuperCube Truck', 'Cube Truck', 'PopVan', 'Camera Cube', 'Stakebed', 'DLUX', 'Scissor Lift', 'ProScout / VTR']
+  ['SuperCube Truck', 'Cube Truck', 'PopVan', 'Camera Cube', 'Stakebed', 'DLUX', 'DLUX (NorCal)', 'Scissor Lift']
     .every((c) => inspectionRegimeForClass(c) === 'dot'),
+)
+// Left unruled when this shipped, then ruled on by Wes 2026-09-19: "Yes it's
+// a bit vehicle." It moves crew, so the 10+-passenger test reaches it.
+// Three spellings because the catalog name and the LCDW copy disagree.
+check(
+  'the ProScout / VTR is a BIT vehicle too',
+  inspectionRegimeForClass('ProScout / VTR') === 'bit' &&
+    inspectionRegimeForClass('ProScout') === 'bit' &&
+    inspectionRegimeForClass('VTR') === 'bit',
+)
+check(
+  'however the PeopleMover is spelled',
+  inspectionRegimeForClass('VTR/PeopleMover Van') === 'bit' && inspectionRegimeForClass('People Mover') === 'bit',
 )
 // An unknown class gets the umbrella, which is correct-but-vague, rather
 // than a guess that is confidently wrong on a document handed to the CHP.
