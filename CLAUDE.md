@@ -25,6 +25,14 @@ three parallel catalog ranking paths).
 - How Wes drives it, the per-role prompts and the sandbox guardrails:
   `docs/runbooks/codex-agent-setup.md` (under docs/, so AHA's
   `platform_memory` can answer it by text).
+- **`docs/SYSTEM-MAP.md` is the structural half of the context** — the domain
+  spine, where everything lives, the pure-rule pattern, the token model, the
+  integration list. THIS file is chronological by ruling, which is right for
+  "why is this like this?" and no use for "where does X live"; the map is the
+  other question, and neither repeats the other. It supersedes
+  `ARCHITECTURE-AUDIT.md` (2026-07-02), which describes a schema half this
+  size and is now marked as history. Numbers in the map were COUNTED — if you
+  restate one, re-count it.
 
 ## People
 - **Wes Bailey** (CEO/owner, primary user) — wes@sirreel.com

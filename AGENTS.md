@@ -4,17 +4,23 @@ SirReel HQ is the internal operations platform for a working rental company.
 It is **in production**, it bills real money, and it has no staging
 environment. Read this file before you touch anything.
 
-## The law lives in two other files
+## Read these three, in this order
 
 | File | What it is |
 | --- | --- |
+| **`docs/SYSTEM-MAP.md`** | **Start here.** The structural map: the domain spine, where everything lives, the architectural patterns, who can see what. ~10 minutes and the rest of the repo becomes legible. |
 | **`CLAUDE.md`** | ~2,900 lines of rulings: why things are the way they are, what was tried and rejected, and what must never be "cleaned up". |
 | **`SHIPLOG.md`** (top section, "Hard Rules") | Three standing rules paid for with real incidents. |
 
-**This file does not repeat them, on purpose.** A second copy of a safety rule
-is a copy that goes stale, and the stale one is the one that wipes a database.
-That is the same reasoning `CLAUDE.md` applies to the BIT certificate pointer
-and the radio-battery pool: one object, one record.
+`SYSTEM-MAP.md` answers *what and where*. `CLAUDE.md` answers *why*. You need
+both, and they are organised for different questions — `CLAUDE.md` is
+chronological by ruling, so it is superb for "why is this like this?" and
+useless for "where does X live".
+
+**This file repeats neither, on purpose.** A second copy of a safety rule is a
+copy that goes stale, and the stale one is the one that wipes a database. That
+is the same reasoning `CLAUDE.md` applies to the BIT certificate pointer and
+the radio-battery pool: one object, one record.
 
 `CLAUDE.md` is large. You are not expected to hold all of it. Do this instead:
 
@@ -51,6 +57,19 @@ Four facts. Every one of them has already cost somebody something.
    the auto-deploy).
 
 ---
+
+## The pattern that makes this codebase workable
+
+`SYSTEM-MAP.md` §5 has this in full, but it is worth stating here because it
+determines where your change belongs: **a decision lives in one pure module, a
+thin database half feeds it, and many surfaces read it.** 396 of the 747
+`src/lib` modules never import Prisma.
+
+So when you change behaviour, the edit almost always belongs in a pure rule
+module (`somethingRules.ts`, or a file named after the decision) that already
+has a `test:*` script pinning it — not in the route or the component. If you
+find two surfaces answering the same question differently, that is a bug in
+this codebase's terms, not a style preference.
 
 ## You can verify almost everything without a database
 
