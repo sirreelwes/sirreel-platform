@@ -13,7 +13,8 @@ Rules as the law, and adds only what is agent-specific — the no-database
 verification loop (175 of 183 `test:*` scripts pass with `DATABASE_URL`
 unset), the currently-red baseline, and the list of code that looks deletable
 and is load-bearing (`promoteHoldsOnApproval`, the dormant-job sweep, the
-three parallel catalog ranking paths).
+three parallel catalog ranking paths). `docs/SYSTEM-MAP.md` carries the
+scale: ~2,300 source files and ~461k hand-written lines.
 - **Never let AGENTS.md become a COPY of this file.** Two copies of a safety
   rule drift, and the stale copy is the one that runs `db push` against
   production — the same one-object-one-record rule as the BIT pointer and the

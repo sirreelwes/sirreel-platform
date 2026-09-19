@@ -42,16 +42,37 @@ running anything that touches data.
 Next.js 14 (app router, `src/`) · TypeScript · Prisma · Neon PostgreSQL ·
 Vercel · Tailwind.
 
+**Roughly 2,300 hand-written source files and ~461,000 lines.** None of it is
+generated — the largest file in the repo is a 7,589-line page component
+somebody typed.
+
+| Area | Files | Lines |
+| --- | --- | --- |
+| `src/app` (routes + pages) | 907 | **157,145** |
+| `src/lib` (the logic) | 762 | **141,598** |
+| `src/components` | 314 | **95,493** |
+| **`src/` total** | **1,984** | **395,260** |
+| `tests/` | 186 | 23,781 |
+| `scripts/` | 107 | 16,611 |
+| `prisma/` | 14 | 12,881 |
+| Docs (`CLAUDE.md` 2,921 · `SHIPLOG.md` 754 · `docs/`) | 23 | ~12,400 |
+
 | | |
 | --- | --- |
 | Prisma models / enums | **178** / **123** (10,780-line schema) |
-| API routes | **696** |
+| API route handlers | **696** |
 | Pages | **193** |
-| `src/lib` modules | **747** |
 | React components | **309** |
-| `scripts/*.ts` | **107** |
 | `test:*` npm scripts | **183** |
 | Vercel cron jobs | **30** |
+| Environment variables | **73** |
+| `AuditLog` action strings | **181** |
+
+**Calibrate on this before you estimate anything.** A question like "where is
+X handled?" can have six right answers here, and a sweep across "the whole
+codebase" is not a thing you can do in one pass. Work from the domain spine
+(§3) and the directory map (§4) down to the file, rather than searching
+broadly and hoping.
 
 Runtime dependencies are deliberately few: `@prisma/client`, `next-auth`,
 `resend` (email), `@react-pdf/renderer` + `pdf-lib` + `pdfjs-dist` (documents),
@@ -121,34 +142,57 @@ src/
     intake/ details/ order/ invoice/ pay-details/   one-shot client links
     (vermar)/ (whitelabel)/   white-label surfaces (largely parked)
     api/             696 route handlers
-  lib/               747 modules — the real logic lives here
-  components/        309 React components, grouped by surface
-prisma/schema.prisma 178 models
-scripts/             107 one-off and re-runnable operational scripts
-tests/               186 test files, almost all pure and offline
+  lib/               762 modules, 141k lines — the real logic lives here
+  components/        314 components, 95k lines, grouped by surface
+prisma/schema.prisma 178 models, 10,780 lines
+scripts/             107 operational scripts, 17k lines
+tests/               186 test files, 24k lines, almost all pure and offline
 docs/                specs, runbooks, this file
 ```
 
-**`src/lib` by weight** (file counts) — this is a good proxy for where the
-complexity actually is:
+**`src/lib` by weight** — measured in LINES, which tells you where the
+complexity is far better than file count does:
 
-| Area | Files | What it covers |
+| Area | Lines | What it covers |
 | --- | --- | --- |
-| `email/` | 83 | templates, Gmail ingest, the job Conversation, thread anchoring |
-| `orders/` | 71 | totals, discounts, line items, status, partner lines |
-| `sub-rentals/` | 44 | partners, their rosters, agreements, margin waterfall |
-| `portal/` | 40 | client + company portal payloads and rules |
-| `contracts/` | 39 | clause registry, PDF rendering, negotiated agreements |
-| `sales/` | 30 | quoting, catalog ranking, tents/sandbags |
-| `actionItems/` | 26 | the action-item registry and its providers |
-| `fleet/` | 25 | DOT/BIT paperwork, inspections, photos |
-| `coi/` | 24 | certificate review, requirements, broker directory |
-| `jobs/` | 23 | cadence, stage, welcome, job-level rollups |
-| `site/` | 20 | public catalog, search, home tiles |
-| `invoices/`, `scheduling/`, `sync/`, `assistant/` | 15–18 each | |
+| `email/` | 15,822 | templates, Gmail ingest, the job Conversation, thread anchoring |
+| `orders/` | 12,644 | totals, discounts, line items, status, partner lines |
+| `sub-rentals/` | 9,717 | partners, rosters, agreements, the margin waterfall |
+| `contracts/` | 9,117 | clause registry, PDF rendering, negotiated agreements |
+| `portal/` | 7,960 | client + company portal payloads and rules |
+| `sales/` | 6,733 | quoting, catalog ranking, tents/sandbags |
+| `invoices/` | 5,198 | invoice generation, edits, aging |
+| `coi/` | 4,385 | certificate review, requirements, broker directory |
+| `fleet/` | 4,306 | DOT/BIT paperwork, inspections, photos |
+| `jobs/` | 3,982 | cadence, stage, welcome, job-level rollups |
+| `sync/` | 3,726 | RentalWorks + Planyo mirrors |
+| `scheduling/` | 3,595 | holds, assignment windows, date-following |
+| `warehouse/` | 3,537 | pick lists, unit scans, sections |
+| `actionItems/` | 3,117 | the registry and its ~20 providers |
+| `rentalworks/`, `collections/`, `assistant/`, `crm/` | 2,700–2,800 each | |
 
-Smaller but load-bearing: `payments/`, `crm/`, `collections/`,
-`rentalworks/`, `drivers/`, `warehouse/`, `catalog/`, `admin/`, `dates/`.
+Smaller but load-bearing: `payments/`, `drivers/`, `catalog/`, `admin/`,
+`site/`, `inventory/`, `dates/`.
+
+### Some files are very large
+
+**122 files exceed 500 lines; 24 exceed 1,000.** The heaviest are the staff
+screens that grew feature by feature:
+
+| File | Lines |
+| --- | --- |
+| `app/(dashboard)/orders/[id]/page.tsx` | 7,589 |
+| `app/(dashboard)/orders/new/page.tsx` | 4,848 |
+| `app/(dashboard)/jobs/[id]/page.tsx` | 4,395 |
+| `components/schedule/GanttBoard.tsx` | 3,742 |
+| `app/portal/job/[slug]/page.tsx` | 2,725 |
+| `components/scheduling/MakeReservationModal.tsx` | 2,580 |
+
+You will not hold these in context. Do not try — `grep` to the symbol or the
+section you need and read a window around it. And do not volunteer to split
+one up: they are big because a lot of decisions landed in them, each with a
+paragraph in `CLAUDE.md`, and a refactor of that size is a change nobody
+asked for with a very long tail.
 
 **API routes by weight:** `portal` (84), `orders` (79), `public` (64),
 `admin` (46), `jobs` (45), `crm` (44), `scheduling` (29), `cron` (27),
@@ -161,9 +205,9 @@ Smaller but load-bearing: `payments/`, `crm/`, `collections/`,
 **A decision lives in one pure module. A thin database half feeds it. Many
 surfaces read it.**
 
-**396 of 747 `src/lib` modules never import Prisma.** That is not an accident
-— it is the dominant architectural pattern, and it is why 175 of 183 test
-scripts run with no database at all.
+**411 of 762 `src/lib` modules — 53% — never import Prisma.** That is not an
+accident; it is the dominant architectural pattern, and it is why 175 of 183
+test scripts run with no database at all.
 
 The shape, every time:
 

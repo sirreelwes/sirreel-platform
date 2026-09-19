@@ -62,8 +62,8 @@ Four facts. Every one of them has already cost somebody something.
 
 `SYSTEM-MAP.md` §5 has this in full, but it is worth stating here because it
 determines where your change belongs: **a decision lives in one pure module, a
-thin database half feeds it, and many surfaces read it.** 396 of the 747
-`src/lib` modules never import Prisma.
+thin database half feeds it, and many surfaces read it.** 411 of the 762
+`src/lib` modules — 53% — never import Prisma.
 
 So when you change behaviour, the edit almost always belongs in a pure rule
 module (`somethingRules.ts`, or a file named after the decision) that already

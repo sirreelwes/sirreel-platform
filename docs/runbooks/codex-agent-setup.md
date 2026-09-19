@@ -88,6 +88,11 @@ LiteHold sitting at rank 2 with no unit).
 Read-only. Have it *report*, not edit. This is where the value is highest and
 the risk lowest.
 
+**Scope it to a path, always.** This repo is ~461,000 hand-written lines
+across ~2,300 files (see `docs/SYSTEM-MAP.md` §2). "Review the codebase" is
+not a task anything can do in one pass — it produces a shallow sweep that
+reads like insight. One directory or one route at a time.
+
 > Review `<path>` for efficiency: N+1 queries, work repeated per row that
 > could be hoisted, `findMany` without a bound, sequential awaits that could
 > be one query, payloads selecting columns nobody reads.
