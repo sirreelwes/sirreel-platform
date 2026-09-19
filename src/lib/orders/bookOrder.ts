@@ -117,8 +117,25 @@ export async function bookOrder(args: {
    * partner "it's a go" notices still run.
    */
   skipBookingWelcome?: boolean
+  /**
+   * Book without telling the sub-rental partners it's a go. Set by the
+   * auto-book sweep for an order whose pickup day has already passed —
+   * a historical row catching up with its own paperwork. "It's a go" on
+   * a rental that is over reads as a NEW order to the partner, and a
+   * backfill of a hundred of them would read as a hundred.
+   *
+   * Never set from a live booking path: a partner who is holding a unit
+   * has to be told when the client says yes.
+   */
+  skipPartnerNotices?: boolean
 }): Promise<BookOrderResult> {
-  const { orderId, userId, ipAddress = null, skipBookingWelcome = false } = args
+  const {
+    orderId,
+    userId,
+    ipAddress = null,
+    skipBookingWelcome = false,
+    skipPartnerNotices = false,
+  } = args
 
   // ── Phase 1: atomic transaction ────────────────────────────────
   // Done as a single $transaction so a half-booked order can't exist.
@@ -440,8 +457,10 @@ export async function bookOrder(args: {
   // "it's a go" when the client books. Best-effort and idempotent (stamped
   // per sub-rental); a partner we couldn't reach is logged, never fatal.
   try {
-    const outcomes = await notifySubRentalsBooked(orderId)
-    for (const o of outcomes) if (o.warning) console.warn('[bookOrder] partner not told:', o.warning)
+    if (!skipPartnerNotices) {
+      const outcomes = await notifySubRentalsBooked(orderId)
+      for (const o of outcomes) if (o.warning) console.warn('[bookOrder] partner not told:', o.warning)
+    }
   } catch (err) {
     console.error('[bookOrder] sub-rental booked notices failed:', err)
   }

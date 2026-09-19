@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
+import { maybeAutoBookOrder } from '@/lib/orders/autoBook'
 import {
   JOB_SESSION_COOKIE,
   buildJobSessionCookieHeader,
@@ -30,9 +31,12 @@ export const maxDuration = 30
  *
  * Approving does two things in one action:
  *   1. Flips the order QUOTE_SENT (or DRAFT) → APPROVED, syncing quoteStatus
- *      to WON and stamping wonAt. APPROVED is a GATE, not an auto-book —
- *      bookOrder() still requires an explicit staff action, it just becomes
- *      available. (Wes, 2026-08-25: client approval is the yes.)
+ *      to WON and stamping wonAt. (Wes, 2026-08-25: client approval is the
+ *      yes.) APPROVED was a GATE and not an auto-book until 2026-09-19,
+ *      when Wes ruled the paperwork IS the booking: if the signed rental
+ *      agreement and the approved COI are already on file when the client
+ *      says yes, the order books itself here (lib/orders/autoBook.ts). With
+ *      either piece outstanding it stays a gate exactly as before.
  *   2. Releases the rental agreement into the same portal, so the Rental
  *      Agreement row flips from "your rep will send this shortly" to a live
  *      "Sign agreement →" without anyone at SirReel touching it. Composed
@@ -161,6 +165,16 @@ export async function POST(req: NextRequest) {
   const promotion = await reconcileHoldFirmness(order.id)
   if (promotion.error) {
     console.error('[approve-quote] hold promotion failed:', promotion.error)
+  }
+
+  // The yes can be the LAST piece: on a job whose agreement and COI are
+  // already filed (an annual account, or a second order on a papered
+  // job), approval completes the set and the order books itself. No-ops
+  // when either document is still outstanding. Best-effort — the
+  // approval is the durable fact.
+  const autoBooked = await maybeAutoBookOrder(order.id, { trigger: 'quote-approved' })
+  if (autoBooked.booked) {
+    console.log('[approve-quote] auto-booked', autoBooked.orderNumber)
   }
 
   const approverName =

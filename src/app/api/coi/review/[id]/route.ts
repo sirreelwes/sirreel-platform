@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma'
 import { rerunCoiAiReview } from '@/lib/coi/rerunCoiReview'
 import { evaluateInsuredMatch } from '@/lib/coi/insuredMatch'
 import { reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
+import { maybeAutoBookJob } from '@/lib/orders/autoBook'
 import { coiChecklist, coiFlags, type CoiCheckContext } from '@/lib/coi/checks'
 import { COI_SCOPE_GAP_NOTE, coiScopeGap } from '@/lib/coi/coiState'
 import { deriveCoiScope } from '@/lib/coi/jobScope'
@@ -725,6 +726,15 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
     for (const o of orders) {
       const r = await reconcileHoldFirmness(o.id)
       if (r.error) console.error('[coi/review] hold reconcile failed:', o.id, r.error)
+    }
+
+    // An approval can also be the last piece of paper, and the paperwork
+    // IS the booking (Wes 2026-09-19). Job-wide: the certificate is filed
+    // against the job, so one sign-off can complete the set for several
+    // orders. maybeAutoBookJob decides per order and never throws.
+    const booked = await maybeAutoBookJob(existing.job.id, { trigger: 'coi-approved', userId: reviewer?.id ?? null })
+    for (const b of booked) {
+      if (b.booked) console.log('[coi/review] auto-booked', b.orderNumber, b.silent ? '(silent)' : '')
     }
   }
 

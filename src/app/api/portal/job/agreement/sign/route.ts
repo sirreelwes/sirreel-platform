@@ -29,6 +29,7 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
+import { maybeAutoBookOrder } from '@/lib/orders/autoBook'
 import { put } from '@vercel/blob'
 import { prisma } from '@/lib/prisma'
 import {
@@ -245,5 +246,11 @@ export async function POST(req: NextRequest) {
     console.error('[agreement/sign] hold reconcile threw:', err)
   }
 
-  return NextResponse.json({ ok: true, agreement: updated })
+  // Signature in, and the COI may already be — in which case the order
+  // books itself (Wes 2026-09-19). This route never advanced the order's
+  // status at ALL, so a client who signed here left it sitting on
+  // QUOTE_SENT through pickup, the rental and the invoice.
+  const autoBooked = await maybeAutoBookOrder(resolved.orderId, { trigger: 'agreement-signed' })
+
+  return NextResponse.json({ ok: true, agreement: updated, booked: autoBooked.booked })
 }

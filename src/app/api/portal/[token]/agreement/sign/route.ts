@@ -10,6 +10,7 @@ import { sendOnJobThread } from '@/lib/email/jobThread'
 import { channelRecipients, dedupeEmails } from '@/lib/email/notificationChannels'
 import { transitionCadenceState } from '@/lib/cadence/scheduler'
 import { computeQuoteStatusSync } from '@/lib/orders/quoteStatus'
+import { maybeAutoBookOrder } from '@/lib/orders/autoBook'
 import type { AgreementStatus } from '@prisma/client'
 
 export const dynamic = 'force-dynamic'
@@ -305,6 +306,13 @@ export async function POST(
   } catch (err) {
     console.error('[portal/agreement/sign] APPROVED transition failed:', err)
   }
+
+  // ...and if the COI is already in, APPROVED is not where this stops.
+  // The paperwork IS the booking (Wes 2026-09-19); the "Book it" click
+  // that used to stand between the two told nobody anything new. Same
+  // bookOrder() the button runs, and it no-ops on anything it should not
+  // touch (a pending shoot-days claim, a partner gate, a draft).
+  await maybeAutoBookOrder(orderRow.id, { trigger: 'agreement-signed' })
 
   // Keep the legacy paperwork checklist in sync — the existing portal page's
   // "Rental agreement done" badge is driven off these fields.

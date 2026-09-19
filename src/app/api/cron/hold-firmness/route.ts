@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { reconcileHoldFirmness } from '@/lib/orders/holdOnQuoteSend'
+import { sweepAutoBook } from '@/lib/orders/autoBook'
 
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
@@ -22,6 +23,13 @@ export const maxDuration = 60
  * Idempotent by construction — a settled book changes nothing, which is
  * the normal result. Scoped to orders that actually own holds so the
  * run stays small.
+ *
+ * SINCE 2026-09-19 it also runs the AUTO-BOOK sweep (lib/orders/autoBook.ts)
+ * — same reasoning, one rung up. Every path that completes the client's
+ * paperwork books the order on the spot, but the inputs move with no event
+ * at all too: an annual master reaching its effective date, a company
+ * certificate carrying forward onto a new job. The sweep is the catch-all,
+ * and like the reconcile above it changes nothing on a normal night.
  *
  * Trigger manually with:
  *   curl -H "Authorization: Bearer $CRON_SECRET" https://hq.sirreel.com/api/cron/hold-firmness
@@ -86,11 +94,30 @@ export async function GET(req: NextRequest) {
     console.log('[cron/hold-firmness] rank changes:', JSON.stringify(changes))
   }
 
+  // Auto-book last: a hold that just firmed is the same paperwork the
+  // book rule reads, and this way one run settles both. Scoped on its own
+  // (every QUOTE_SENT/APPROVED order, holds or not) because an order with
+  // no reservation still has a status that should say BOOKED.
+  let autoBooked: { orderNumber: string | null; silent: boolean; reason?: string }[] = []
+  try {
+    autoBooked = (await sweepAutoBook()).map((r) => ({
+      orderNumber: r.orderNumber,
+      silent: r.silent,
+      ...(r.booked ? {} : { reason: `${r.reason}: ${r.detail ?? ''}`.trim() }),
+    }))
+    if (autoBooked.length > 0) {
+      console.log('[cron/hold-firmness] auto-booked:', JSON.stringify(autoBooked))
+    }
+  } catch (err) {
+    console.error('[cron/hold-firmness] auto-book sweep failed:', err)
+  }
+
   return NextResponse.json({
     ok: errors.length === 0,
     checked: orders.length,
     changed: changes.length,
     changes,
+    autoBooked,
     errors,
   })
 }

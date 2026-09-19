@@ -514,16 +514,37 @@ export async function holdOnQuoteSend(orderId: string): Promise<HoldOnQuoteResul
  * agreement, card on file. Driver-named and gear-assigned are OUR work
  * and appear in job readiness; holding a truck hostage to our own
  * dispatch admin would be backwards.
+ *
+ * The three flags are returned SEPARATELY as well as rolled into
+ * `missing`, because the auto-book rule needs two of them and not the
+ * third (src/lib/orders/autoBook.ts: agreement + COI book the order; the
+ * card is a check-OUT gate, not a booking one). Reading that off the
+ * `missing` strings would make a display list load-bearing.
  */
-export async function clientPaperworkIn(orderId: string): Promise<{
+export interface ClientPaperwork {
   ok: boolean
   missing: string[]
-}> {
+  /** A full certificate, human-approved, in date, and in scope. */
+  coiOk: boolean
+  /** A signed rental agreement — the order's own, a sibling order's on
+   *  the same job, or the company's annual master. */
+  signOk: boolean
+  cardOk: boolean
+}
+
+export async function clientPaperworkIn(orderId: string): Promise<ClientPaperwork> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
     select: {
       jobId: true,
-      signedAgreements: { select: { contractType: true, status: true, coveredByAgreementId: true } },
+      signedAgreements: {
+        select: {
+          contractType: true,
+          status: true,
+          coveredByAgreementId: true,
+          coveredByCompanyAgreementId: true,
+        },
+      },
       job: {
         select: {
           companyId: true,
@@ -572,7 +593,9 @@ export async function clientPaperworkIn(orderId: string): Promise<{
       },
     },
   })
-  if (!order) return { ok: false, missing: ['order not found'] }
+  if (!order) {
+    return { ok: false, missing: ['order not found'], coiOk: false, signOk: false, cardOk: false }
+  }
 
   // Newest FULL certificate — workers' comp on its own firms up nothing.
   const coi = newestFullCoi(order.job?.coiChecks ?? [])
@@ -590,10 +613,20 @@ export async function clientPaperworkIn(orderId: string): Promise<{
   const coiOk =
     !!coi && !coiExpired && !coiScopeShort && coi.humanDecision === 'APPROVED' && coi.coverageVerified
 
+  // An annual master counts (`coveredByCompanyAgreementId`, stamped by
+  // applyAnnualCoverage). It was missing here until 2026-09-19, so the 61
+  // annual accounts — the clients who signed ONCE, for the year, precisely
+  // so they would not be asked per job — read as "signed agreement"
+  // missing forever: their holds never firmed and nothing could auto-book.
   const rental = order.signedAgreements.filter((a) => a.contractType === 'RENTAL_AGREEMENT')
   const signOk =
     rental.length > 0 &&
-    rental.every((a) => isSignedAgreementStatus(a.status) || !!a.coveredByAgreementId)
+    rental.every(
+      (a) =>
+        isSignedAgreementStatus(a.status) ||
+        !!a.coveredByAgreementId ||
+        !!a.coveredByCompanyAgreementId,
+    )
 
   // Both stores, same as the job page: a portal authorization on one of the
   // job's bookings, OR a card staff keyed onto the company from paper the
@@ -608,7 +641,7 @@ export async function clientPaperworkIn(orderId: string): Promise<{
   if (!coiOk) missing.push('COI')
   if (!signOk) missing.push('signed agreement')
   if (!cardOk) missing.push('card on file')
-  return { ok: missing.length === 0, missing }
+  return { ok: missing.length === 0, missing, coiOk, signOk, cardOk }
 }
 
 /**

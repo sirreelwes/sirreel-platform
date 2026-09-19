@@ -34,6 +34,7 @@
     "test:company-activity": "tsx tests/crm/company-activity.test.ts",
     "test:structured-data": "tsx tests/site/structured-data.test.ts",
     "test:line-type": "tsx tests/orders/line-type.test.ts",
+    "test:auto-book": "tsx tests/orders/auto-book.test.ts",
     "test:bug-triage": "tsx tests/bugs/triage-invariants.test.ts",
     "test:walkaround-slots": "tsx tests/fleet/walkaround-slots.test.ts",
     "test:driver-report-scope": "tsx tests/fleet/driver-report-scope.test.ts",
