@@ -1,5 +1,12 @@
 # ARCHITECTURE AUDIT — SirReel HQ
 
+> **SUPERSEDED (2026-09-19) — kept as history, do not read as current.**
+> This audit describes 86 models and a 4,498-line schema. As of 2026-09-19 the
+> schema is **178 models / 10,780 lines** — the system roughly doubled after
+> this was written, and whole subsystems below (partners, the job Conversation,
+> annual agreements, the broker directory, barcode scanning) did not exist yet.
+> The current structural map is **`docs/SYSTEM-MAP.md`**.
+
 Discovery-only audit, 2026-07-02. Read-only; no code changed. Sources: prisma/schema.prisma (4,498 lines), SHIPLOG.md, src/middleware.ts, app route tree, lib/, .env.local (names only), package.json.
 
 ---
