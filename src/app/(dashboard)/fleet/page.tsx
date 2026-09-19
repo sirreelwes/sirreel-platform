@@ -6,7 +6,7 @@ import type { UserRole } from '@prisma/client';
 import { getPermissions } from '@/lib/permissions';
 import { SurfaceGuard } from '@/components/shared/SurfaceGuard';
 import { Truck, AlertTriangle, Check } from 'lucide-react';
-import { docExpiryState, VEHICLE_DOC_LABEL } from '@/lib/fleet/vehicleDocs';
+import { docExpiryState, vehicleDocLabel, vehicleDocShortLabel } from '@/lib/fleet/vehicleDocs';
 
 type Asset = {
   id: string;
@@ -202,19 +202,21 @@ function FleetPageInner() {
             </button>
           </div>
         </div>
-        <div className="flex gap-2">
+        {/* Two w-44 boxes plus the link never fitted one phone row, so they
+            wrapped off the side rather than under each other. */}
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           {/* The bulk door. The per-unit panel takes one PDF at a time, which
               for a folder of registrations and DOT inspection scans is a morning of
               clicking — and therefore a job that does not get done. */}
           <a href="/fleet/paperwork"
-            className="border border-gray-200 bg-white hover:border-gray-400 rounded-lg px-3 py-1.5 text-[11px] font-semibold text-gray-700 whitespace-nowrap">
+            className="border border-gray-200 bg-white hover:border-gray-400 rounded-lg px-3 py-2 sm:py-1.5 text-[12px] sm:text-[11px] font-semibold text-gray-700 whitespace-nowrap">
             Upload paperwork
           </a>
           <input value={search} onChange={e => setSearch(e.target.value)}
             placeholder="Search units..."
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-[11px] w-44 focus:outline-none focus:border-gray-400" />
+            className="border border-gray-200 rounded-lg px-3 py-2 sm:py-1.5 text-base sm:text-[11px] w-full sm:w-44 focus:outline-none focus:border-gray-400" />
           <select value={filterCat} onChange={e => setFilterCat(e.target.value)}
-            className="border border-gray-200 rounded-lg px-3 py-1.5 text-[11px] w-44 focus:outline-none focus:border-gray-400">
+            className="border border-gray-200 rounded-lg px-3 py-2 sm:py-1.5 text-base sm:text-[11px] w-full sm:w-44 focus:outline-none focus:border-gray-400">
             <option value="All">All Types</option>
             {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
@@ -244,7 +246,12 @@ function FleetPageInner() {
 
       {/* Units table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="grid grid-cols-[1.5fr_110px_100px_1.5fr_120px] gap-2 px-4 py-2.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
+        {/* The five columns need ~600px to breathe: 330px of them are fixed,
+            which on a phone left the two 1.5fr columns fighting over what was
+            left and everything reading as a column of shards (Wes 2026-09-19:
+            "the columns on mobile are scrunched"). Below lg the row stacks
+            into a card and these headers stop meaning anything, so they go. */}
+        <div className="hidden lg:grid grid-cols-[1.5fr_110px_100px_1.5fr_120px] gap-2 px-4 py-2.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100">
           <div>Unit</div>
           <div>Status</div>
           <div>Location</div>
@@ -252,7 +259,7 @@ function FleetPageInner() {
           <div>Set Status</div>
         </div>
 
-        <div className="max-h-[calc(100vh-320px)] overflow-y-auto divide-y divide-gray-50">
+        <div className="divide-y divide-gray-50 lg:max-h-[calc(100vh-320px)] lg:overflow-y-auto">
           {loading ? (
             <div className="text-center py-12 text-gray-400 text-sm">Loading fleet...</div>
           ) : filtered.length === 0 ? (
@@ -260,33 +267,44 @@ function FleetPageInner() {
           ) : filtered.map(a => {
             const s = STATUS_CONFIG[a.status] || STATUS_CONFIG.AVAILABLE;
             const isUpdating = updating === a.id;
+            // With the row stacked, the "Current / Notes" cell is a line of
+            // its own — so an em-dash placeholder becomes a blank band on
+            // every idle unit. At lg it is a column and still wants one.
+            const hasMeta = !!(a.currentBooking || a.maintenanceNote || a.notes);
             return (
-              <div key={a.id} className={`grid grid-cols-[1.5fr_110px_100px_1.5fr_120px] gap-2 px-4 py-2.5 items-center hover:bg-gray-50 transition-colors ${isUpdating ? 'opacity-50' : ''}`}>
+              <div key={a.id} className={`flex flex-col gap-2 px-4 py-3 hover:bg-gray-50 transition-colors lg:grid lg:grid-cols-[1.5fr_110px_100px_1.5fr_120px] lg:gap-2 lg:py-2.5 lg:items-center ${isUpdating ? 'opacity-50' : ''}`}>
                 <div className="flex items-center gap-2.5 min-w-0">
                   <CatThumb assetId={a.id} hasImage={a.categoryHasImage} name={a.categoryName} />
                   <div className="min-w-0">
-                    <button onClick={() => setDotAsset(a)} className="text-[12px] font-semibold text-gray-800 hover:text-blue-600 hover:underline text-left">
+                    <button onClick={() => setDotAsset(a)} className="text-[14px] lg:text-[12px] font-semibold text-gray-800 hover:text-blue-600 hover:underline text-left">
                       {a.unitName}
                     </button>
-                    <div className="text-[9px] text-gray-400">{a.categoryName}{a.year ? ` · ${a.year} ${a.make}` : ''}</div>
-                    <div className="text-[9px] text-gray-300 flex gap-1.5">
+                    <div className="text-[11px] lg:text-[9px] text-gray-400">{a.categoryName}{a.year ? ` · ${a.year} ${a.make}` : ''}</div>
+                    {/* flex-wrap: five chips at 9px overflowed the cell sideways
+                        rather than wrapping, which was half of "scrunched". */}
+                    <div className="text-[11px] lg:text-[9px] text-gray-400 lg:text-gray-300 flex flex-wrap gap-x-1.5 gap-y-0.5">
                       {a.mileage ? <span>{a.mileage.toLocaleString()} mi</span> : null}
                       {a.licensePlate ? <span className="font-mono">{a.licensePlate}</span> : null}
-                      {a.latestBitDate ? <span className="text-emerald-500">DOT {a.latestBitDate.slice(0, 10)}</span> : null}
-                      <DocChip label="Reg" hasFile={a.hasRegistration} expiresAt={a.registrationExpiresAt} />
-                      <DocChip label="DOT" hasFile={a.hasBitCertificate} expiresAt={a.bitCertificateExpiresAt} />
+                      {a.latestBitDate ? <span className="text-emerald-500">{vehicleDocShortLabel('bit-certificate', a.categoryName)} {a.latestBitDate.slice(0, 10)}</span> : null}
+                      <DocChip label={vehicleDocShortLabel('registration', a.categoryName)} hasFile={a.hasRegistration} expiresAt={a.registrationExpiresAt} />
+                      <DocChip label={vehicleDocShortLabel('bit-certificate', a.categoryName)} hasFile={a.hasBitCertificate} expiresAt={a.bitCertificateExpiresAt} />
                     </div>
                   </div>
                 </div>
 
-                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[9px] font-bold w-fit ${s.bg} ${s.color}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
-                  {s.label}
-                </span>
+                {/* Status and location ride together on a phone. `lg:contents`
+                    dissolves this wrapper at lg so the grid still sees its
+                    five children in their original columns. */}
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 lg:contents">
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[9px] font-bold w-fit ${s.bg} ${s.color}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${s.dot}`} />
+                    {s.label}
+                  </span>
 
-                <span className="text-[10px] text-gray-500">{a.location?.toLowerCase().replace('_', ' ')}</span>
+                  <span className="text-[11px] lg:text-[10px] text-gray-500">{a.location?.toLowerCase().replace('_', ' ')}</span>
+                </div>
 
-                <div className="text-[10px] text-gray-500 truncate">
+                <div className={`text-[11px] text-gray-500 lg:text-[10px] lg:truncate ${hasMeta ? '' : 'hidden lg:block'}`}>
                   {a.currentBooking ? (
                     <span className="text-blue-600 font-semibold">{a.currentBooking.company}</span>
                   ) : a.maintenanceNote ? (
@@ -304,7 +322,7 @@ function FleetPageInner() {
                   <span className="text-[9px] text-gray-300 italic">set by fleet</span>
                 ) : scope === 'inactive' ? (
                   <button onClick={() => setStatus(a.id, 'AVAILABLE')} disabled={isUpdating}
-                    className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded px-2 py-1 w-fit">
+                    className="text-[12px] lg:text-[10px] font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 rounded px-2 py-1.5 lg:py-1 w-fit">
                     Reactivate
                   </button>
                 ) : (
@@ -312,7 +330,9 @@ function FleetPageInner() {
                     value={SETTABLE_STATUSES.includes(a.status as any) ? a.status : ''}
                     disabled={isUpdating}
                     onChange={e => { if (e.target.value) setStatus(a.id, e.target.value); }}
-                    className="border border-gray-200 rounded-lg px-1.5 py-1 text-[10px] text-gray-700 bg-white w-full focus:outline-none focus:border-gray-400"
+                    // text-base below lg: anything under 16px makes iOS Safari
+                    // zoom the whole page on focus.
+                    className="border border-gray-200 rounded-lg px-2 py-2 text-base text-gray-700 bg-white w-full focus:outline-none focus:border-gray-400 lg:px-1.5 lg:py-1 lg:text-[10px]"
                   >
                     {!SETTABLE_STATUSES.includes(a.status as any) && (
                       <option value="" disabled>{STATUS_CONFIG[a.status]?.label || a.status}</option>
@@ -441,9 +461,15 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
     onSaved();
   };
 
-  const fieldCls = 'w-full px-2.5 py-1.5 bg-white border border-gray-200 rounded-lg text-[12px] text-gray-800 focus:outline-none focus:border-gray-400';
+  // text-base below sm: under 16px iOS Safari zooms the page on focus.
+  const fieldCls = 'w-full px-2.5 py-2 sm:py-1.5 bg-white border border-gray-200 rounded-lg text-base sm:text-[12px] text-gray-800 focus:outline-none focus:border-gray-400';
   const labelCls = 'block text-[10px] font-semibold text-gray-500 mb-1';
   const latest = bits[0]; // already sorted desc by inspectionDate
+  // Julian 2026-09-18 / Wes 2026-09-19: a cube's inspection is the federal
+  // DOT annual, a passenger van's is the CHP BIT. One slot, one box — the
+  // WORD follows the unit's class so the person filing it can find it.
+  const inspectionWord = vehicleDocShortLabel('bit-certificate', asset.categoryName);
+  const isBitClass = inspectionWord === 'BIT';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
@@ -451,7 +477,7 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
         <header className="flex items-start justify-between px-5 py-3.5 border-b border-gray-100">
           <div>
             <h2 className="text-base font-bold text-gray-900">{asset.unitName} · DOT</h2>
-            <p className="text-[11px] text-gray-400">{asset.categoryName} — vehicle details &amp; DOT inspections</p>
+            <p className="text-[11px] text-gray-400">{asset.categoryName} — vehicle details &amp; {inspectionWord} inspections</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
         </header>
@@ -495,7 +521,7 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
             <div className="rounded-lg border border-gray-200 divide-y divide-gray-100 mb-3">
               <div className="px-3 py-2 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="text-[11px] font-semibold text-gray-700">{VEHICLE_DOC_LABEL.registration}</div>
+                  <div className="text-[11px] font-semibold text-gray-700">{vehicleDocLabel('registration', asset.categoryName)}</div>
                   <DocState hasFile={hasReg} expiresAt={regExpiresOn} />
                 </div>
                 <div className="flex items-center gap-2 flex-none">
@@ -509,7 +535,7 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
               </div>
               <div className="px-3 py-2 flex items-center justify-between gap-2">
                 <div className="min-w-0">
-                  <div className="text-[11px] font-semibold text-gray-700">{VEHICLE_DOC_LABEL['bit-certificate']}</div>
+                  <div className="text-[11px] font-semibold text-gray-700">{vehicleDocLabel('bit-certificate', asset.categoryName)}</div>
                   <DocState hasFile={hasCert} expiresAt={certExpiresOn} />
                 </div>
                 <div className="flex items-center gap-2 flex-none">
@@ -525,7 +551,7 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
 
             <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-2">
               <div className="text-[10px] font-semibold text-gray-500">{hasReg ? 'Replace the registration' : 'Add the registration'}</div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className={labelCls}>PDF scan</label>
                   <input type="file" accept="application/pdf" onChange={(e) => setRegFile(e.target.files?.[0] ?? null)} className="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-200 file:text-gray-700 file:text-[11px]" />
@@ -547,7 +573,7 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
 
           {/* BIT inspections */}
           <section className="border-t border-gray-100 pt-4">
-            <div className="text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-2">DOT inspections</div>
+            <div className="text-[10px] uppercase tracking-wide text-gray-400 font-bold mb-2">{inspectionWord} inspections</div>
             <div className="text-[12px] text-gray-700 mb-2">
               {latest ? (
                 <span>Latest: <span className="font-semibold">{latest.inspectionDate.slice(0, 10)}</span>
@@ -572,9 +598,13 @@ function UnitDotModal({ asset, onClose, onSaved }: { asset: Asset; onClose: () =
             )}
 
             <div className="rounded-lg bg-gray-50 border border-gray-200 p-3 space-y-2">
-              <div className="text-[10px] font-semibold text-gray-500">Add a DOT inspection</div>
-              <p className="text-[10px] text-gray-400 -mt-1">The annual inspection on a truck, the BIT on a passenger van — same box either way.</p>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="text-[10px] font-semibold text-gray-500">Add a {inspectionWord} inspection</div>
+              <p className="text-[10px] text-gray-400 -mt-1">
+                {isBitClass
+                  ? 'The CHP BIT certificate for this van — the same box the trucks file their DOT annual in.'
+                  : 'The annual inspection on a truck, the BIT on a passenger van — same box either way.'}
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div><label className={labelCls}>Inspection date</label><input className={fieldCls} type="date" value={bitDate} onChange={(e) => setBitDate(e.target.value)} /></div>
                 <div><label className={labelCls}>PDF scan</label><input type="file" accept="application/pdf" onChange={(e) => setBitFile(e.target.files?.[0] ?? null)} className="block w-full text-[11px] text-gray-600 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:bg-gray-200 file:text-gray-700 file:text-[11px]" /></div>
                 <div className="col-span-2">

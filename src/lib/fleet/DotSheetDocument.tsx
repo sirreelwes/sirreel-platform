@@ -13,6 +13,8 @@ try {
   LOGO_BUFFER = null
 }
 
+import { vehicleDocShortLabel } from './vehicleDocs'
+
 export interface DotUnit {
   unitName: string
   categoryName: string
@@ -130,12 +132,13 @@ export function DotSheetDocument(props: DotSheetProps): React.ReactElement<Docum
 
             <View style={styles.bitRow}>
               {/* Julian 2026-09-18: a truck's is a DOT ANNUAL inspection, a
-                  passenger van's a CHP BIT. The old label named only the van's
-                  document and printed it on every page, including the cubes. */}
-              <Text style={styles.cellLabel}>Latest DOT inspection</Text>
+                  passenger van's a CHP BIT. This first said BIT on every page
+                  including the cubes, then DOT on every page including the
+                  vans; it now follows the unit's own class (Wes 2026-09-19). */}
+              <Text style={styles.cellLabel}>Latest {vehicleDocShortLabel('bit-certificate', u.categoryName)} inspection</Text>
               {u.latestBitDate
                 ? <Text style={styles.cellVal}>{fmtDate(u.latestBitDate)} — certificate on file{' '}</Text>
-                : <Text style={styles.missing}>— No DOT inspection on file —</Text>}
+                : <Text style={styles.missing}>— No {vehicleDocShortLabel('bit-certificate', u.categoryName)} inspection on file —</Text>}
             </View>
 
             {u.missing.length > 0 && (

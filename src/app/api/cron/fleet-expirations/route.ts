@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
+import { vehicleDocLabel } from '@/lib/fleet/vehicleDocs'
 
 export const dynamic = 'force-dynamic'
 
@@ -39,6 +40,9 @@ export async function GET(req: NextRequest) {
       licensePlate: true,
       registrationExpiresAt: true,
       bitCertificateExpiresAt: true,
+      // Only to NAME the document in the alert: a passenger van's is a CHP
+      // BIT, a truck's the DOT annual. Julian searches his mail for "BIT".
+      category: { select: { name: true } },
     },
   })
 
@@ -82,6 +86,7 @@ async function ensureAlert(args: {
     make: string | null
     model: string | null
     licensePlate: string | null
+    category?: { name: string | null } | null
   }
   docKind: 'registration' | 'bit'
   expiresAt: Date
@@ -104,7 +109,10 @@ async function ensureAlert(args: {
 
   const daysLeft = Math.max(0, Math.ceil((args.expiresAt.getTime() - args.now.getTime()) / 86_400_000))
   const severity = daysLeft <= 0 ? 'critical' : daysLeft <= 7 ? 'high' : 'medium'
-  const docLabel = args.docKind === 'registration' ? 'Registration' : 'DOT inspection'
+  const docLabel = vehicleDocLabel(
+    args.docKind === 'registration' ? 'registration' : 'bit-certificate',
+    args.asset.category?.name,
+  )
   const vehicleLabel = [args.asset.make, args.asset.model].filter(Boolean).join(' ') || args.asset.unitName
   const plate = args.asset.licensePlate ? ` (${args.asset.licensePlate})` : ''
 

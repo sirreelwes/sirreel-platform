@@ -89,7 +89,7 @@ export async function gatherDotUnits(orderId: string, alsoOwnOrderIds: readonly 
     if (seen.has(asset.id)) continue
     seen.add(asset.id)
     const latestBitDate = toIso(asset.bitInspections[0]?.inspectionDate)
-    const missing = missingDotFields({ ...asset, hasBitInspection: !!latestBitDate })
+    const missing = missingDotFields({ ...asset, hasBitInspection: !!latestBitDate, categoryName: asset.category.name })
     units.push({
       unitName: asset.unitName,
       categoryName: asset.category.name,
@@ -219,7 +219,13 @@ export async function dotSheetStatesForOrders(
     select: {
       orderId: true,
       bookingItem: { select: { bookingId: true } },
-      asset: { select: { id: true, unitName: true, year: true, make: true, vin: true, licensePlate: true } },
+      asset: {
+        select: {
+          id: true, unitName: true, year: true, make: true, vin: true, licensePlate: true,
+          // Only so the gap can be NAMED — a van's is a BIT, not a DOT annual.
+          category: { select: { name: true } },
+        },
+      },
     },
   })
 
@@ -251,7 +257,7 @@ export async function dotSheetStatesForOrders(
       if (seen.has(asset.id)) continue
       seen.add(asset.id)
       unitCount++
-      const missing = missingDotFields({ ...asset, hasBitInspection: hasBit.has(asset.id) })
+      const missing = missingDotFields({ ...asset, hasBitInspection: hasBit.has(asset.id), categoryName: asset.category.name })
       if (missing.length) gaps.push({ unitName: asset.unitName, missing })
     }
     out.set(o.id, dotSheetState({ unitCount, gaps, publishedAt: o.dotSheetGeneratedAt }))

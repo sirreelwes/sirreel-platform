@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { AgreementStatus } from '@prisma/client';
 import { describeAgreementStatus } from '@/lib/portal/agreementStatus';
+import { vehicleDocLabel } from '@/lib/fleet/vehicleDocs';
 import { PortalPayPanel } from '@/components/portal/PortalPayPanel';
 import { PortalBankDetails } from '@/components/portal/PortalBankDetails';
 import { PortalDriversSection } from '@/components/portal/PortalDriversSection';
@@ -2640,7 +2641,7 @@ function VehiclePaperworkRow({ vehicle }: { vehicle: PortalData['paperwork']['ve
           expired={expired(regExpiry)}
         />
         <DocLink
-          label="DOT inspection"
+          label={vehicleDocLabel('bit-certificate', vehicle.categoryName)}
           url={vehicle.bitCertificateUrl}
           expiry={bitExpiry}
           expiringSoon={expiringSoon(bitExpiry)}
