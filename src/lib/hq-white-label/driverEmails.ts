@@ -1,5 +1,5 @@
 /**
- * What a partner's driver receives from their employer's Utliiz workspace.
+ * What a partner's driver receives from their employer's Spectiv workspace.
  * Wes 2026-09-06: "one pain point for companies like SirReel and KK is
  * driver communication." Three notes, all phone-first, all in the
  * PARTNER's name — the driver works for King Kong, not for us:
@@ -8,7 +8,7 @@
  *   update      the call time / address changed
  *   reminder    the evening before day one
  *
- * Utliiz's own palette (ink, Utah red, the invoice turquoise family) with
+ * Spectiv's own palette (ink, Utah red, the invoice turquoise family) with
  * the workspace's brand name as the headline; never SirReel. The accent arg
  * is kept on the type for callers but no longer paints a band — Wes
  * 2026-09-06 saw a dark-mode client turn one into salmon.
@@ -41,7 +41,7 @@ const GROUND = '#F1F8F9'
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif"
 
 /**
- * The frame every driver note shares: Utliiz's own look — white card on
+ * The frame every driver note shares: Spectiv's own look — white card on
  * the pale aqua ground, ink type, one red button, the partner's name as
  * the headline under a red rule (never a coloured band: dark-mode mail
  * clients invert those into mud, which is what Wes saw). Pinned to

@@ -26,7 +26,7 @@ export function DriverBookingView({ token, initial }: { token: string; initial: 
   async function post(action: 'ack' | 'checkout' | 'checkin', body: unknown) {
     setBusy(action)
     setErr(null)
-    const r = await fetch(`/api/public/utliiz-drive/${token}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+    const r = await fetch(`/api/public/spectiv-drive/${token}/${action}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
     const j = (await r.json().catch(() => ({}))) as { view?: View; error?: string }
     setBusy(null)
     if (!r.ok || !j.view) return setErr(j.error ?? 'Something went wrong.')
@@ -120,7 +120,7 @@ export function DriverBookingView({ token, initial }: { token: string; initial: 
 
         <div className="[&_section]:!bg-[#111827] [&_section]:!border-[#111827]">
           <DriverHoursCard
-            endpoint={`/api/public/utliiz-drive/${token}/hours`}
+            endpoint={`/api/public/spectiv-drive/${token}/hours`}
             entries={v.hours.entries}
             total={v.hours.total}
             defaultDate={v.today}

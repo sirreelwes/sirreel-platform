@@ -1,9 +1,9 @@
 'use client'
 
 /**
- * The request form on utliiz.com — replaces the mailto buttons (Wes
- * 2026-09-06). Lands a UtliizLead and mails VerMar; the visitor sees a
- * thank-you in place. Styled with the Utliiz palette (turquoise base),
+ * The request form on spectiv.pro — replaces the mailto buttons (Wes
+ * 2026-09-06). Lands a SpectivLead and mails VerMar; the visitor sees a
+ * thank-you in place. Styled with the Spectiv palette (turquoise base),
  * not SirReel's.
  */
 import { useState } from 'react'
@@ -29,7 +29,7 @@ export function RequestForm({ compact = false }: { compact?: boolean }) {
     e.preventDefault()
     setBusy(true)
     setError(null)
-    const r = await fetch('/api/public/utliiz/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(v) })
+    const r = await fetch('/api/public/spectiv/request', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(v) })
     const j = (await r.json().catch(() => ({}))) as { error?: string }
     setBusy(false)
     if (!r.ok) return setError(j.error ?? 'Something went wrong. Try again in a minute.')
@@ -39,7 +39,7 @@ export function RequestForm({ compact = false }: { compact?: boolean }) {
   if (done) {
     return (
       <div className="rounded-2xl bg-[#E4F1F4] border border-[#8FC2CE] px-6 py-8 text-center">
-        <div className="text-[22px] font-black text-[#0f2a30]" style={{ fontFamily: 'var(--font-utliiz-display)' }}>Got it — we&rsquo;ll be in touch.</div>
+        <div className="text-[22px] font-black text-[#0f2a30]" style={{ fontFamily: 'var(--font-spectiv-display)' }}>Got it — we&rsquo;ll be in touch.</div>
         <p className="mt-2 text-[15px] text-[#0f2a30]/80 max-w-[44ch] mx-auto">We set workspaces up by hand so yours starts with your fleet already in it. Expect an email from a person, usually the same day.</p>
       </div>
     )

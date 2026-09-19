@@ -22,6 +22,12 @@ Origin: 2026-06-29, a fixture-cleanup `deleteMany({ where: { assetCategoryId: cu
 
 Origin: 2026-08-17, a `git add -A` swept four unstaged RentalWorks files from a concurrent session into `80a705f` — a commit about catalog aliases — and pushed them to `main`. Nothing broke (the content was correct, the build was green), but the history now misattributes a RentalWorks behavior change and will mislead a bisect. Same afternoon, same shared tree: `scripts/seed-catalog-aliases.ts` was described in three commit messages as the source of truth for catalog aliases while being untracked and invisible to `git status`, and a peer escalated a missing alias it had sampled 16 seconds into another session's write sequence.
 
+## 2026-09-19
+
+### Utliiz is Spectiv
+
+`(this commit)` Wes: "Instead of utiliiz.com we are switching the software-as-a-service plan to spectiv.pro … a version of SirReel's HQ that is tailor-made to work with SirReel.com's marketplace … I just don't want to give all of our skills to our competitors." The product is renamed end to end — `HQ_PRODUCT.name`, the mark (a new `SpectivMark.tsx` cut from DM Sans 900 on the same construction as the Utliiz mark: red lowercase first letter at 1.3×, ink for the rest, red only inside the mark; first draft), the public statics, the driver and request API paths, the cron path, the site and workspace copy. Two things deliberately keep the old name: `/hq/[token]` (every link already handed out) and the `sr_utliiz_leads` table (a rename is not an additive change; the Prisma model is `SpectivLead` over the old map). The positioning turns around with the name: spectiv.pro now says "built for the SirReel.com marketplace" where Utliiz was forbidden to name SirReel at all — the marketplace is the point of the product; the trimmed feature set is what keeps HQ's client-service skills out of a competitor's hands. spectiv.pro is registered but has no DNS and is not on the Vercel project, so nothing points at it yet: `SPECTIV_PRO_LIVE=1` is the single flip that moves link minting to spectiv.pro and turns utliiz.com into a 308 — until then utliiz.com keeps serving the Spectiv-branded site and every driver link stays alive. Driver mail keeps leaving from dispatch@utliiz.com (`UTLIIZ_SEND_FROM` is the fallback for `SPECTIV_SEND_FROM`) until the new domain is verified at Resend.
+
 ## 2026-09-18
 
 ### Idempotent on the company was not idempotent on the document

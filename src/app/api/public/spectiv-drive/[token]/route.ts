@@ -1,4 +1,4 @@
-/** GET /api/public/utliiz-drive/[token] — the driver's view of their booking. */
+/** GET /api/public/spectiv-drive/[token] — the driver's view of their booking. */
 import { NextResponse } from 'next/server'
 import { loadDriverBooking } from '@/lib/hq-white-label/driverFlow'
 

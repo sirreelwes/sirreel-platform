@@ -1,6 +1,6 @@
 /**
  * /drive/booking/[token] — a partner's DRIVER's page for one of the
- * partner's own Utliiz bookings. Phone-first; the token is the login.
+ * partner's own Spectiv bookings. Phone-first; the token is the login.
  * Wears the partner's brand and accent, never SirReel's.
  */
 import type { Metadata } from 'next'
@@ -17,8 +17,8 @@ export async function generateMetadata({ params }: { params: { token: string } }
     robots: { index: false, follow: false },
     viewport: 'width=device-width, initial-scale=1, viewport-fit=cover',
   icons: {
-    icon: [{ url: '/utliiz-icon.svg', type: 'image/svg+xml' }, { url: '/utliiz-icon-192.png', type: 'image/png', sizes: '192x192' }, { url: '/utliiz-icon-512.png', type: 'image/png', sizes: '512x512' }],
-    apple: '/utliiz-apple-touch-icon.png',
+    icon: [{ url: '/spectiv-icon.svg', type: 'image/svg+xml' }, { url: '/spectiv-icon-192.png', type: 'image/png', sizes: '192x192' }, { url: '/spectiv-icon-512.png', type: 'image/png', sizes: '512x512' }],
+    apple: '/spectiv-apple-touch-icon.png',
   },
   }
 }

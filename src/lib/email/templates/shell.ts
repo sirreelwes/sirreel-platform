@@ -45,8 +45,8 @@ export interface EmailShellOptions {
   /** Small print under the card, above the footer. */
   footNote?: string
   /** Accent for the eyebrow, CTA and footer links. Defaults to SirReel gold;
-   *  partner-facing mail passes the Utliiz turquoise (Wes 2026-09-06:
-   *  "the turquoise that foreshadows Utliiz"). */
+   *  partner-facing mail passes the Spectiv turquoise (Wes 2026-09-06:
+   *  "the turquoise that foreshadows Utliiz" — the product now called Spectiv). */
   accent?: string
   /** Co-branded masthead — THEIR mark, a rule, OURS — in place of the
    *  SirReel-only header. Partner mail wears it (Wes 2026-09-11: "the shared

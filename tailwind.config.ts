@@ -7,7 +7,7 @@ const config: Config = {
       colors: {
         // ── Brand accent (Wes 2026-09-06): "convert all the gold, site wide —
         //    emails, etc — to turquoise, everywhere in the entire build."
-        //    The accent is the Utliiz turquoise (HQ_PRODUCT.defaultAccent,
+        //    The accent is the Spectiv turquoise (HQ_PRODUCT.defaultAccent,
         //    #0F7A93 = amber-600). `amber-*` is REMAPPED to this scale so
         //    the 200+ files that say amber for the brand accent all switch
         //    at once; the light steps (300/400) are what sits on black —

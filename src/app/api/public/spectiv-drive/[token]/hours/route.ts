@@ -1,4 +1,4 @@
-/** /api/public/utliiz-drive/[token]/hours — the driver's day, with meters.
+/** /api/public/spectiv-drive/[token]/hours — the driver's day, with meters.
  *  Same body and view as the SirReel driver routes; third anchor. */
 import { NextRequest, NextResponse } from 'next/server'
 import { bookingByDriverToken } from '@/lib/hq-white-label/driverFlow'

@@ -1,35 +1,38 @@
 /**
- * utliiz.com — the site. One page: what it is, what it does, the plans,
+ * spectiv.pro — the site. One page: what it is, what it does, the plans,
  * and a request form (no mailto — Wes 2026-09-06). Copy comes from
  * product.ts so this, the partner landing and the workspace never
  * disagree about the product.
  *
- * NEVER name SirReel here. Wes 2026-09-06: "we cannot reference SirReel as
- * a partner of Utliiz. To everyone but myself they should look like
- * distinct entities with no ties except SirReel uses them." SirReel is a
- * customer of Utliiz, and that is the only sentence about it that may ever
- * appear on this domain.
+ * The SirReel.com MARKETPLACE is named here on purpose. Under the old
+ * name the rule was the opposite (Wes 2026-09-06: "we cannot reference
+ * SirReel as a partner of Utliiz"); the 2026-09-19 switch to Spectiv made
+ * the marketplace the point: "a version of SirReel's HQ that is
+ * tailor-made to work with SirReel.com's marketplace". What stays out is
+ * the rest of HQ — this is the trimmed product, not the client-service
+ * skills ("I just don't want to give all of our skills to our
+ * competitors").
  */
 import { CalendarDays, ClipboardList, FileSignature, Truck, UserRound, Users } from 'lucide-react'
 import { HQ_ADD_ONS, HQ_PITCH, HQ_PLANS, HQ_PRODUCT } from '@/lib/hq-white-label/product'
 import { RequestForm } from '@/components/hq-white-label/RequestForm'
-import { UtliizIcon, UtliizWordmark } from '@/components/hq-white-label/UtliizMark'
+import { SpectivIcon, SpectivWordmark } from '@/components/hq-white-label/SpectivMark'
 
 export const dynamic = 'force-static'
 
 const ICONS = [CalendarDays, ClipboardList, Truck, Users, UserRound, FileSignature]
-const DISPLAY: React.CSSProperties = { fontFamily: 'var(--font-utliiz-display), system-ui, sans-serif' }
+const DISPLAY: React.CSSProperties = { fontFamily: 'var(--font-spectiv-display), system-ui, sans-serif' }
 
 function Wordmark() {
   return (
     <span className="inline-flex items-center gap-3">
-      <UtliizIcon size={38} />
-      <UtliizWordmark height={40} />
+      <SpectivIcon size={38} />
+      <SpectivWordmark height={40} />
     </span>
   )
 }
 
-export default function UtliizSitePage() {
+export default function SpectivSitePage() {
   return (
     <div>
       <header className="max-w-[1080px] mx-auto px-5 sm:px-8 py-6 flex items-center justify-between gap-4">
@@ -40,13 +43,13 @@ export default function UtliizSitePage() {
       {/* Hero: pale aqua ground, a turquoise band of type, no dark block. */}
       <section className="max-w-[1080px] mx-auto px-5 sm:px-8 pt-8 pb-14 sm:pt-16 sm:pb-24 grid lg:grid-cols-[1.15fr_1fr] gap-10 items-center">
         <div>
-          <div className="inline-block rounded-full bg-[#0f2a30] text-white text-[12px] font-bold uppercase tracking-[2px] px-3.5 py-1.5">Fleet operations for rental companies</div>
+          <div className="inline-block rounded-full bg-[#0f2a30] text-white text-[12px] font-bold uppercase tracking-[2px] px-3.5 py-1.5">Fleet software built for the SirReel.com marketplace</div>
           <h1 className="mt-5 text-[44px] sm:text-[68px] font-black leading-[0.98] tracking-[-0.02em] text-[#0f2a30]" style={DISPLAY}>
             {HQ_PRODUCT.tagline}
           </h1>
           <p className="mt-6 text-[17px] sm:text-[19px] leading-relaxed text-[#0f2a30]/75 max-w-[54ch]">
-            Every unit you own on one calendar. Your own customers booked beside the jobs your partners send you. Your brand on all of it.
-            Proven every day on a working production fleet in Los Angeles.
+            Every unit you own on one calendar. The jobs that come to you through the SirReel.com marketplace, booked beside the ones you book yourself. Your brand on all of it.
+            Built from the system that runs a working production fleet in Los Angeles every day.
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <a href="#request" className="rounded-full bg-[#CC0000] hover:bg-[#A30000] px-6 py-3.5 text-[16px] font-bold text-white no-underline transition-colors">Start a free {HQ_PRODUCT.trialDays}-day trial</a>
@@ -143,8 +146,8 @@ export default function UtliizSitePage() {
               Tell us who you are and roughly what you run. We set every workspace up by hand so it starts with your fleet already in it, then email you the link.
             </p>
             <div className="mt-6 rounded-[22px] bg-[#F1F8F9] p-5 text-[14.5px] text-[#0f2a30]/75">
-              <div className="font-bold text-[#0f2a30]">Rent units to other companies?</div>
-              When a rental partner of yours runs {HQ_PRODUCT.name} too, their bookings of your units land on your calendar automatically, driver and call time included. Say who they are and we&rsquo;ll connect you.
+              <div className="font-bold text-[#0f2a30]">Listed on SirReel.com?</div>
+              When your units are on the SirReel.com marketplace, every booking of them lands on your {HQ_PRODUCT.name} calendar automatically, driver and call time included. Tell us which units and we&rsquo;ll connect them.
             </div>
           </div>
           <div className="rounded-[28px] bg-white border border-[#8FC2CE]/50 p-6 sm:p-8 shadow-[0_20px_60px_rgba(15,122,147,0.10)]">
@@ -154,7 +157,7 @@ export default function UtliizSitePage() {
       </section>
 
       <footer className="max-w-[1080px] mx-auto px-5 sm:px-8 py-10 text-[13px] text-[#0f2a30]/60 flex flex-wrap items-center justify-between gap-3">
-        <span className="inline-flex items-center gap-3"><UtliizWordmark height={18} ink="#4b6b72" /> <span className="text-[12px]">© 2026 · a {HQ_PRODUCT.maker} product</span></span>
+        <span className="inline-flex items-center gap-3"><SpectivWordmark height={18} ink="#4b6b72" /> <span className="text-[12px]">© 2026 · a {HQ_PRODUCT.maker} product</span></span>
         <a href="#request" className="font-bold text-[#CC0000] no-underline">Request a workspace →</a>
       </footer>
     </div>

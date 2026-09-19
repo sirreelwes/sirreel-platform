@@ -22,7 +22,7 @@ import { partnerVocab, type PartnerKindKey } from '@/lib/sub-rentals/partnerKind
 import { canSendPartnerWelcome, buildIntroDraft, type IntroDraft } from '@/lib/sub-rentals/welcomeSender'
 import { partnerLogoEmailUrl } from '@/lib/sub-rentals/partnerLogo'
 
-/** Partner mail wears the Utliiz turquoise, not SirReel gold — a foreshadow
+/** Partner mail wears the Spectiv turquoise, not SirReel gold — a foreshadow
  *  of the workspace the partner page points them to. */
 const PARTNER_ACCENT = HQ_PRODUCT.defaultAccent
 const EMAIL_FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif"

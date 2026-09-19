@@ -52,7 +52,7 @@ const ACCENT = '#0F7A93'
 const HEADER_BG = '#0f172a'
 const TEXT = '#1f2937'
 const MUTED = '#6b7280'
-const CTA_BG = '#0F7A93' // the brand accent (Utliiz turquoise) — was amber-600
+const CTA_BG = '#0F7A93' // the brand accent (Spectiv turquoise) — was amber-600
 
 function escapeHtml(s: string): string {
   return s

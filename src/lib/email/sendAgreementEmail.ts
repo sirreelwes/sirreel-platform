@@ -77,7 +77,7 @@ export interface EmailPayload {
   text?: string
   attachments?: { filename: string; content: Buffer }[]
   /**
-   * Sender override for white-label mail (Utliiz drivers hear from the
+   * Sender override for white-label mail (Spectiv drivers hear from the
    * partner's brand, not SirReel). Must be a verified sending identity —
    * unset falls back to SEND_FROM.
    */

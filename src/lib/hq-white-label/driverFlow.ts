@@ -1,7 +1,7 @@
 /**
- * The driver conduit for a partner's OWN bookings in Utliiz.
+ * The driver conduit for a partner's OWN bookings in Spectiv.
  *
- * Wes 2026-09-06: "driver communication is a pain point… can Utliiz send
+ * Wes 2026-09-06 (when it was still Utliiz): "driver communication is a pain point… can Utliiz send
  * emails to the drivers for check in / out." Mirrors the SirReel sub-rental
  * conduit, minus SirReel: the partner names a roster driver on a booking →
  * the driver gets a page of their own (token = credential, like every
@@ -62,7 +62,7 @@ function mailArgs(b: BookingRow): DriverMailArgs | null {
  * The From line a driver sees: the PARTNER's name, our address. Wes
  * 2026-09-06 asked whether driver mail needs to be per driver — no: each
  * driver gets their own message to their own address; this is only who it
- * comes from. UTLIIZ_SEND_FROM is a bare address; a value with a display
+ * comes from. SPECTIV_SEND_FROM is a bare address; a value with a display
  * name already in it is used as-is.
  */
 export function driverSenderFor(brandName: string): string | undefined {
@@ -99,7 +99,7 @@ export async function addWorkspaceDriver(ws: { id: string; vendorId: string; bra
     : await prisma.vendorDriver.create({ data: { vendorId: ws.vendorId, email, firstName: parts[0] ?? null, lastName: parts.slice(1).join(' ') || null, profileToken: token, profileTokenMintedAt: new Date(), invitedAt: new Date() }, select: { id: true, firstName: true, lastName: true, email: true } })
   const wsRow = await prisma.vendorWorkspace.findUnique({ where: { id: ws.id }, select: { accentColor: true } })
   const mail = buildDriverInvite({ brandName: ws.brandName, accent: wsRow?.accentColor || HQ_PRODUCT.defaultAccent, driverName: row.firstName ? driverDisplayName(row) : null, profileUrl: `${HQ_PRODUCT.origin}${profilePagePath(token)}` })
-  const res = await sendAgreementEmail({ to: [email], from: driverSenderFor(ws.brandName), subject: mail.subject, html: mail.html, text: mail.text, label: 'utliiz-driver/invite' }).catch(() => ({ ok: false as const, reason: 'send threw' }))
+  const res = await sendAgreementEmail({ to: [email], from: driverSenderFor(ws.brandName), subject: mail.subject, html: mail.html, text: mail.text, label: 'spectiv-driver/invite' }).catch(() => ({ ok: false as const, reason: 'send threw' }))
   return { id: row.id, invited: res.ok, existed: !!existing }
 }
 
@@ -143,7 +143,7 @@ export async function assignBookingDriver(ws: { id: string; vendorId: string }, 
   const row = await loadBookingRow(b.id)
   const args = row && mailArgs(row)
   if (!row || !args) return { notified: false }
-  const ok = await mailDriver(row, buildDriverAssignment(args), 'utliiz-driver/assignment')
+  const ok = await mailDriver(row, buildDriverAssignment(args), 'spectiv-driver/assignment')
   if (ok) await prisma.vendorWorkspaceBooking.update({ where: { id: b.id }, data: { driverNotifiedAt: new Date() } })
   return { notified: ok }
 }
@@ -155,7 +155,7 @@ export async function notifyBookingLogistics(bookingId: string, changed: string[
   await prisma.vendorWorkspaceBooking.update({ where: { id: bookingId }, data: { logisticsUpdatedAt: new Date() } })
   const args = mailArgs(row)
   if (!args) return false
-  return mailDriver(row, buildDriverUpdate(args, changed), 'utliiz-driver/update')
+  return mailDriver(row, buildDriverUpdate(args, changed), 'spectiv-driver/update')
 }
 
 /** Cron: the evening before day one, once. */
@@ -170,7 +170,7 @@ export async function sendDriverReminders(): Promise<{ sent: number; skipped: nu
     const row = await loadBookingRow(id)
     const args = row && mailArgs(row)
     if (!row || !args) { skipped++; continue }
-    const ok = await mailDriver(row, buildDriverReminder(args), 'utliiz-driver/reminder')
+    const ok = await mailDriver(row, buildDriverReminder(args), 'spectiv-driver/reminder')
     if (ok) { sent++; await prisma.vendorWorkspaceBooking.update({ where: { id }, data: { reminderSentAt: new Date() } }) } else skipped++
   }
   return { sent, skipped }

@@ -50,15 +50,26 @@ const PUBLIC_HOSTS = ['sirreel.com', 'www.sirreel.com']
 // link minting says so. The operator control plane (/vermar/*) is NOT
 // served here yet: it needs a Google login, and NextAuth's callback is
 // bound to the hq host — it stays on hq.sirreel.com until that's wired.
-// utliiz.com is the product's own domain (Wes 2026-09-06); vermardesign.com
-// is the maker's. Both serve the same site until VerMar has a site of its own.
-const VERMAR_HOSTS = ['vermardesign.com', 'www.vermardesign.com', 'utliiz.com', 'www.utliiz.com']
+// spectiv.pro is the product's own domain (Wes 2026-09-19, replacing
+// utliiz.com from 2026-09-06); vermardesign.com is the maker's. Both serve
+// the same site until VerMar has a site of its own. spectiv.pro is inert
+// until Wes points its DNS here and attaches it to the Vercel project.
+const VERMAR_HOSTS = ['vermardesign.com', 'www.vermardesign.com', 'spectiv.pro', 'www.spectiv.pro']
+// The old product domain. Still attached to the project and still in
+// driver emails already sent, so it keeps resolving. Until spectiv.pro
+// is attached it SERVES the (Spectiv-branded) site like the others — a
+// redirect to a domain with no DNS would kill every driver link already
+// handed out. Once Wes has attached spectiv.pro, SPECTIV_PRO_LIVE=1
+// in Vercel sends every request to the same path on spectiv.pro instead.
+const LEGACY_PRODUCT_HOSTS = ['utliiz.com', 'www.utliiz.com']
+const PRODUCT_APEX = 'spectiv.pro'
+const REDIRECT_LEGACY_PRODUCT_HOST = process.env.SPECTIV_PRO_LIVE === '1'
 const VERMAR_ALLOWED_PREFIXES = [
   '/vermar-site',           // the site itself (root-rewrite target + direct hits)
   '/hq/',                   // partner workspaces — token-gated, no login
   '/api/public/vendor-hq/', // their API
   '/drive/booking/',        // a partner's driver's page for one booking
-  '/api/public/utliiz-drive/',
+  '/api/public/spectiv-drive/',
   '/drive/profile/',        // a driver's own profile (name, phone, licence) — shared with the SirReel conduit, vendor-voiced
   '/api/drive/profile/',
   '/robots.txt',
@@ -339,8 +350,17 @@ export function middleware(req: NextRequest): NextResponse {
     return branded404(req, host, 'public:block-404')
   }
 
-  // ── vermardesign.com (HQ by VerMar Design) ────────────────────
-  if (VERMAR_HOSTS.includes(host)) {
+  // ── utliiz.com → spectiv.pro (the product's old name) ──────────
+  if (LEGACY_PRODUCT_HOSTS.includes(host) && REDIRECT_LEGACY_PRODUCT_HOST) {
+    const url = req.nextUrl.clone()
+    url.host = PRODUCT_APEX
+    url.protocol = 'https:'
+    url.port = ''
+    return tagged(NextResponse.redirect(url, 308), host, 'vermar:legacy-host')
+  }
+
+  // ── vermardesign.com / spectiv.pro (Spectiv by VerMar Design) ──
+  if (VERMAR_HOSTS.includes(host) || LEGACY_PRODUCT_HOSTS.includes(host)) {
     if (host.startsWith('www.')) {
       const url = req.nextUrl.clone()
       url.host = host.slice(4)

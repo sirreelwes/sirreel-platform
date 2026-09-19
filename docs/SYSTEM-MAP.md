@@ -400,7 +400,7 @@ contacts. Any new surface that shows a rate needs to respect that.
 - **The staff shell is LIGHT.** `<main>` is `bg-[#F7F6F3]`. Use the `lt-*` /
   `chip-*` Tailwind tokens, not raw `zinc`. Dark styling is legal only inside
   a card painting its own opaque dark background.
-- **Accent is `amber-*`, which is remapped to Utliiz turquoise `#0F7A93`.**
+- **Accent is `amber-*`, which is remapped to Spectiv turquoise `#0F7A93`.**
   Gold is gone.
 - **16px inputs below the `sm`/`lg` breakpoint.** Anything smaller makes iOS
   Safari zoom the page on focus. Several surfaces are used on a phone in a

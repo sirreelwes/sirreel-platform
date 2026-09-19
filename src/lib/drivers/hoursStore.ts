@@ -3,7 +3,7 @@
  *
  * One store, three anchors: a partner's driver (SubRental), a production's
  * driver on our truck (DriverAssignment), and a partner's own booking in
- * their Utliiz workspace (VendorWorkspaceBooking). Every driver page posts
+ * their Spectiv workspace (VendorWorkspaceBooking). Every driver page posts
  * the same body — a work date, up to four stamps, and the meters — and gets
  * the same view back, so the card is one component. Re-posting a day
  * replaces it, which is how a driver adds "wrap" at night to the "left lot"

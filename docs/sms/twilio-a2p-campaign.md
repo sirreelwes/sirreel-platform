@@ -101,7 +101,7 @@ The call to action is displayed publicly at https://sirreel.com/sms-terms#opt-in
 
 Every sample names the brand in full and ends with the STOP line that
 `sendTracked` appends. Links stay on sirreel.com domains (the client portal is
-tsx.sirreel.com). Driver pages really live on utliiz.com; keep them out of the
+tsx.sirreel.com). Driver pages really live on spectiv.pro; keep them out of the
 samples so the reviewer sees one brand domain.
 
 ```

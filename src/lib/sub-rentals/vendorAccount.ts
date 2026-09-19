@@ -281,7 +281,7 @@ async function buildVendorAccount(vendor: {
       orderBy: { createdAt: 'desc' },
       select: { id: true, title: true, signedAt: true, signerName: true, expiryDate: true },
     }),
-    // Utliiz is not offered to partners (Wes 2026-09-11) — no link, no lookup.
+    // Spectiv is not offered to partners (Wes 2026-09-11) — no link, no lookup.
     PARTNER_HQ_OFFER ? workspaceLinkForVendor(vendor.id) : Promise.resolve(null),
   ])
   const num = (d: unknown) => (d == null ? null : Number(d))

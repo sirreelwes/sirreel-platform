@@ -443,7 +443,7 @@ function AgendaRow({ r, direction }: { r: AgendaBooking; direction: keyof typeof
               </span>
             )}
             {gaps.length > 0 && (
-              // chip-warn, NOT amber: `amber-*` is the Utliiz turquoise
+              // chip-warn, NOT amber: `amber-*` is the Spectiv turquoise
               // since the 2026-09-06 remap, and tailwind.config.ts says
               // in as many words that status yellows live here so
               // warnings stay warm. One gap names itself; more than one

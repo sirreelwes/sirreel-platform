@@ -23,7 +23,7 @@ import { loadWorkspaceByToken } from '@/lib/hq-white-label/workspace'
 import { HQ_PRODUCT, PARTNER_HQ_OFFER } from '@/lib/hq-white-label/product'
 import { isVerMarOperator } from '@/lib/hq-white-label/operator'
 import { HqNav } from '@/components/hq-white-label/HqNav'
-import { UtliizIcon } from '@/components/hq-white-label/UtliizMark'
+import { SpectivIcon } from '@/components/hq-white-label/SpectivMark'
 
 export const dynamic = 'force-dynamic'
 
@@ -33,8 +33,8 @@ export async function generateMetadata({ params }: { params: { token: string } }
     title: ws ? `${ws.brandName} · ${HQ_PRODUCT.name}` : HQ_PRODUCT.name,
     robots: { index: false, follow: false },
   icons: {
-    icon: [{ url: '/utliiz-icon.svg', type: 'image/svg+xml' }, { url: '/utliiz-icon-192.png', type: 'image/png', sizes: '192x192' }, { url: '/utliiz-icon-512.png', type: 'image/png', sizes: '512x512' }],
-    apple: '/utliiz-apple-touch-icon.png',
+    icon: [{ url: '/spectiv-icon.svg', type: 'image/svg+xml' }, { url: '/spectiv-icon-192.png', type: 'image/png', sizes: '192x192' }, { url: '/spectiv-icon-512.png', type: 'image/png', sizes: '512x512' }],
+    apple: '/spectiv-apple-touch-icon.png',
   },
   }
 }
@@ -114,7 +114,7 @@ export default async function HqLayout({ children, params }: { children: React.R
 
       <footer className="max-w-[1080px] mx-auto px-4 sm:px-6 py-10 text-[12px] text-[#6b7280] flex flex-wrap items-center justify-between gap-3">
         <span className="inline-flex items-center gap-2.5">
-          <UtliizIcon size={20} />
+          <SpectivIcon size={20} />
           <span><strong className="text-[#4b5563]">{HQ_PRODUCT.name}</strong> by {HQ_PRODUCT.maker} · {HQ_PRODUCT.tagline}</span>
         </span>
         <a href={`mailto:${HQ_PRODUCT.supportEmail}`} className="hover:text-[#111827]">{HQ_PRODUCT.supportEmail}</a>

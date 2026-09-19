@@ -1,5 +1,5 @@
-/** POST /api/public/utliiz/request — the form on utliiz.com. Public,
- *  rate-limited, lands a UtliizLead and mails VerMar ops. */
+/** POST /api/public/spectiv/request — the form on spectiv.pro. Public,
+ *  rate-limited, lands a SpectivLead and mails VerMar ops. */
 import { NextRequest, NextResponse } from 'next/server'
 import { checkRateLimit, clientIp } from '@/lib/portal/publicRateLimit'
 import { createLead } from '@/lib/hq-white-label/leads'
@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic'
 
 export async function POST(req: NextRequest) {
   const ip = clientIp(req)
-  if (!checkRateLimit(`utliiz-request:${ip}`).ok) return NextResponse.json({ error: 'Slow down — try again in a few minutes.' }, { status: 429 })
+  if (!checkRateLimit(`spectiv-request:${ip}`).ok) return NextResponse.json({ error: 'Slow down — try again in a few minutes.' }, { status: 429 })
   const b = (await req.json().catch(() => null)) as Record<string, unknown> | null
   if (!b || typeof b !== 'object') return NextResponse.json({ error: 'Bad request' }, { status: 400 })
   // Honeypot: real people never fill a field they can't see.
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, ...(await createLead(b, ip)) }, { status: 201 })
   } catch (e) {
     const status = typeof (e as { status?: number })?.status === 'number' ? (e as { status: number }).status : 500
-    if (status >= 500) console.error('[utliiz request]', e)
+    if (status >= 500) console.error('[spectiv request]', e)
     return NextResponse.json({ error: status < 500 && e instanceof Error ? e.message : 'Something went wrong.' }, { status })
   }
 }

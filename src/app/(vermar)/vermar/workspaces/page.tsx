@@ -83,7 +83,7 @@ function WorkspaceCard({ w, busy, onPatch, onRotate, toast }: {
 
   const changeStatus = async (next: Status) => {
     if (next === w.status) return
-    if (CLOSES.includes(next) && !window.confirm(`Set ${w.vendorName}'s Utliiz workspace to ${STATUS_LABEL[next]}? Their workspace shows a "closed" screen until it's reopened. Nothing is deleted.`)) return
+    if (CLOSES.includes(next) && !window.confirm(`Set ${w.vendorName}'s Spectiv workspace to ${STATUS_LABEL[next]}? Their workspace shows a "closed" screen until it's reopened. Nothing is deleted.`)) return
     await onPatch(w.id, { status: next })
   }
   const copy = async () => {
@@ -209,7 +209,7 @@ export default function AdminHqWorkspacesPage() {
     await load()
   }
   const provision = async (v: VendorWithout) => {
-    if (!window.confirm(`Start a 30-day Utliiz trial for ${v.name}? ${v.email ? `Their contact (${v.email}) is emailed the link.` : 'They have no email on file, so nobody is emailed — copy the link from the card and send it yourself.'}`)) return
+    if (!window.confirm(`Start a 30-day Spectiv trial for ${v.name}? ${v.email ? `Their contact (${v.email}) is emailed the link.` : 'They have no email on file, so nobody is emailed — copy the link from the card and send it yourself.'}`)) return
     setBusy(v.id)
     const r = await call('/api/vermar/workspaces/provision', 'POST', { vendorId: v.id })
     setBusy(null)
@@ -223,7 +223,7 @@ export default function AdminHqWorkspacesPage() {
       <div className="mb-5">
         <h1 className="text-2xl font-semibold text-lt-fg">Workspaces</h1>
         <p className="text-sm text-lt-fg2 mt-1 max-w-[72ch]">
-          Every partner running their fleet on Utliiz. Who&apos;s on trial, who&apos;s paying, who&apos;s closed, and the link each one logs in
+          Every partner running their fleet on Spectiv. Who&apos;s on trial, who&apos;s paying, who&apos;s closed, and the link each one logs in
           with. Status, plan, trial date and link rotation are yours to change here; the partner sees the result immediately.
         </p>
       </div>
@@ -238,7 +238,7 @@ export default function AdminHqWorkspacesPage() {
         <>
           {data.leads.length > 0 && (
             <>
-              <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mb-3">Requests from utliiz.com · {data.leads.filter((l) => !l.contactedAt).length} open</h2>
+              <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mb-3">Requests from spectiv.pro · {data.leads.filter((l) => !l.contactedAt).length} open</h2>
               <div className="bg-lt-card border border-lt-hairline rounded-xl divide-y divide-lt-hairline mb-8">
                 {data.leads.map((l) => (
                   <div key={l.id} className={`px-4 py-3 flex flex-wrap items-start gap-3 ${l.contactedAt ? 'opacity-60' : ''}`}>
@@ -272,7 +272,7 @@ export default function AdminHqWorkspacesPage() {
           <h2 className="text-[11px] uppercase font-semibold tracking-[1.6px] text-lt-fg3 mt-8 mb-3">Partners without one · {data.vendorsWithout.length}</h2>
           <p className="text-sm text-lt-fg2 mb-3 max-w-[72ch]">
             SirReel partners with units on the roster and no workspace yet. Starting one from here does exactly what the partner pressing
-            &ldquo;See what Utliiz can do for you&rdquo; does — including emailing their contact the link.
+            &ldquo;See what Spectiv can do for you&rdquo; does — including emailing their contact the link.
           </p>
           {data.vendorsWithout.length === 0 ? (
             <div className="text-sm text-lt-fg2">Everyone with units has one.</div>

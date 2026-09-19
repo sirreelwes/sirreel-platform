@@ -140,7 +140,7 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   `src/components/yard/YardBoard.tsx`. `bg-zinc-900/40` is not that; over
   cream it is a washed mid-grey.
 - Accent: `bg-amber-600 hover:bg-amber-500` for primary CTAs — and `amber-*` IS
-  the Utliiz turquoise (#0F7A93) since 2026-09-06, remapped in tailwind.config.ts;
+  the Spectiv turquoise (#0F7A93) since 2026-09-06, remapped in tailwind.config.ts;
   gold is gone everywhere (Wes). Inline hexes: `#0F7A93` on light, `#4DB1C6` on
   black, `#0C657A` for dark text. Never reintroduce `#c39a3f` / `#D4A547`.
 - Yard/warehouse surfaces are read standing at a terminal — keep item
@@ -1492,15 +1492,34 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   the roster unit page or removes the photo. Columns via
   `scripts/add-partner-photo-columns.ts` (additive SQL); everything fails
   soft until it has run. `npm run test:partner-photos`.
-- **Utliiz is NOT offered to partners (Wes 2026-09-11):** "focus on using
+- **Spectiv (then Utliiz) is NOT offered to partners (Wes 2026-09-11):** "focus on using
   this tech to aggregate partners into our sales and take a smaller piece…
   I don't want them to have the tech so they can't compete with our client
   service." `PARTNER_HQ_OFFER = false` in `src/lib/hq-white-label/product.ts`
   closes the account-page strip, the /vendor/account/[token]/hq landing
   page, the start-trial route and the /hq/[token] shell (VerMar support view
   still opens). The white-label code stays parked; flip the flag to restore.
-  Partner emails never carried a Utliiz link — only the turquoise accent,
+  Partner emails never carried a Spectiv link — only the turquoise accent,
   which stays (it is the brand accent now, not a foreshadow).
+- **Utliiz → Spectiv (spectiv.pro), 2026-09-19 (Wes):** "Instead of
+  utiliiz.com we are switching the software-as-a-service plan to
+  spectiv.pro. Spectiv is software that will support people in the
+  industry and give them a version of SirReel's HQ that is tailor-made to
+  work with SirReel.com's marketplace … I just don't want to give all of
+  our skills to our competitors." The name, mark (`SpectivMark.tsx`, red
+  lowercase s at 1.3× + red square i-dot — first draft, Wes hasn't
+  iterated), statics (`public/spectiv-*`), API paths (`/api/public/
+  spectiv-drive`, `/api/public/spectiv/request`, cron
+  `spectiv-driver-reminders`) and copy all moved; `/hq/[token]` and the
+  `sr_utliiz_leads` table keep their names (links + additive-only DB).
+  Positioning FLIPPED: spectiv.pro now names the SirReel.com marketplace
+  openly (the 9/6 "never name SirReel" rule is gone) — what stays out is
+  the rest of HQ. `SPECTIV_PRO_LIVE=1` (Vercel) is the one switch: until
+  Wes points spectiv.pro DNS at Vercel and attaches the domain, new links
+  mint on utliiz.com and utliiz.com serves the site; after it, links mint
+  on spectiv.pro and utliiz.com 308s there. Driver mail reads
+  `SPECTIV_SEND_FROM` then `UTLIIZ_SEND_FROM` (dispatch@utliiz.com stays
+  verified at Resend until spectiv.pro is). `PARTNER_HQ_OFFER` unchanged.
 - **Do NOT `prisma db push` for the next partner column.** 2026-09-10: the
   live DB carries `sr_job_locations` and nine `sub_rentals` columns that no
   schema file knows; a push from a checkout drops them. Add columns with

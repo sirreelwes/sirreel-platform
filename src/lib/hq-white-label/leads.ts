@@ -1,6 +1,6 @@
 /**
- * Requests from utliiz.com — companies that aren't SirReel partners
- * asking for a workspace. Stored as UtliizLead, mailed to VerMar ops,
+ * Requests from spectiv.pro — companies that aren't SirReel partners
+ * asking for a workspace. Stored as SpectivLead, mailed to VerMar ops,
  * worked from /vermar/workspaces.
  */
 import { prisma } from '@/lib/prisma'
@@ -20,7 +20,7 @@ export async function createLead(input: Record<string, unknown>, ip: string | nu
   if (!company) throw Object.assign(new Error('Your company name, please.'), { status: 400 })
   if (!email || !EMAIL_RE.test(email)) throw Object.assign(new Error('A working email, please — it’s how we send your link.'), { status: 400 })
   const fleetSize = clean(input.fleetSize, 20)
-  const row = await prisma.utliizLead.create({
+  const row = await prisma.spectivLead.create({
     data: {
       name, company, email,
       phone: clean(input.phone, 30),
@@ -34,7 +34,7 @@ export async function createLead(input: Record<string, unknown>, ip: string | nu
   })
   const base = (process.env.NEXT_PUBLIC_APP_URL || 'https://hq.sirreel.com').replace(/\/$/, '')
   const lines = [
-    `${name} at ${company} asked for a ${HQ_PRODUCT.name} workspace from utliiz.com.`,
+    `${name} at ${company} asked for a ${HQ_PRODUCT.name} workspace from spectiv.pro.`,
     `Email: ${email}`,
     row && input.phone ? `Phone: ${clean(input.phone, 30)}` : null,
     fleetSize ? `Fleet size: ${fleetSize}` : null,
@@ -47,7 +47,7 @@ export async function createLead(input: Record<string, unknown>, ip: string | nu
     subject: `${HQ_PRODUCT.name} request — ${company}`,
     html: `<p>${lines.map((l) => l.replace(/&/g, '&amp;').replace(/</g, '&lt;')).join('<br/>')}</p><p><a href="${base}/vermar/workspaces">${base}/vermar/workspaces</a></p>`,
     text: `${lines.join('\n')}\n\n${base}/vermar/workspaces`,
-    label: 'utliiz-lead',
+    label: 'spectiv-lead',
   }).catch(() => null)
   return { id: row.id }
 }
@@ -59,7 +59,7 @@ export interface LeadRow {
 }
 
 export async function listLeads(): Promise<LeadRow[]> {
-  const rows = await prisma.utliizLead.findMany({ orderBy: { createdAt: 'desc' }, take: 200 })
+  const rows = await prisma.spectivLead.findMany({ orderBy: { createdAt: 'desc' }, take: 200 })
   return rows.map((r) => ({
     id: r.id, name: r.name, company: r.company, email: r.email, phone: r.phone,
     fleetSize: r.fleetSize, fleetKind: r.fleetKind, note: r.note,
@@ -68,7 +68,7 @@ export async function listLeads(): Promise<LeadRow[]> {
 }
 
 export async function setLeadContacted(id: string, contacted: boolean, by: string): Promise<void> {
-  const row = await prisma.utliizLead.findUnique({ where: { id }, select: { id: true } })
+  const row = await prisma.spectivLead.findUnique({ where: { id }, select: { id: true } })
   if (!row) throw Object.assign(new Error('Request not found.'), { status: 404 })
-  await prisma.utliizLead.update({ where: { id }, data: contacted ? { contactedAt: new Date(), contactedBy: by } : { contactedAt: null, contactedBy: null } })
+  await prisma.spectivLead.update({ where: { id }, data: contacted ? { contactedAt: new Date(), contactedBy: by } : { contactedAt: null, contactedBy: null } })
 }

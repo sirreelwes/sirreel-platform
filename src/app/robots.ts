@@ -26,9 +26,11 @@ export default async function robots(): Promise<MetadataRoute.Robots> {
   const host = (await headers()).get('host')?.split(':')[0]?.toLowerCase() ?? ''
   const isPublicSite = PUBLIC_SITE_HOSTS.includes(host)
 
-  // vermardesign.com — HQ by VerMar Design's product site. Crawl the site;
-  // never the partners' workspaces, whose URLs are credentials.
-  if (host === 'vermardesign.com' || host === 'www.vermardesign.com' || host === 'utliiz.com' || host === 'www.utliiz.com') {
+  // spectiv.pro / vermardesign.com — Spectiv by VerMar Design's product
+  // site. Crawl the site; never the partners' workspaces, whose URLs are
+  // credentials. utliiz.com (the old name) still serves the site until
+  // the middleware's SPECTIV_PRO_LIVE flip — same rule.
+  if (host === 'vermardesign.com' || host === 'www.vermardesign.com' || host === 'spectiv.pro' || host === 'www.spectiv.pro' || host === 'utliiz.com' || host === 'www.utliiz.com') {
     return {
       rules: [{ userAgent: '*', allow: '/', disallow: ['/hq/', '/api/'] }],
       host: host.startsWith('www.') ? `https://${host.slice(4)}` : `https://${host}`,
