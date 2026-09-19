@@ -71,3 +71,45 @@ input:focus, select:focus, textarea:focus { outline: none; border-color: #bbb !i
   /* Tailwind's own 12px step, one notch up for the same reason. */
   .hq-shell .text-xs { font-size: 0.8125rem; }
 }
+
+/* ── No form control below 16px on a phone ───────────────────────────
+ *
+ * iOS zooms the page IN whenever a focused <input>/<select>/<textarea>
+ * computes below 16px, and it never zooms back out on its own. An app
+ * router navigation is not a page load, so that scale then survives
+ * every click through HQ — and HQ is installed as a standalone PWA
+ * (src/app/manifest.ts), which has no address bar to reset it and
+ * resumes at whatever scale it was suspended at. Wes, 2026-09-19:
+ * "every return to HQ ends up with the screen zoomed in a little."
+ * That is 16/14 ≈ 1.14x, held from whatever field was tapped first.
+ *
+ * It is the ELEMENT that has to be floored, not the class: Tailwind's
+ * preflight gives a bare control `font-size: 100%`, so almost every
+ * field in HQ silently inherits its card's text-sm/text-xs and lands at
+ * 13-14px. Retyping them is the `text-base sm:text-sm` that was already
+ * done by hand on /admin/maintenance and the CRM portal panel — right,
+ * but ~900 controls right.
+ *
+ * ONLY EVER RAISES: nothing in HQ declares a control above 16px today,
+ * which is what makes the !important safe. Declare a bigger one and it
+ * will be shrunk here instead — add an exception rather than lifting
+ * the floor.
+ *
+ * NOT fixed with `maximumScale` on the viewport: pinch-zoom is an
+ * accessibility affordance and HQ is dense on a phone (the same reason
+ * given in src/app/layout.tsx). This stops the zoom being applied; it
+ * does not stop the user applying one.
+ *
+ * Checkbox and radio are excluded — no text, and iOS never zooms for
+ * them. The second media condition is a phone held sideways in a real
+ * Safari tab (~932px wide, short): the PWA is locked portrait, a tab is
+ * not. Scoped to .hq-shell like the floor above — the client portal and
+ * the public site have the same platform behaviour and are NOT covered.
+ */
+@media (max-width: 767px), (pointer: coarse) and (max-height: 500px) {
+  .hq-shell input:not([type='checkbox']):not([type='radio']),
+  .hq-shell select,
+  .hq-shell textarea {
+    font-size: 16px !important;
+  }
+}
