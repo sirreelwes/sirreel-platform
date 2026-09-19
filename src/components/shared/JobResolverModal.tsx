@@ -46,6 +46,24 @@ export interface ResolvedJob {
   created: boolean
 }
 
+/**
+ * The modal's text fields.
+ *
+ * `bg-white text-gray-900` are stated rather than inherited on purpose:
+ * this is the first screen a rep types a company into from a phone, and
+ * an input with no colours of its own is the one the platform feels free
+ * to colour for us (Wes, 2026-09-19 — a white value in a white box, with
+ * iOS AutoFill's contact strip open). globals.css stops the two known
+ * mechanisms app-wide; saying it here as well costs nothing and means
+ * this field cannot be made unreadable by anything an ancestor does.
+ *
+ * `text-base sm:text-sm` is the /admin/maintenance rule: below 16px iOS
+ * Safari zooms the page on focus, which is what put the screenshot at
+ * two-thirds of a field per line.
+ */
+const FIELD =
+  'w-full border border-gray-200 rounded-xl px-3 py-2 text-base sm:text-sm bg-white text-gray-900 placeholder:text-gray-400 focus:outline-none focus:border-gray-400'
+
 interface Candidate {
   jobId: string
   jobCode: string
@@ -335,7 +353,7 @@ export function JobResolverModal({
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
                     placeholder="Not listed? Search all open jobs…"
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400"
+                    className={FIELD}
                   />
                 </div>
                 {searchHits.map((c) => (
@@ -353,7 +371,7 @@ export function JobResolverModal({
               <div className="space-y-3">
                 <div>
                   <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Job name *</label>
-                  <input value={dName} onChange={(e) => setDName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                  <input value={dName} onChange={(e) => setDName(e.target.value)} className={FIELD} />
                 </div>
                 <div className="relative">
                   <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Production company {companyUnknown ? <span className="font-normal text-gray-400">— we&rsquo;ll ask the client</span> : '*'}</label>
@@ -364,7 +382,7 @@ export function JobResolverModal({
                     onFocus={() => { if (dCompany.trim().length > 0 && !dCompanyId) setCompanyOpen(true) }}
                     placeholder="Search existing or type a new company…"
                     autoComplete="off"
-                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400 disabled:bg-gray-50 disabled:text-gray-400"
+                    className={`${FIELD} disabled:bg-gray-50 disabled:text-gray-400`}
                   />
                   {dCompanyId && !companyUnknown && (
                     <div className="text-[10px] text-emerald-600 mt-0.5">existing company — will be linked, not duplicated</div>
@@ -401,15 +419,15 @@ export function JobResolverModal({
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
                     <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Contact name</label>
-                    <input value={dContactName} onChange={(e) => setDContactName(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                    <input value={dContactName} onChange={(e) => setDContactName(e.target.value)} className={FIELD} />
                   </div>
                   <div>
                     <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Phone</label>
-                    <input value={dContactPhone} onChange={(e) => setDContactPhone(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                    <input value={dContactPhone} onChange={(e) => setDContactPhone(e.target.value)} className={FIELD} />
                   </div>
                   <div>
                     <label className="text-[11px] font-semibold text-gray-600 mb-1 block">Email</label>
-                    <input value={dContactEmail} onChange={(e) => setDContactEmail(e.target.value)} className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-gray-400" />
+                    <input value={dContactEmail} onChange={(e) => setDContactEmail(e.target.value)} className={FIELD} />
                   </div>
                 </div>
                 {result?.resolvedPerson && dContactEmail === result.resolvedPerson.email && (

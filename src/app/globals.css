@@ -3,6 +3,24 @@
 @tailwind utilities;
 
 :root {
+  /* ── Say the colour scheme out loud ──────────────────────────────
+   *
+   * Every surface here paints its own colours — the staff shell and the
+   * portal are light, the marketing site is dark by explicit classes —
+   * and NOTHING in this stylesheet answers `prefers-color-scheme`. With
+   * no declaration at all, a phone in Dark Mode is free to draw the
+   * parts we never coloured (form-control chrome, the AutoFill text
+   * colour, carets, date pickers, scrollbars) from the SYSTEM palette,
+   * which is how a white caret and white typed text landed in a white
+   * input on the job resolver (Wes, 2026-09-19, iPhone).
+   *
+   * Declaring `light` changes nothing about how the app renders today —
+   * light is already the used scheme — it just stops the guessing. A
+   * genuinely dark control opts back in per element with
+   * `[color-scheme:dark]` (see StandingSetAvailabilityForm).
+   */
+  color-scheme: light;
+
   --bg: #f5f5f5;
   --surface: #ffffff;
   --border: #e2e2e2;
@@ -10,6 +28,31 @@
   --text: #1a1a1a;
   --text-muted: #5c5c5c;
   --text-dim: #8a8a8a;
+}
+
+/* ── AutoFill must not repaint the text ──────────────────────────────
+ *
+ * iOS Safari's AutoFill (the "AutoFill Contact" strip over the keyboard)
+ * draws an autofilled field's text with its OWN `-webkit-text-fill-color`,
+ * which beats every `color` we set — the class, the inherited value, all
+ * of it. In Dark Mode that colour is white, so tapping a contact to fill
+ * a production company left the value present, selectable and invisible.
+ *
+ * `currentColor` hands it straight back to whatever the element's own
+ * `color` computes to, so a light input goes dark and a `text-white`
+ * input on a dark card stays white — no per-surface list to maintain.
+ * Background is deliberately left alone: overriding it with a fixed
+ * inset shadow is the usual recipe and it would repaint the dark inputs
+ * in /inventory and /sub-rentals white.
+ */
+input:-webkit-autofill,
+input:-webkit-autofill:hover,
+input:-webkit-autofill:focus,
+input:-webkit-autofill:active,
+textarea:-webkit-autofill,
+select:-webkit-autofill {
+  -webkit-text-fill-color: currentColor;
+  caret-color: currentColor;
 }
 
 body {

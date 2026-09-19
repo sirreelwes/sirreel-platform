@@ -102,6 +102,12 @@ export const viewport: Viewport = {
   initialScale: 1,
   viewportFit: 'cover',
   themeColor: '#1a1a1a',
+  // Emits <meta name="color-scheme" content="light">, which lands in the
+  // document head BEFORE the stylesheet does — so the first paint of a
+  // form control on a phone in Dark Mode is already light rather than
+  // flashing the system palette. globals.css carries the same
+  // declaration on :root; the reasoning is written up there.
+  colorScheme: 'light',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
