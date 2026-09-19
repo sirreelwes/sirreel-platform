@@ -63,6 +63,7 @@ import {
 } from "@/lib/orders/editability";
 import { isStageLineItem } from "@/lib/orders/stageLines";
 import { resolveLineType } from "@/lib/orders/lineType";
+import { claimBlockerFor, canTieToLine, claimBlockerWords } from "@/lib/orders/lineUnitClaim";
 import { configNotesFor, appendConfigNote } from "@/lib/catalog/configNotes";
 import {
   ASSET_BEARING_DEPARTMENTS,
@@ -2397,6 +2398,36 @@ export default function OrderDetailPage() {
     return live[0] ?? null;
   };
 
+  /** Attaching a hold's unit to THIS order — the one-tap half of the
+   *  unclaimed chip. Only offered where `canTieToLine` says it settles the
+   *  question: nothing stamped on it, on no order, already covering the
+   *  line's days. It uses the existing sales control
+   *  (PATCH /api/scheduling/assignments/[id]/order, Hugo 2026-09-03), so
+   *  the job check and the yard's "order attached" indicator are the same
+   *  ones the board writes — this adds no second way to attach an order. */
+  const [tyingAssignmentId, setTyingAssignmentId] = useState<string | null>(null);
+  const tieUnitToOrder = async (assignmentId: string, unitName: string) => {
+    if (tyingAssignmentId) return;
+    setTyingAssignmentId(assignmentId);
+    try {
+      const res = await fetch(`/api/scheduling/assignments/${assignmentId}/order`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orderId }),
+      });
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        alert(d?.reason || d?.error || `Could not tie ${unitName} to this order (HTTP ${res.status})`);
+        return;
+      }
+      await fetchOrder();
+    } catch (err) {
+      alert(`Could not tie ${unitName} to this order: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setTyingAssignmentId(null);
+    }
+  };
+
   /** THE TRUCKS RESERVED FOR THIS LINE — the through line (Wes 2026-09-16:
    *  "in that order line, we can even see cube 34"). Rows stamped with the
    *  line win; a line with no stamp (bound before 2026-09-16, or from the
@@ -2404,18 +2435,34 @@ export default function OrderDetailPage() {
    *  dates match the line's block, capped at the line's quantity. Mirrors
    *  lib/orders/lineUnits.ts, which is what the delete and edit paths
    *  release by — so what the row shows is what the row would give back. */
-  const unitsForLine = (li: LineItem): { hold: HoldItem; units: HoldItem['assignments']; exact: boolean } | null => {
+  const unitsForLine = (li: LineItem): {
+    hold: HoldItem;
+    units: HoldItem['assignments'];
+    exact: boolean;
+    /** Live units ON the hold that this line does not claim — with the
+     *  reason each one is out. Wes 2026-09-19: the row said "Held · no
+     *  unit" about a van the board had plainly reserved for the job, and
+     *  the unit picker called the same block fully assigned, because
+     *  capacity counts an assignment by its DATES alone while the claim
+     *  below wants a line stamp or this order's id. Naming them is not a
+     *  claim — the row stops denying a truck it can see. */
+    unclaimed: HoldItem['assignments'];
+  } | null => {
     const hold = holdForLine(li);
     if (!hold) return null;
     const live = hold.assignments.filter((a) => a.status === 'ASSIGNED' || a.status === 'CHECKED_OUT');
+    const rest = (units: HoldItem['assignments']) => {
+      const taken = new Set(units.map((u) => u.id));
+      return live.filter((a) => !taken.has(a.id));
+    };
     const stamped = live.filter((a) => a.orderLineItemId === li.id);
-    if (stamped.length > 0) return { hold, units: stamped, exact: true };
+    if (stamped.length > 0) return { hold, units: stamped, exact: true, unclaimed: rest(stamped) };
     const day = (v: string) => v.slice(0, 10);
     const mine = live
       .filter((a) => a.orderId === orderId && !a.orderLineItemId)
       .filter((a) => day(a.startDate) === day(li.pickupDate) && day(a.endDate) === day(li.returnDate))
       .slice(0, Math.max(0, li.quantity));
-    return { hold, units: mine, exact: false };
+    return { hold, units: mine, exact: false, unclaimed: rest(mine) };
   };
 
   /** Every LIVE reservation on the job — the vehicles a gear order may
@@ -3165,7 +3212,7 @@ export default function OrderDetailPage() {
           if (li.parentLineItemId || li.type === 'FEE' || li.type === 'DISCOUNT') return null;
           const forLine = unitsForLine(li);
           if (!forLine) return null;
-          const { hold, units, exact } = forLine;
+          const { hold, units, exact, unclaimed } = forLine;
           // THIS line's shortfall — its own quantity against its own
           // trucks, not the shared hold's. Removing the line gives back
           // exactly these units (lineUnits.ts), so the row says which.
@@ -3185,9 +3232,48 @@ export default function OrderDetailPage() {
               ))}
               {remaining > 0 && (
                 <span className="rounded border border-dashed border-chip-warn-fg/40 bg-chip-warn-bg px-1.5 py-0.5 font-semibold text-chip-warn-fg">
-                  {hold.holdRank > 1 ? `${hold.holdRank === 2 ? '2nd' : '3rd'} hold · no unit` : `Held · ${units.length > 0 ? `${remaining} more ` : ''}no unit`}
+                  {hold.holdRank > 1
+                    ? `${hold.holdRank === 2 ? '2nd' : '3rd'} hold · no unit`
+                    : unclaimed.length > 0
+                      // "No unit" is false when the hold visibly has one, and
+                      // it is the sentence that sent Wes looking for a truck
+                      // the board had already reserved. Say how many are
+                      // there; each one names itself below.
+                      ? `Held · ${remaining} to tie up`
+                      : `Held · ${units.length > 0 ? `${remaining} more ` : ''}no unit`}
                 </span>
               )}
+              {/* The units ON this hold that the line does not claim, each
+                  saying what is in the way. The one unambiguous case — on
+                  no order, already covering this line's days — gets a
+                  button; a truck on another order, or on other days, is
+                  named and left to a person (lineUnitClaim.ts). */}
+              {remaining > 0 && unclaimed.map((a) => {
+                const blocker = claimBlockerFor(a, { id: li.id, orderId, pickupDate: li.pickupDate, returnDate: li.returnDate });
+                if (blocker === 'over-quantity') return null;
+                const tieable = canTieToLine(a, { id: li.id, orderId, pickupDate: li.pickupDate, returnDate: li.returnDate });
+                return (
+                  <span
+                    key={`unclaimed-${a.id}`}
+                    className="inline-flex items-center gap-1 rounded border border-dashed border-lt-hairline bg-lt-inner px-1.5 py-0.5 text-lt-fg2"
+                    title="On the same hold as this line, so the fleet has it reserved — the line just does not claim it. The unit picker counts it against this block either way, which is why it can read as fully assigned."
+                  >
+                    <span className="font-semibold text-lt-fg">{a.asset.unitName}</span>
+                    <span>· {claimBlockerWords(blocker, a)}</span>
+                    {tieable && canManageSubRentals && (
+                      <button
+                        type="button"
+                        disabled={tyingAssignmentId === a.id}
+                        onClick={() => tieUnitToOrder(a.id, a.asset.unitName)}
+                        className="font-semibold text-amber-800 hover:underline underline-offset-2 disabled:opacity-50"
+                        title={`Say this unit goes out on ${order?.orderNumber ?? 'this order'}. It already covers this line's days, so the line picks it up.`}
+                      >
+                        {tyingAssignmentId === a.id ? 'Tying…' : 'Tie to this order'}
+                      </button>
+                    )}
+                  </span>
+                );
+              })}
               {canManageSubRentals && (
                 <button
                   type="button"

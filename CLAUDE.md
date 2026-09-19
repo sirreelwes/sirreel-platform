@@ -1958,6 +1958,54 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
   all — which is why it is worth correcting on orders that already shipped.
 - `npm run test:line-type` now pins the fallback in both directions.
 
+### "Held · no unit" over a van the board has reserved (2026-09-19 — Wes)
+- Wes, same order: "Cargo 35 is a reservation for this job, but the order
+  says Equipment—cargo (not assigned) when it's the same vehicle." Separate
+  defect from the EQUIPMENT typing above — `type` does not gate the unit
+  chip (the mistyped line showed its van fine).
+- **TWO RULES READ ONE ROW AND ANSWER DIFFERENTLY**, which is what makes it
+  a dead end rather than a nuisance:
+  - **Capacity** (`blockCapacity` / `coverageOfBlock`, assignWindow.ts)
+    counts an assignment by its **DATES ALONE**. So the block reads FULL and
+    the unit picker offers a SWAP, not an assign.
+  - **The line's readout** (`unitsForLine` on the order page, mirrored by
+    `liveUnitsForLine` in lineUnits.ts) claims a unit only when it carries
+    **this line's stamp**, or is unstamped AND carries **this order's id**
+    AND covers the line's block **exactly on both ends**.
+  An assignment can pass the first and fail the second. The line then says
+  "no unit"; the picker says the block is full. Neither is wrong about its
+  own question.
+- **The commonest way in is `orderId: null`, and it is DELIBERATE.**
+  `assignUnit` attaches an order only when the caller named one, a swap
+  inherits one, or `soleOrderCoveringHold` finds EXACTLY ONE order on the
+  job whose days touch the hold. **A job carrying two overlapping orders is
+  an ambiguity the server refuses to resolve** (Oliver 2026-09-18 — a
+  guessed stamp had put a van on paperwork the yard closed three days
+  earlier). So the board writes an assignment belonging to no order, and
+  every line on that job then fails the `orderId` half of the claim. The
+  other three ways: stamped to another LINE (including one since deleted —
+  such a row is excluded from BOTH branches), on a SIBLING order, or the
+  line's block moved and the exact-day match fails.
+- **The fix is on the READ side; no claim rule was widened.** Widening the
+  fallback to accept `orderId: null` would let two orders on one job both
+  show — and both RELEASE — the same truck, which is the harm
+  `soleOrderCoveringHold` exists to prevent. Instead
+  `src/lib/orders/lineUnitClaim.ts` (pure, `npm run test:line-unit-claim`)
+  says WHY each live unit on the hold is not the line's, in the SAME order
+  the claim itself is decided, and the row now NAMES those units instead of
+  denying them: "Cargo 35 · on this job's hold, not tied to an order yet".
+- **`canTieToLine` marks the one unambiguous case** — nothing stamped, on
+  no order, already covering the line's days — and only that one gets a
+  **"Tie to this order"** button, which calls the EXISTING sales control
+  `PATCH /api/scheduling/assignments/[id]/order` (Hugo 2026-09-03) so the
+  job check and the yard's order-attached indicator stay one implementation.
+  A truck on a sibling order, or on other days, is NAMED and left to a
+  person: taking it off another order's paperwork has a yard consequence.
+- Not done: nothing reconciles this automatically, and the unit picker still
+  reports the block full in this state (correctly, by its own rule) — so
+  before this, tying the truck up by hand was not actually reachable from
+  the order page.
+
 ## Lost because of insurance — a reason of its own (2026-09-18 — Wes)
 - Wes: "We've lost a couple of jobs because of improper insurance from the
   Production. I'd like to have this as an option." The Mark-lost picker had
