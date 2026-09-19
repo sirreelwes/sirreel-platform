@@ -94,6 +94,8 @@ export function JobDriversSection({
   pendingHolds = [],
   onChanged,
   onAssign,
+  driverPromptFor,
+  onDriverPromptHandled,
   jobId,
   driverRequest,
   askContactName,
@@ -119,6 +121,16 @@ export function JobDriversSection({
   /** Opens the unit picker in place. Without it the row falls back to
    *  the calendar deep link, which a phone cannot use — see the job page. */
   onAssign?: (bookingItemId: string) => void
+  /**
+   * A bookingAssignmentId whose invite form should open, asked for from
+   * OUTSIDE this card — the unit tile's "+ Name a driver" (Wes 2026-09-19,
+   * who wanted the button under the vehicle). The tile deliberately does
+   * not carry a second copy of the form: it hands the unit down here, and
+   * this scrolls its row into view and opens it. Clear it through
+   * `onDriverPromptHandled` so pressing the same tile twice works.
+   */
+  driverPromptFor?: string | null
+  onDriverPromptHandled?: () => void
 }) {
   // WHERE the form is open, not just whether. It used to render only at
   // the top of the card, so "+ Name a driver" on the fourth unit opened a
@@ -157,6 +169,27 @@ export function JobDriversSection({
   useEffect(() => {
     if (formOpen && only && !target) setTarget(only)
   }, [formOpen, only, target])
+
+  // The tile asked for a row. Open it, then bring it into view — the card
+  // is below the reservations, so the form would otherwise open off-screen
+  // and the press would read as a dead button (the same failure the
+  // per-row `openFor` fixed on 2026-09-15).
+  useEffect(() => {
+    if (!driverPromptFor) return
+    const v = vehicles.find((x) => x.bookingAssignmentId === driverPromptFor)
+    // A rental that is over, or a job that has finished, has nobody left to
+    // invite — the row says so and offers no button. Take the rep to it
+    // rather than opening a form the row itself refuses.
+    const nameableNow = !!v && !isOver(v) && !closedReason
+    if (nameableNow) {
+      setOpenFor(driverPromptFor)
+      setTarget(driverPromptFor)
+      setErr(null); setMsg(null)
+    }
+    onDriverPromptHandled?.()
+    document.getElementById(`driver-row-${driverPromptFor}`)?.scrollIntoView({ block: 'center' })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [driverPromptFor, onDriverPromptHandled])
 
   const openForm = useCallback((preselect?: string) => {
     setOpenFor(preselect ?? 'HEADER')
@@ -393,7 +426,11 @@ export function JobDriversSection({
 
       <div className="space-y-2">
         {vehicles.map((v) => (
-          <div key={v.bookingAssignmentId} className="rounded-lg border border-zinc-200 bg-zinc-50 px-3.5 py-2.5">
+          <div
+            key={v.bookingAssignmentId}
+            id={`driver-row-${v.bookingAssignmentId}`}
+            className="scroll-mt-4 rounded-lg border border-zinc-200 bg-zinc-50 px-3.5 py-2.5"
+          >
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-[15px] text-zinc-900">{v.unitName}</div>

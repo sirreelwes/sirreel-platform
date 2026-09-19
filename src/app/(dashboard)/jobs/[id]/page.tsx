@@ -625,6 +625,12 @@ export default function JobDetailPage() {
   // renders the Agenda view — and the picker only lived on the timeline
   // board, so a phone never got the list of trucks at all.
   const [assignHoldId, setAssignHoldId] = useState<string | null>(null);
+  // "Name a driver" pressed on a UNIT TILE (Wes 2026-09-19: "should we move
+  // the name a driver button directly under the vehicle?"). The form itself
+  // is not duplicated here — this carries the unit down to the Drivers card,
+  // which opens ITS row's form and scrolls to it. One form, one POST, one
+  // set of licence rules; the tile is just another way in.
+  const [driverPromptFor, setDriverPromptFor] = useState<string | null>(null);
   // Releasing a category hold straight off the job page. Wes 2026-09-10:
   // a duplicate draft quote had already put holds on the job, and
   // deleting the draft left them behind — "drafts assigned units and now
@@ -687,7 +693,11 @@ export default function JobDetailPage() {
   // section — expand it, then scroll.
   useEffect(() => {
     const HASH_TO_SECTION: Record<string, string> = {
-      coi: 'coi', wc: 'wc', agreement: 'agreement', 'reserved-assets': 'assets',
+      // Both hashes land on the merged Reservations card — `reserved-assets`
+      // is kept because three places still link at it (the EOD email, the
+      // hold-unassigned action item, the order page's load-on card).
+      coi: 'coi', wc: 'wc', agreement: 'agreement',
+      'reserved-assets': 'reservations', reservations: 'reservations',
       drivers: 'drivers', orders: 'orders', 'rw-billing': 'money', invoices: 'money',
       'final-invoice': 'money',
       contacts: 'contacts',
@@ -1135,6 +1145,12 @@ export default function JobDetailPage() {
   // default dates on the hold pickers below; the dates a person READS come
   // off the individual orders and bookings.
   const orderSpan = deriveJobDateRange(job.orders);
+  // Pacific "today", for the tiles' is-this-rental-over test. Same rule the
+  // Drivers card uses, so a van that came back cannot ask for a driver on
+  // one card and refuse on the other.
+  const todayPacific = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Los_Angeles', year: 'numeric', month: '2-digit', day: '2-digit',
+  }).format(new Date());
 
   // THE PICKUP, in the header (Wes 2026-09-10: "the pickup date at a
   // minimum should be prominently displayed"). This is not the job-wide
@@ -1502,7 +1518,7 @@ const driverTone = (d: any): string => {
   const pendingHolds = (() => {
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
-    const out: { bookingItemId: string; category: string; categoryId: string | null; quantity: number; startDate: string | null; endDate: string | null }[] = []
+    const out: { bookingItemId: string; bookingId: string; category: string; categoryId: string | null; quantity: number; startDate: string | null; endDate: string | null }[] = []
     for (const b of job.bookings) {
       if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
       // Live dates only — a wrapped job's UNFULFILLED line is history,
@@ -1519,6 +1535,9 @@ const driverTone = (d: any): string => {
         if (live.length === 0) {
           out.push({
             bookingItemId: it.id,
+            // Which reservation raised this hold — the merged card nests
+            // each booking's tiles under the booking itself.
+            bookingId: b.id,
             category: it.category.name,
             categoryId: it.category.id ?? null,
             quantity: it.quantity,
@@ -1648,10 +1667,11 @@ const driverTone = (d: any): string => {
     wc: wcCerts.length === 0,
     agreement: agreementStatus === 'none',
     reservations: (job.bookings ?? []).length === 0,
-    // A held category with no unit picked lives in the assets card too —
-    // hiding the card on "no units" hid the one control that assigns one
-    // (Wes 2026-09-05: "I don't see where to choose hold no unit").
-    assets: reservedAssets.length === 0 && pendingHolds.length === 0,
+    // No separate assets key since 2026-09-19 — the units live inside the
+    // Reservations card, which is gated on having a booking at all. A held
+    // category with no unit picked still renders there, so the control that
+    // assigns one cannot hide (Wes 2026-09-05: "I don't see where to choose
+    // hold no unit").
     drivers: reservedAssets.length === 0 && pendingHolds.length === 0,
     orders: job.orders.length === 0,
     money: job.orders.length === 0 && job.rwOrderCount === 0,
@@ -2543,12 +2563,23 @@ const driverTone = (d: any): string => {
         </div>
       </div>
 
-      {/* Reservations — one row per booking, with where it came from.
-          First of the rental block, and above the unit grid on purpose:
-          two cards for two vans look identical whether that is one
-          two-van rental or the same rental held twice, and only the
-          booking-level view separates them. */}
-      {showSec('reservations') && (
+      {/* Reservations — one card, with each booking's UNITS nested inside
+          it (Wes 2026-09-19: "is it redundant to have reservations and
+          reserved asset right next to each other? Can this be combined?").
+          It was redundant on the job in front of him: one booking, one van,
+          and two cards saying so. It is NOT redundant in general, which is
+          why the booking row survives rather than the tiles absorbing it —
+          two tiles for two vans look identical whether that is one two-van
+          rental or the same rental held twice, and only the booking level
+          separates them (see JobBookingsSection's header: three jobs were
+          in that state during the Planyo cutover). So the booking keeps its
+          number, origin, status, window and Remove; the tiles it raised sit
+          under it, pictured, instead of in a card of their own.
+
+          ABOVE the orders since 2026-09-18 (Wes: "have images of the things
+          that are being held, just like they have on their page, as well as
+          the orders directly below that"). */}
+      {showSec('reservations') && (<>
       <JobBookingsSection
         bookings={(job.bookings ?? []).map((b: any) => ({
           id: b.id,
@@ -2567,21 +2598,8 @@ const driverTone = (d: any): string => {
           })),
         }))}
         onChanged={load}
-      />
-      )}
-
-      {/* Reserved assets → each opens its reservation on the calendar.
-
-          ABOVE the orders since 2026-09-18, and pictured, because that is
-          how the client's own job portal reads and Wes asked the staff page
-          to mimic it: "have images of the things that are being held, just
-          like they have on their page, as well as the orders directly below
-          that." What they are getting, then what it costs. */}
-      {showSec('assets') && (
-      <div id="reserved-assets" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Reserved assets</h2>
-          <div className="flex items-center gap-3">
+        headerRight={
+          <>
             <span className="text-[12px] text-zinc-600">
               {reservedAssets.length} unit{reservedAssets.length === 1 ? '' : 's'}
               {pendingHolds.length > 0 && ` · ${pendingHolds.length} held`}
@@ -2594,16 +2612,26 @@ const driverTone = (d: any): string => {
               job={{ id: job.id, jobCode: job.jobCode, name: job.name, company: { id: job.company.id, name: job.company.name }, contact: holdContact, startDate: isoDate(orderSpan.start), endDate: isoDate(orderSpan.end) }}
               onCreated={load}
             />
-          </div>
-        </div>
-        {reservedAssets.length === 0 && pendingHolds.length === 0 ? (
-          <div className="mt-3 text-[15px] text-zinc-700">No units reserved on this job yet — use + Add asset to hold one.</div>
-        ) : (
-          <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {reservedAssets.map((a) => (
+          </>
+        }
+        renderUnits={(bookingId) => {
+          const mine = reservedAssets.filter((a) => a.bookingId === bookingId);
+          const held = pendingHolds.filter((h) => h.bookingId === bookingId);
+          if (mine.length === 0 && held.length === 0) {
+            return (
+              <div className="mt-2 border-t border-zinc-200 pt-2 text-[12px] text-zinc-600">
+                No unit picked on this reservation yet.
+              </div>
+            );
+          }
+          return (
+            // Hairline above, so the tiles read as held BY the reservation
+            // rather than as a second list that happens to sit near it.
+            <div className="mt-2.5 grid gap-2.5 border-t border-zinc-200 pt-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {mine.map((a) => (
               <div
                 key={a.bookingAssignmentId}
-                className="group rounded-xl border border-zinc-200 bg-zinc-50 hover:border-amber-400 hover:bg-zinc-100 p-3 transition-all duration-200 hover:-translate-y-0.5"
+                className="group rounded-xl border border-zinc-200 bg-white hover:border-amber-400 hover:bg-zinc-50 p-3 transition-all duration-200 hover:-translate-y-0.5"
               >
               <Link
                 href={`/gantt?date=${a.startDate.slice(0, 10)}`}
@@ -2654,22 +2682,58 @@ const driverTone = (d: any): string => {
                 </div>
                 <div className="mt-0.5 text-[12px] text-zinc-700 truncate">{a.category}</div>
                 <div className="mt-1.5 text-[12px] text-zinc-700 font-mono">{fmtDay(a.startDate)} – {fmtDay(a.endDate)}</div>
-                {/* Who's driving it — the question a rep asks while looking
-                    at the unit, so answered here rather than only in the
-                    Drivers section below. */}
-                <div className="mt-1.5 text-[11px] truncate">
-                  {a.drivers.length === 0 ? (
-                    <span className="text-zinc-600">No driver named</span>
-                  ) : (
-                    <span className={driverTone(a.drivers[0])}>
-                      <User size={12} aria-hidden className="inline-block align-[-1px] mr-1" />{driverName(a.drivers[0])}
-                      {a.drivers.length > 1 && ` +${a.drivers.length - 1}`}
-                      {' · '}{driverStateLabel(a.drivers[0])}
-                    </span>
-                  )}
-                </div>
                 <div className="mt-1.5 text-[11px] text-amber-700 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
               </Link>
+              {/* Who's driving it, directly under the vehicle and the full
+                  width of the tile (Wes 2026-09-19). It used to be a line of
+                  grey text reading "No driver named", with the only way to
+                  ACT on it in another card further down the page. Outside
+                  the Link on purpose — a button inside an anchor is invalid
+                  markup and the click would fight the calendar link.
+
+                  A rental that is over never asks: nobody names a driver
+                  onto a van that came back. Same rule as the Drivers card
+                  (JobDriversSection's isOver), so the two cannot disagree. */}
+              {(() => {
+                const over = !!a.unitReturned || a.endDate.slice(0, 10) < todayPacific;
+                const named = a.drivers.length > 0;
+                if (over && !named) {
+                  return (
+                    <div className="mt-2 rounded-lg border border-zinc-200 bg-white px-2 py-1.5 text-center text-[11px] text-zinc-600">
+                      No driver named · rental is over
+                    </div>
+                  );
+                }
+                return (
+                  <button
+                    type="button"
+                    onClick={() => setDriverPromptFor(a.bookingAssignmentId)}
+                    title={
+                      named
+                        ? `Drivers on ${a.unitName} — name another, or manage this one`
+                        : over
+                          ? `Who drove ${a.unitName}`
+                          : `Name the driver taking ${a.unitName} out`
+                    }
+                    className={`mt-2 block w-full rounded-lg border px-2 py-1.5 text-[11px] font-semibold transition-colors ${
+                      named
+                        ? 'border-zinc-200 bg-white text-zinc-700 hover:border-amber-400'
+                        : 'border-dashed border-amber-300 bg-amber-50 text-amber-700 hover:border-amber-500 hover:bg-amber-100'
+                    }`}
+                  >
+                    {named ? (
+                      <span className={`flex items-center justify-center gap-1 truncate ${driverTone(a.drivers[0])}`}>
+                        <User size={12} aria-hidden />
+                        <span className="truncate">{driverName(a.drivers[0])}</span>
+                        {a.drivers.length > 1 && <span>+{a.drivers.length - 1}</span>}
+                        <span className="text-zinc-600 font-normal">· {driverStateLabel(a.drivers[0])}</span>
+                      </span>
+                    ) : (
+                      <>+ Name a driver</>
+                    )}
+                  </button>
+                );
+              })()}
               {/* The order this truck goes out on, and the way to write
                   one from here (Wes 2026-09-10: "when we open a
                   reservation we should be able to add a warehouse order
@@ -2732,7 +2796,7 @@ const driverTone = (d: any): string => {
             {/* Two actions, so the tile is a div with buttons inside
                 rather than one big button: pick the unit, or take the
                 hold off the job entirely. */}
-            {pendingHolds.map((h) => (
+            {held.map((h) => (
               <div
                 key={h.bookingItemId}
                 className="group text-left rounded-xl border border-dashed border-amber-300 bg-amber-50 p-3 transition-all duration-200"
@@ -2778,20 +2842,21 @@ const driverTone = (d: any): string => {
                 </div>
               </div>
             ))}
-          </div>
-        )}
-        {holdReleaseError && (
-          <div className="mt-2 text-[12px] font-semibold text-rose-700">{holdReleaseError}</div>
-        )}
-      </div>
+            </div>
+          );
+        }}
+      />
+      {holdReleaseError && (
+        <div className="-mt-2 text-[12px] font-semibold text-rose-700">{holdReleaseError}</div>
       )}
+      </>)}
 
       {/* Orders — the rental block's last card (Wes 2026-09-14: "the
           orders and reservations should be at the top of the job page for
           us too… the orders should be directly below the reservations";
           then 2026-09-18, "the orders directly below that", meaning below
-          the pictured assets). So the block reads reservations → reserved
-          assets → orders, under the paperwork tiles; COI / WC / agreement
+          the pictured assets). So the block reads reservations-with-their-
+          units → orders, under the paperwork tiles; COI / WC / agreement
           are the paperwork BEHIND it and sit below, with the tiles above
           still jumping to them.
 
@@ -3044,6 +3109,8 @@ const driverTone = (d: any): string => {
         pendingHolds={pendingHolds}
         onChanged={load}
         onAssign={(bookingItemId) => setAssignHoldId(bookingItemId)}
+        driverPromptFor={driverPromptFor}
+        onDriverPromptHandled={() => setDriverPromptFor(null)}
         jobId={job.id}
         driverRequest={job.driverRequestSentAt && job.driverRequestSentTo ? { sentAt: job.driverRequestSentAt, sentTo: job.driverRequestSentTo } : null}
         askContactName={signatory ? `${signatory.person.firstName} ${signatory.person.lastName}`.trim() : null}

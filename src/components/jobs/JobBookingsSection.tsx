@@ -40,7 +40,7 @@
  * and only a human knows which.
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useState, type ReactNode } from 'react'
 import { isLiveAssignment } from '@/lib/jobs/reservedAssets'
 
 interface Assignment {
@@ -149,9 +149,25 @@ export const findPlanyoTwins = findDuplicateHolds
 export function JobBookingsSection({
   bookings,
   onChanged,
+  headerRight,
+  renderUnits,
 }: {
   bookings: JobBooking[]
   onChanged?: () => void
+  /** Controls that belong to the whole card — the unit count and
+   *  "+ Add asset", which used to head a second card of their own. */
+  headerRight?: ReactNode
+  /**
+   * The unit tiles held UNDER each reservation (Wes 2026-09-19: "is it
+   * redundant to have reservations and reserved assets right next to each
+   * other?"). It was: on a one-booking, one-van job the two cards said the
+   * same thing twice. Nesting the tiles inside the booking that raised them
+   * keeps the one thing the booking row alone could tell you — whether two
+   * vans are one two-van rental or the same rental held twice — and stops
+   * the page saying it over again. Absent (no callback) the row falls back
+   * to naming its units in a line, which is what it did before.
+   */
+  renderUnits?: (bookingId: string) => ReactNode
 }) {
   const [busyId, setBusyId] = useState<string | null>(null)
   const [err, setErr] = useState<string | null>(null)
@@ -205,14 +221,23 @@ export function JobBookingsSection({
   const dupCount = findDuplicateGroups(bookings).length
 
   return (
-    <div className="bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
-      <div className="flex items-center justify-between">
+    <div id="reservations" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
+      {/* The units used to be a card of their own, and three places link at
+          its hash: the EOD unassigned-units email, the hold-unassigned
+          action item and the order page's load-on card. Keep both anchors
+          alive — and note `#reservations` never resolved to ANYTHING before
+          today, because this card had no id at all. */}
+      <span id="reserved-assets" className="block scroll-mt-4" aria-hidden />
+      <div className="flex items-center justify-between gap-3">
         <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">
           Reservations
         </h2>
-        <span className="text-[12px] text-zinc-700">
-          {liveCount} live{bookings.length !== liveCount && ` · ${bookings.length - liveCount} closed`}
-        </span>
+        <div className="flex items-center gap-3">
+          <span className="text-[12px] text-zinc-700">
+            {liveCount} live{bookings.length !== liveCount && ` · ${bookings.length - liveCount} closed`}
+          </span>
+          {headerRight}
+        </div>
       </div>
 
       {dupCount > 0 && (
@@ -288,10 +313,16 @@ export function JobBookingsSection({
                   <div className="mt-1 text-[12px] text-zinc-700 font-mono">
                     {day(b.startDate)} – {day(b.endDate)}
                   </div>
-                  <div className="mt-0.5 text-[12px] text-zinc-600 truncate">
-                    {cats.join(', ') || 'no equipment'}
-                    {units.length > 0 && <span className="text-zinc-600"> · {units.join(', ')}</span>}
-                  </div>
+                  {/* With the tiles nested below, this line would be the
+                      same sentence twice — the tiles name the class and the
+                      unit, with a picture. Kept verbatim for a caller that
+                      renders no tiles. */}
+                  {!renderUnits && (
+                    <div className="mt-0.5 text-[12px] text-zinc-600 truncate">
+                      {cats.join(', ') || 'no equipment'}
+                      {units.length > 0 && <span className="text-zinc-600"> · {units.join(', ')}</span>}
+                    </div>
+                  )}
                   {twin && !dead && (
                     <div className="mt-1.5 text-[11px] text-amber-700">
                       Same dates and equipment as{' '}
@@ -312,6 +343,7 @@ export function JobBookingsSection({
                   </button>
                 )}
               </div>
+              {renderUnits?.(b.id)}
             </div>
           )
         })}
