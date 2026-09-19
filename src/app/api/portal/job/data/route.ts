@@ -40,7 +40,7 @@ import { coiClientDecision } from '@/lib/coi/coiState'
 import { loadOrderReplacementValue, toClientReplacementValue } from '@/lib/coi/replacementValue'
 import { deriveOrderWindow } from '@/lib/jobs/dateRange'
 import { buildBookingTerms, type BookingVehicleLine } from '@/lib/sales/bookingTerms'
-import { PUBLIC_VEHICLE_VISIBLE_WHERE } from '@/lib/site/vehicleCatalog'
+import { loadCategoryPhotoPaths } from '@/lib/fleet/categoryPhotos'
 import { CLIENT_KIT_VISIBILITY, hiddenFromClient } from '@/lib/orders/clientLines'
 import { narrowAssignmentsToOrder, portalDocHref } from '@/lib/fleet/vehicleDocs'
 import { dotSheetForOrder } from '@/lib/fleet/dotSheet'
@@ -434,25 +434,12 @@ export async function GET(req: NextRequest) {
   // the vehicles"). Same PUBLIC proxy the account portal uses — the blob URL
   // itself never reaches a browser (companyOverview.ts). No photo on the
   // class simply means no tile image; the tile still renders.
-  const reservedCategoryIds = [
-    ...new Set(vehicleAssignments.map((va) => va.asset.category?.id).filter((id): id is string => !!id)),
-  ]
-  // PUBLIC_VEHICLE_VISIBLE_WHERE is the same gate the proxy enforces, and it
-  // already means "has an image" — gallery photo, the row's own photoUrl, or
-  // the linked Fleet Pricing category's. Measured 2026-09-12: all nine live
-  // classes get theirs from the LAST of those, so testing only the first two
-  // (as the first cut did) left every tile a grey placeholder.
-  const vehiclePhotoByCategory = new Map<string, string>()
-  if (reservedCategoryIds.length > 0) {
-    const cats = await prisma.vehicleCategory.findMany({
-      where: { assetCategoryId: { in: reservedCategoryIds }, ...PUBLIC_VEHICLE_VISIBLE_WHERE },
-      select: { id: true, assetCategoryId: true },
-    })
-    for (const vc of cats) {
-      if (!vc.assetCategoryId || vehiclePhotoByCategory.has(vc.assetCategoryId)) continue
-      vehiclePhotoByCategory.set(vc.assetCategoryId, `/api/public/catalog-image/vehicle/${vc.id}`)
-    }
-  }
+  // The gate, the three image sources and the proxy href all live in
+  // lib/fleet/categoryPhotos now — HQ's own job page shows the same photos
+  // on the same reservations (Wes 2026-09-18), and they must not drift.
+  const vehiclePhotoByCategory = await loadCategoryPhotoPaths(
+    vehicleAssignments.map((va) => va.asset.category?.id),
+  )
 
   // "Active COI on file — but is it the right one for THIS job?" (Wes,
   // 2026-09-09). Only a CARRIED certificate raises the question; the
@@ -1007,7 +994,7 @@ export async function GET(req: NextRequest) {
           unitName: va.asset.unitName,
           title: titleParts || va.asset.unitName,
           categoryName: va.asset.category?.name ?? null,
-          photoPath: va.asset.category?.id ? vehiclePhotoByCategory.get(va.asset.category.id) ?? null : null,
+          photoPath: va.asset.category?.id ? vehiclePhotoByCategory[va.asset.category.id] ?? null : null,
           licensePlate: va.asset.licensePlate,
           assignmentStartDate: va.startDate,
           assignmentEndDate: va.endDate,

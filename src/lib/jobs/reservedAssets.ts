@@ -38,13 +38,17 @@ export interface ReservedAssetSourceAssignment {
 export interface ReservedAssetSourceBooking {
   id: string
   status: string
-  items: { category: { name: string }; assignments: ReservedAssetSourceAssignment[] }[]
+  items: { category: { id?: string | null; name: string }; assignments: ReservedAssetSourceAssignment[] }[]
 }
 
 export interface ReservedAssetRow {
   assetId: string
   unitName: string
   category: string
+  /** The asset CATEGORY the unit was held under — what a class photo is
+   *  keyed on (lib/fleet/categoryPhotos). Null on a source that did not
+   *  select it. */
+  categoryId: string | null
   startDate: string
   endDate: string
   status: string
@@ -67,6 +71,21 @@ export interface ReservedAssetRow {
  */
 export const DEAD_ORDER_STATUSES = new Set(['CANCELLED'])
 
+/**
+ * Is this assignment a unit the job still HAS?
+ *
+ * SWAPPED is terminal-but-auditable — the row is kept so the record reads
+ * back, and it is never a reserved unit. Every surface that lists assigned
+ * assets must ask this, not just this file's rows: the order page's
+ * "Reserved units" card unioned the job's assignments raw, so a Cube 5
+ * released off S260918-012 on 2026-09-18 went on sitting in the card with
+ * nothing on the order to remove (Wes: "a ghost in the job on the upper
+ * right"). RETURNED stays live — that truck really did go out.
+ */
+export function isLiveAssignment(status: string): boolean {
+  return status !== 'SWAPPED'
+}
+
 export function buildReservedAssets(
   bookings: ReservedAssetSourceBooking[] | null | undefined,
 ): ReservedAssetRow[] {
@@ -80,12 +99,13 @@ export function buildReservedAssets(
         // reads back, never a reserved asset. Rendering it here put a
         // released Cube 5 in E.L.F. Project Sooth's "1 unit" count with
         // nothing to do about it (Wes 2026-09-10).
-        if (a.status === 'SWAPPED') continue
+        if (!isLiveAssignment(a.status)) continue
         const checkout = a.checkoutRecords?.[0]
         rows.push({
           assetId: a.asset.id,
           unitName: a.asset.unitName,
           category: it.category.name,
+          categoryId: it.category.id ?? null,
           startDate: a.startDate,
           endDate: a.endDate,
           status: a.status,

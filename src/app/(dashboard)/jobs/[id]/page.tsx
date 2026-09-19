@@ -6,7 +6,7 @@ import { isSignedAgreementStatus } from '@/lib/portal/agreementStatus';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { deriveJobDateRange, deriveOrderWindow, isoDate } from '@/lib/jobs/dateRange';
-import { buildReservedAssets, DEAD_ORDER_STATUSES } from '@/lib/jobs/reservedAssets';
+import { buildReservedAssets, DEAD_ORDER_STATUSES, isLiveAssignment } from '@/lib/jobs/reservedAssets';
 import { daysUntil, fmtPickup, pickupLabel } from '@/lib/sales/quoteUrgency';
 import { isStageLineItem } from '@/lib/orders/stageLines';
 import { notifyJobsChanged } from '@/components/jobs/JobsListProvider';
@@ -77,7 +77,7 @@ import { computeReadiness } from '@/lib/jobs/readiness';
 import { orderContentSummary } from '@/lib/orders/contentSummary';
 import { rollupCoiState } from '@/lib/coi/coiState';
 import { cardAskState } from '@/lib/payments/cardAsk';
-import { AlertTriangle, CalendarDays, Check, User, Mail } from 'lucide-react';
+import { AlertTriangle, CalendarDays, Check, User, Mail, Truck } from 'lucide-react';
 import { useSession } from 'next-auth/react';
 import { canCreateOrders } from '@/lib/permissions';
 import { jobBlindRollup } from '@/lib/fleet/blindRule';
@@ -428,6 +428,10 @@ interface JobDetail {
     lastTroubleAt: string | null;
     lastTroubleDetail: string | null;
   };
+  // AssetCategory id → the class photo's href, for the reserved-asset and
+  // held-class tiles (lib/fleet/categoryPhotos). Same pictures the client
+  // sees on their own portal; a class with no photo is simply absent.
+  categoryPhotos?: Record<string, string>;
   // bookingId → the client's collision-waiver decision, so each reserved
   // asset shows its vehicle's state. UNANSWERED is not DECLINED: one is an
   // open question to chase, the other is a settled answer.
@@ -517,6 +521,33 @@ const INQUIRY_SOURCE_BADGE: Record<'MANUAL' | 'GMAIL' | 'WEB_FORM', string> = {
   GMAIL:    'bg-rose-50 text-rose-700 border-rose-200',
   WEB_FORM: 'bg-sky-50 text-sky-700 border-sky-200',
 };
+
+/**
+ * The class picture on a reserved / held tile — the same photo the client is
+ * looking at on their own job portal (Wes 2026-09-18: "the assets for the job
+ * are not pictured… mimic the job portals"). Nothing on the staff page should
+ * be a surprise to the rep on the phone with them.
+ *
+ * `path` comes from the job payload's `categoryPhotos` map
+ * (lib/fleet/categoryPhotos) and is already the gated proxy href — the stored
+ * blob URLs 403 in a browser. Absent for a class with no photo (a stage, for
+ * one), which is ordinary: the band falls back to the truck outline rather
+ * than a broken image or a hole in the grid, so every tile keeps one height.
+ */
+function ClassPhoto({ path, alt }: { path: string | null | undefined; alt: string }) {
+  return (
+    <div className="mb-2 h-20 w-full overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100">
+      {path ? (
+        /* eslint-disable-next-line @next/next/no-img-element */
+        <img src={path} alt={alt} className="block h-full w-full object-cover" loading="lazy" />
+      ) : (
+        <div className="flex h-full w-full items-center justify-center text-zinc-300">
+          <Truck size={24} aria-hidden />
+        </div>
+      )}
+    </div>
+  );
+}
 
 const ASSIGN_BADGE: Record<string, string> = {
   ASSIGNED:    'bg-sky-50 text-sky-700 border-sky-200',
@@ -1471,7 +1502,7 @@ const driverTone = (d: any): string => {
   const pendingHolds = (() => {
     const todayStart = new Date()
     todayStart.setHours(0, 0, 0, 0)
-    const out: { bookingItemId: string; category: string; quantity: number; startDate: string | null; endDate: string | null }[] = []
+    const out: { bookingItemId: string; category: string; categoryId: string | null; quantity: number; startDate: string | null; endDate: string | null }[] = []
     for (const b of job.bookings) {
       if (b.status === 'CANCELLED' || b.status === 'ARCHIVED') continue
       // Live dates only — a wrapped job's UNFULFILLED line is history,
@@ -1489,6 +1520,7 @@ const driverTone = (d: any): string => {
           out.push({
             bookingItemId: it.id,
             category: it.category.name,
+            categoryId: it.category.id ?? null,
             quantity: it.quantity,
             startDate: b.startDate ?? null,
             endDate: b.endDate ?? null,
@@ -2538,13 +2570,230 @@ const driverTone = (d: any): string => {
       />
       )}
 
-      {/* Orders — directly below the Reservations they bill (Wes
-          2026-09-14, twice: "the orders and reservations should be at the
-          top of the job page for us too", then "the orders should be
-          directly below the reservations"). The rental is what someone
-          opens a job to see, so the pair sits under the paperwork tiles;
-          COI / WC / agreement are the paperwork BEHIND it and sit below,
-          with the tiles above still jumping to them.
+      {/* Reserved assets → each opens its reservation on the calendar.
+
+          ABOVE the orders since 2026-09-18, and pictured, because that is
+          how the client's own job portal reads and Wes asked the staff page
+          to mimic it: "have images of the things that are being held, just
+          like they have on their page, as well as the orders directly below
+          that." What they are getting, then what it costs. */}
+      {showSec('assets') && (
+      <div id="reserved-assets" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
+        <div className="flex items-center justify-between">
+          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Reserved assets</h2>
+          <div className="flex items-center gap-3">
+            <span className="text-[12px] text-zinc-600">
+              {reservedAssets.length} unit{reservedAssets.length === 1 ? '' : 's'}
+              {pendingHolds.length > 0 && ` · ${pendingHolds.length} held`}
+            </span>
+            <AddAssetButton
+              // Derived span, same as JobQuickActions above. This read
+              // job.startDate/endDate, which the API stopped sending long
+              // before the columns were dropped — so the hold picker was
+              // silently defaulting to today on every job.
+              job={{ id: job.id, jobCode: job.jobCode, name: job.name, company: { id: job.company.id, name: job.company.name }, contact: holdContact, startDate: isoDate(orderSpan.start), endDate: isoDate(orderSpan.end) }}
+              onCreated={load}
+            />
+          </div>
+        </div>
+        {reservedAssets.length === 0 && pendingHolds.length === 0 ? (
+          <div className="mt-3 text-[15px] text-zinc-700">No units reserved on this job yet — use + Add asset to hold one.</div>
+        ) : (
+          <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
+            {reservedAssets.map((a) => (
+              <div
+                key={a.bookingAssignmentId}
+                className="group rounded-xl border border-zinc-200 bg-zinc-50 hover:border-amber-400 hover:bg-zinc-100 p-3 transition-all duration-200 hover:-translate-y-0.5"
+              >
+              <Link
+                href={`/gantt?date=${a.startDate.slice(0, 10)}`}
+                title="Open this reservation on the calendar"
+                className="block"
+              >
+                <ClassPhoto path={a.categoryId ? job.categoryPhotos?.[a.categoryId] : null} alt={a.category} />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-2 min-w-0">
+                    <svg className="w-4 h-4 shrink-0 text-amber-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M12 2.6 20.5 7v10L12 21.4 3.5 17V7z" />
+                      <path d="M3.5 7 12 11.6 20.5 7" />
+                      <path d="M12 11.6v9.8" />
+                    </svg>
+                    <span className="font-semibold text-zinc-900 group-hover:text-amber-700 transition-colors truncate">{a.unitName}</span>
+                  </span>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {(() => {
+                      // The badge NAMES the decision. It used to be a
+                      // two-tone shield that went grey for "declined" and
+                      // "never asked" alike, so the answer to "did they take
+                      // the waiver?" was unreadable off this page.
+                      const lcdw = job.lcdwByBooking?.[a.bookingId] ?? 'UNANSWERED';
+                      const style =
+                        lcdw === 'ACCEPTED'
+                          ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'LCDW', title: 'LCDW accepted — SirReel waives the first $1,000 in collision damage ($24/day/vehicle)' }
+                          : lcdw === 'DECLINED'
+                            ? { cls: 'bg-white text-zinc-600 border-zinc-300', label: 'LCDW declined', title: 'LCDW declined — the client carries their own collision coverage' }
+                            : { cls: 'bg-amber-50 text-amber-700 border-amber-200', label: 'LCDW?', title: 'LCDW not answered yet — the client has not accepted or declined the waiver' };
+                      return (
+                        <span
+                          title={style.title}
+                          className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${style.cls}`}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M12 2.6 20 6v6c0 4.9-3.4 7.9-8 9.4C7.4 19.9 4 16.9 4 12V6z" />
+                            {lcdw === 'ACCEPTED' && <path d="M9 12l2 2 4-4.2" />}
+                            {lcdw === 'DECLINED' && <path d="M9.5 9.5l5 5m0-5l-5 5" />}
+                          </svg>
+                          {style.label}
+                        </span>
+                      );
+                    })()}
+                    <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${ASSIGN_BADGE[a.status] ?? 'bg-zinc-100 text-zinc-700 border-zinc-300'}`}>
+                      {a.status.replace('_', ' ')}
+                    </span>
+                  </div>
+                </div>
+                <div className="mt-0.5 text-[12px] text-zinc-700 truncate">{a.category}</div>
+                <div className="mt-1.5 text-[12px] text-zinc-700 font-mono">{fmtDay(a.startDate)} – {fmtDay(a.endDate)}</div>
+                {/* Who's driving it — the question a rep asks while looking
+                    at the unit, so answered here rather than only in the
+                    Drivers section below. */}
+                <div className="mt-1.5 text-[11px] truncate">
+                  {a.drivers.length === 0 ? (
+                    <span className="text-zinc-600">No driver named</span>
+                  ) : (
+                    <span className={driverTone(a.drivers[0])}>
+                      <User size={12} aria-hidden className="inline-block align-[-1px] mr-1" />{driverName(a.drivers[0])}
+                      {a.drivers.length > 1 && ` +${a.drivers.length - 1}`}
+                      {' · '}{driverStateLabel(a.drivers[0])}
+                    </span>
+                  )}
+                </div>
+                <div className="mt-1.5 text-[11px] text-amber-700 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
+              </Link>
+              {/* The order this truck goes out on, and the way to write
+                  one from here (Wes 2026-09-10: "when we open a
+                  reservation we should be able to add a warehouse order
+                  there"). The builder opens against this job and attaches
+                  the saved order to THIS unit. */}
+              <div className="mt-2 flex items-center justify-between gap-2 border-t border-zinc-200 pt-2 text-[11px]">
+                {a.attachedOrder ? (
+                  <span className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    {/* A DEAD order named here is not "the order this truck
+                        goes out on" — it is drift, and rendering it as an
+                        ordinary chip is how three vans went out tomorrow
+                        under a cancelled S260915-004. Say which. */}
+                    <Link
+                      href={orderHrefFromJob(a.attachedOrder.id)}
+                      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono font-semibold ${
+                        DEAD_ORDER_STATUSES.has(a.attachedOrder.status)
+                          ? 'border border-rose-200 bg-rose-50 text-rose-700 line-through decoration-rose-400 hover:bg-rose-100'
+                          : 'border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100'
+                      }`}
+                      title={
+                        DEAD_ORDER_STATUSES.has(a.attachedOrder.status)
+                          ? `This unit is still attached to ${a.attachedOrder.orderNumber}, which is ${a.attachedOrder.status.toLowerCase()} — put it on the live order`
+                          : 'This unit goes out on this order'
+                      }
+                    >
+                      {a.attachedOrder.orderNumber}
+                    </Link>
+                    {/* The reservation said gear was coming and it still
+                        has not been written (Wes 2026-09-14). The tile is
+                        where it belongs: "+ Warehouse order" is the next
+                        control along. */}
+                    {a.attachedOrder.warehouseOrderExpected && (
+                      <span
+                        className="shrink-0 rounded border border-chip-warn-fg/30 bg-chip-warn-bg px-1.5 py-0.5 font-semibold text-chip-warn-fg"
+                        title="Sales said a warehouse order is coming on this reservation — the gear list is not written yet"
+                      >
+                        gear to come
+                      </span>
+                    )}
+                  </span>
+                ) : (
+                  <span className="text-zinc-500">No order on this unit</span>
+                )}
+                {canWriteOrders && (
+                  <Link
+                    href={`/orders/new?jobId=${encodeURIComponent(job.id)}&loadOnAssignmentId=${encodeURIComponent(a.bookingAssignmentId)}`}
+                    className="shrink-0 font-semibold text-amber-700 hover:text-amber-800 hover:underline"
+                    title={`Start a warehouse order that loads on ${a.unitName}`}
+                  >
+                    + Warehouse order
+                  </Link>
+                )}
+              </div>
+              </div>
+            ))}
+            {/* Category-level holds with no unit picked yet. These are
+                REAL reservations (the quote-send soft hold lands here) —
+                before this they only surfaced in the Drivers card, so a
+                held category read as "nothing reserved" on this panel. */}
+            {/* Two actions, so the tile is a div with buttons inside
+                rather than one big button: pick the unit, or take the
+                hold off the job entirely. */}
+            {pendingHolds.map((h) => (
+              <div
+                key={h.bookingItemId}
+                className="group text-left rounded-xl border border-dashed border-amber-300 bg-amber-50 p-3 transition-all duration-200"
+              >
+                {/* A held class is a picture too — this is the tile Wes was
+                    looking at when he said the job's assets are not
+                    pictured, and "what are we holding" is exactly the
+                    question a class photo answers before a unit is picked. */}
+                <ClassPhoto path={h.categoryId ? job.categoryPhotos?.[h.categoryId] : null} alt={h.category} />
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-zinc-900 truncate">
+                    {h.category}
+                    {h.quantity > 1 && <span className="ml-1.5 text-zinc-600 font-normal">× {h.quantity}</span>}
+                  </span>
+                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
+                    Held · no unit
+                  </span>
+                </div>
+                {h.startDate && (
+                  <div className="mt-1.5 text-[12px] text-zinc-700 font-mono">
+                    {fmtDay(h.startDate)}{h.endDate ? ` – ${fmtDay(h.endDate)}` : ''}
+                  </div>
+                )}
+                <div className="mt-1.5 flex items-center justify-between gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setAssignHoldId(h.bookingItemId)}
+                    title="Held at category level — pick the specific unit"
+                    disabled={releasingHoldId != null}
+                    className="text-[11px] font-semibold text-amber-700 hover:text-amber-800 hover:underline disabled:opacity-40"
+                  >
+                    Assign a unit →
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => releaseHold(h)}
+                    title="Release this hold — the capacity goes back to the board"
+                    disabled={releasingHoldId != null}
+                    className="shrink-0 rounded border border-zinc-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-zinc-600 hover:border-rose-600 hover:text-rose-700 disabled:opacity-40"
+                  >
+                    {releasingHoldId === h.bookingItemId ? 'Removing…' : 'Remove'}
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        {holdReleaseError && (
+          <div className="mt-2 text-[12px] font-semibold text-rose-700">{holdReleaseError}</div>
+        )}
+      </div>
+      )}
+
+      {/* Orders — the rental block's last card (Wes 2026-09-14: "the
+          orders and reservations should be at the top of the job page for
+          us too… the orders should be directly below the reservations";
+          then 2026-09-18, "the orders directly below that", meaning below
+          the pictured assets). So the block reads reservations → reserved
+          assets → orders, under the paperwork tiles; COI / WC / agreement
+          are the paperwork BEHIND it and sit below, with the tiles above
+          still jumping to them.
 
           Phase 7 Pass B collapsible cards: click the row to expand the
           booked scope, signed agreements, invoices, and any per-vehicle
@@ -2680,13 +2929,16 @@ const driverTone = (d: any): string => {
 
                       {/* Per-vehicle assignments — only if a Booking
                           for this order's categories has assignments. */}
-                      {orderBookings.some((b) => b.items.some((bi) => bi.assignments.length > 0)) && (
+                      {/* SWAPPED rows excluded — a unit handed back off the
+                          job is history, not a vehicle on this order
+                          (isLiveAssignment, lib/jobs/reservedAssets). */}
+                      {orderBookings.some((b) => b.items.some((bi) => bi.assignments.some((a) => isLiveAssignment(a.status)))) && (
                         <div>
                           <div className="text-[10px] uppercase tracking-wider text-zinc-600 font-semibold mb-1.5">Per-vehicle assignments</div>
                           <ul className="text-[13px] text-zinc-700 space-y-0.5">
                             {orderBookings.flatMap((b) =>
                               b.items.flatMap((bi) =>
-                                bi.assignments.map((a) => (
+                                bi.assignments.filter((a) => isLiveAssignment(a.status)).map((a) => (
                                   <li key={a.id} className="flex gap-2">
                                     <span className="text-zinc-700 min-w-[1rem]">·</span>
                                     <span>
@@ -2771,212 +3023,10 @@ const driverTone = (d: any): string => {
       </div>
       )}
 
-      {/* Reserved assets → each opens its reservation on the calendar */}
-      {showSec('assets') && (
-      <div id="reserved-assets" className="scroll-mt-4 bg-gradient-to-b from-white to-zinc-50 border border-zinc-200 rounded-2xl p-4 transition-colors duration-200 hover:border-zinc-400">
-        <div className="flex items-center justify-between">
-          <h2 className="text-[15px] font-semibold text-zinc-900 flex items-center gap-2.5 before:content-[''] before:w-1 before:h-4 before:rounded-full before:bg-amber-500/80">Reserved assets</h2>
-          <div className="flex items-center gap-3">
-            <span className="text-[12px] text-zinc-600">
-              {reservedAssets.length} unit{reservedAssets.length === 1 ? '' : 's'}
-              {pendingHolds.length > 0 && ` · ${pendingHolds.length} held`}
-            </span>
-            <AddAssetButton
-              // Derived span, same as JobQuickActions above. This read
-              // job.startDate/endDate, which the API stopped sending long
-              // before the columns were dropped — so the hold picker was
-              // silently defaulting to today on every job.
-              job={{ id: job.id, jobCode: job.jobCode, name: job.name, company: { id: job.company.id, name: job.company.name }, contact: holdContact, startDate: isoDate(orderSpan.start), endDate: isoDate(orderSpan.end) }}
-              onCreated={load}
-            />
-          </div>
-        </div>
-        {reservedAssets.length === 0 && pendingHolds.length === 0 ? (
-          <div className="mt-3 text-[15px] text-zinc-700">No units reserved on this job yet — use + Add asset to hold one.</div>
-        ) : (
-          <div className="mt-3 grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3">
-            {reservedAssets.map((a) => (
-              <div
-                key={a.bookingAssignmentId}
-                className="group rounded-xl border border-zinc-200 bg-zinc-50 hover:border-amber-400 hover:bg-zinc-100 p-3 transition-all duration-200 hover:-translate-y-0.5"
-              >
-              <Link
-                href={`/gantt?date=${a.startDate.slice(0, 10)}`}
-                title="Open this reservation on the calendar"
-                className="block"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="flex items-center gap-2 min-w-0">
-                    <svg className="w-4 h-4 shrink-0 text-amber-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2.6 20.5 7v10L12 21.4 3.5 17V7z" />
-                      <path d="M3.5 7 12 11.6 20.5 7" />
-                      <path d="M12 11.6v9.8" />
-                    </svg>
-                    <span className="font-semibold text-zinc-900 group-hover:text-amber-700 transition-colors truncate">{a.unitName}</span>
-                  </span>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {(() => {
-                      // The badge NAMES the decision. It used to be a
-                      // two-tone shield that went grey for "declined" and
-                      // "never asked" alike, so the answer to "did they take
-                      // the waiver?" was unreadable off this page.
-                      const lcdw = job.lcdwByBooking?.[a.bookingId] ?? 'UNANSWERED';
-                      const style =
-                        lcdw === 'ACCEPTED'
-                          ? { cls: 'bg-emerald-50 text-emerald-700 border-emerald-200', label: 'LCDW', title: 'LCDW accepted — SirReel waives the first $1,000 in collision damage ($24/day/vehicle)' }
-                          : lcdw === 'DECLINED'
-                            ? { cls: 'bg-white text-zinc-600 border-zinc-300', label: 'LCDW declined', title: 'LCDW declined — the client carries their own collision coverage' }
-                            : { cls: 'bg-amber-50 text-amber-700 border-amber-200', label: 'LCDW?', title: 'LCDW not answered yet — the client has not accepted or declined the waiver' };
-                      return (
-                        <span
-                          title={style.title}
-                          className={`inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${style.cls}`}
-                        >
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M12 2.6 20 6v6c0 4.9-3.4 7.9-8 9.4C7.4 19.9 4 16.9 4 12V6z" />
-                            {lcdw === 'ACCEPTED' && <path d="M9 12l2 2 4-4.2" />}
-                            {lcdw === 'DECLINED' && <path d="M9.5 9.5l5 5m0-5l-5 5" />}
-                          </svg>
-                          {style.label}
-                        </span>
-                      );
-                    })()}
-                    <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border ${ASSIGN_BADGE[a.status] ?? 'bg-zinc-100 text-zinc-700 border-zinc-300'}`}>
-                      {a.status.replace('_', ' ')}
-                    </span>
-                  </div>
-                </div>
-                <div className="mt-0.5 text-[12px] text-zinc-700 truncate">{a.category}</div>
-                <div className="mt-1.5 text-[12px] text-zinc-700 font-mono">{fmtDay(a.startDate)} – {fmtDay(a.endDate)}</div>
-                {/* Who's driving it — the question a rep asks while looking
-                    at the unit, so answered here rather than only in the
-                    Drivers section below. */}
-                <div className="mt-1.5 text-[11px] truncate">
-                  {a.drivers.length === 0 ? (
-                    <span className="text-zinc-600">No driver named</span>
-                  ) : (
-                    <span className={driverTone(a.drivers[0])}>
-                      <User size={12} aria-hidden className="inline-block align-[-1px] mr-1" />{driverName(a.drivers[0])}
-                      {a.drivers.length > 1 && ` +${a.drivers.length - 1}`}
-                      {' · '}{driverStateLabel(a.drivers[0])}
-                    </span>
-                  )}
-                </div>
-                <div className="mt-1.5 text-[11px] text-amber-700 opacity-0 group-hover:opacity-100 transition-opacity">On calendar →</div>
-              </Link>
-              {/* The order this truck goes out on, and the way to write
-                  one from here (Wes 2026-09-10: "when we open a
-                  reservation we should be able to add a warehouse order
-                  there"). The builder opens against this job and attaches
-                  the saved order to THIS unit. */}
-              <div className="mt-2 flex items-center justify-between gap-2 border-t border-zinc-200 pt-2 text-[11px]">
-                {a.attachedOrder ? (
-                  <span className="flex min-w-0 flex-wrap items-center gap-1.5">
-                    {/* A DEAD order named here is not "the order this truck
-                        goes out on" — it is drift, and rendering it as an
-                        ordinary chip is how three vans went out tomorrow
-                        under a cancelled S260915-004. Say which. */}
-                    <Link
-                      href={orderHrefFromJob(a.attachedOrder.id)}
-                      className={`inline-flex items-center gap-1 rounded px-1.5 py-0.5 font-mono font-semibold ${
-                        DEAD_ORDER_STATUSES.has(a.attachedOrder.status)
-                          ? 'border border-rose-200 bg-rose-50 text-rose-700 line-through decoration-rose-400 hover:bg-rose-100'
-                          : 'border border-violet-200 bg-violet-50 text-violet-700 hover:bg-violet-100'
-                      }`}
-                      title={
-                        DEAD_ORDER_STATUSES.has(a.attachedOrder.status)
-                          ? `This unit is still attached to ${a.attachedOrder.orderNumber}, which is ${a.attachedOrder.status.toLowerCase()} — put it on the live order`
-                          : 'This unit goes out on this order'
-                      }
-                    >
-                      {a.attachedOrder.orderNumber}
-                    </Link>
-                    {/* The reservation said gear was coming and it still
-                        has not been written (Wes 2026-09-14). The tile is
-                        where it belongs: "+ Warehouse order" is the next
-                        control along. */}
-                    {a.attachedOrder.warehouseOrderExpected && (
-                      <span
-                        className="shrink-0 rounded border border-chip-warn-fg/30 bg-chip-warn-bg px-1.5 py-0.5 font-semibold text-chip-warn-fg"
-                        title="Sales said a warehouse order is coming on this reservation — the gear list is not written yet"
-                      >
-                        gear to come
-                      </span>
-                    )}
-                  </span>
-                ) : (
-                  <span className="text-zinc-500">No order on this unit</span>
-                )}
-                {canWriteOrders && (
-                  <Link
-                    href={`/orders/new?jobId=${encodeURIComponent(job.id)}&loadOnAssignmentId=${encodeURIComponent(a.bookingAssignmentId)}`}
-                    className="shrink-0 font-semibold text-amber-700 hover:text-amber-800 hover:underline"
-                    title={`Start a warehouse order that loads on ${a.unitName}`}
-                  >
-                    + Warehouse order
-                  </Link>
-                )}
-              </div>
-              </div>
-            ))}
-            {/* Category-level holds with no unit picked yet. These are
-                REAL reservations (the quote-send soft hold lands here) —
-                before this they only surfaced in the Drivers card, so a
-                held category read as "nothing reserved" on this panel. */}
-            {/* Two actions, so the tile is a div with buttons inside
-                rather than one big button: pick the unit, or take the
-                hold off the job entirely. */}
-            {pendingHolds.map((h) => (
-              <div
-                key={h.bookingItemId}
-                className="group text-left rounded-xl border border-dashed border-amber-300 bg-amber-50 p-3 transition-all duration-200"
-              >
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-zinc-900 truncate">
-                    {h.category}
-                    {h.quantity > 1 && <span className="ml-1.5 text-zinc-600 font-normal">× {h.quantity}</span>}
-                  </span>
-                  <span className="shrink-0 text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded border bg-amber-50 text-amber-700 border-amber-200">
-                    Held · no unit
-                  </span>
-                </div>
-                {h.startDate && (
-                  <div className="mt-1.5 text-[12px] text-zinc-700 font-mono">
-                    {fmtDay(h.startDate)}{h.endDate ? ` – ${fmtDay(h.endDate)}` : ''}
-                  </div>
-                )}
-                <div className="mt-1.5 flex items-center justify-between gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setAssignHoldId(h.bookingItemId)}
-                    title="Held at category level — pick the specific unit"
-                    disabled={releasingHoldId != null}
-                    className="text-[11px] font-semibold text-amber-700 hover:text-amber-800 hover:underline disabled:opacity-40"
-                  >
-                    Assign a unit →
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => releaseHold(h)}
-                    title="Release this hold — the capacity goes back to the board"
-                    disabled={releasingHoldId != null}
-                    className="shrink-0 rounded border border-zinc-300 bg-white px-2 py-0.5 text-[11px] font-semibold text-zinc-600 hover:border-rose-600 hover:text-rose-700 disabled:opacity-40"
-                  >
-                    {releasingHoldId === h.bookingItemId ? 'Removing…' : 'Remove'}
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-        {holdReleaseError && (
-          <div className="mt-2 text-[12px] font-semibold text-rose-700">{holdReleaseError}</div>
-        )}
-      </div>
-      )}
-
-      {/* Drivers — who's taking each unit out. Sits directly under the
-          reserved assets it describes. */}
+      {/* Drivers — who's taking each unit out. It used to adjoin the
+          reserved assets it describes; the Orders card came between them on
+          2026-09-18 when the assets moved above it. Still the first thing
+          under the rental block, and still keyed on the same tiles. */}
       {showSec('drivers') && (
       <JobDriversSection
         vehicles={reservedAssets.map((a) => ({

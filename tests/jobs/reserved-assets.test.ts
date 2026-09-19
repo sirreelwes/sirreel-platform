@@ -15,6 +15,7 @@
 import {
   buildReservedAssets,
   DEAD_ORDER_STATUSES,
+  isLiveAssignment,
   type ReservedAssetSourceBooking,
 } from '../../src/lib/jobs/reservedAssets'
 
@@ -169,6 +170,39 @@ for (const live of ['BOOKED', 'CLOSED', 'RETURNED', 'INVOICED', 'DRAFT']) {
   if (DEAD_ORDER_STATUSES.has(live)) bad(`${live} must never be treated as a dead order`)
 }
 ok('booked, closed, returned, invoiced and draft are not dead')
+
+// The rule itself, now that four surfaces read it rather than one. Wes held
+// two SuperCubes on S260918-012 by accident (2026-09-18), took Cube 5 off, and
+// the order page's "Reserved units" card went on naming it: it unioned the
+// job's assignments raw while the job tiles had always skipped SWAPPED.
+if (!isLiveAssignment('SWAPPED')) ok('a swapped assignment is not a unit the job still has')
+else bad('SWAPPED must never read as a live assignment')
+for (const s of ['ASSIGNED', 'CHECKED_OUT', 'RETURNED']) {
+  // RETURNED included on purpose: that truck really did go out.
+  if (!isLiveAssignment(s)) bad(`${s} must read as a live assignment`)
+}
+ok('assigned, checked out and returned all read as live')
+
+// The category id rides along so a tile can find its class photo
+// (lib/fleet/categoryPhotos) — the job page pictures its reservations the
+// way the client portal does (Wes 2026-09-18).
+const withCategoryId = buildReservedAssets([
+  {
+    id: 'bk-photo',
+    status: 'CONFIRMED',
+    items: [
+      {
+        category: { id: 'cat-passenger-van', name: 'Passenger Van' },
+        assignments: [asn('p1', 'Pass 8', '2026-09-16', '2026-09-16')],
+      },
+    ],
+  },
+])
+if (withCategoryId[0]?.categoryId === 'cat-passenger-van') ok('the row carries its category id')
+else bad('categoryId dropped — the tile cannot find its class photo')
+// A source that never selected it is not an error; the tile falls back to its icon.
+if (buildReservedAssets(wrongNumber)[0]?.categoryId === null) ok('an unselected category id reads null, not undefined')
+else bad('a missing category id must read null')
 
 console.log('')
 if (failures.length) {

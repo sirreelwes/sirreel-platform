@@ -21,6 +21,7 @@ import { normalizePaymentPreference } from '@/lib/payments/paymentPreference'
 import { resolveWalletCardForJob } from '@/lib/payments/jobCardOnFile'
 import { RW_VOID } from '@/lib/rentalworks/arStatus'
 import { pickPrimaryContact } from '@/lib/jobs/primaryContact'
+import { loadCategoryPhotoPaths } from '@/lib/fleet/categoryPhotos'
 import { recomputeMostCommonProductionTypeProfile } from '@/lib/companies/recomputeMostCommonProductionTypeProfile'
 import { rollupCadence, cadenceDays } from '@/lib/jobs/cadence'
 import { stageForJobs } from '@/lib/jobs/stageBatch'
@@ -670,6 +671,17 @@ export async function GET(
     )
     const textDelivery = await textDeliveryForAssignments(driverAssignmentIds)
 
+    // A class photo per reserved / held category, so the job page can show
+    // the rep the same pictures the client sees on their portal (Wes
+    // 2026-09-18: "the assets for the job are not pictured... mimic the job
+    // portals"). Keyed on the BOOKING ITEM's category — which is what a
+    // still-unassigned hold has — so a held class is pictured before a unit
+    // is picked. A class with no photo is absent, and the tile falls back to
+    // its icon.
+    const categoryPhotos = await loadCategoryPhotoPaths(
+      job.bookings.flatMap((b) => b.items.map((it) => it.category?.id)),
+    )
+
     return NextResponse.json({
       job: {
         ...job,
@@ -686,6 +698,7 @@ export async function GET(
             })),
           })),
         })),
+        categoryPhotos,
         selfServeUnquoted,
         // Is the job still open to client-facing rental-time asks, or has
         // it finished? One derivation, shared with the routes that refuse

@@ -8,6 +8,7 @@ import { calendarDays, computeBillableDays, weekCapChoices } from '@/lib/orders/
 import { DayClaimsPanel } from '@/components/orders/DayClaimsPanel';
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { orderBackTarget } from "@/lib/nav/orderBackTarget";
+import { isLiveAssignment } from "@/lib/jobs/reservedAssets";
 import { useSession } from "next-auth/react";
 import { getPermissions } from "@/lib/permissions";
 import type { UserRole } from "@prisma/client";
@@ -3846,14 +3847,26 @@ export default function OrderDetailPage() {
             // Reserved units via the Job join (orders hang off Jobs; the
             // Job's bookings carry asset assignments), unioned with any
             // directly-linked booking, deduped by unit.
+            //
+            // SWAPPED rows are history, not reservations — the same rule
+            // the job page's tiles have always used (isLiveAssignment).
+            // Without it a unit taken back off the job stayed listed here
+            // forever with nothing on the order to remove: Wes held two
+            // SuperCubes on S260918-012 by accident on 2026-09-18, took
+            // Cube 5 off, and this card went on naming it beside the
+            // Cube 18 that actually goes out.
             const raw = [
               ...(order.job?.bookings ?? []).flatMap((bk) =>
                 bk.items.flatMap((it) =>
-                  it.assignments.map((a) => ({ unitName: a.asset.unitName, category: it.category?.name ?? '' })),
+                  it.assignments
+                    .filter((a) => isLiveAssignment(a.status))
+                    .map((a) => ({ unitName: a.asset.unitName, category: it.category?.name ?? '' })),
                 ),
               ),
               ...(order.booking?.items ?? []).flatMap((it) =>
-                it.assignments.map((a) => ({ unitName: a.asset.unitName, category: it.category?.name ?? '' })),
+                it.assignments
+                  .filter((a) => isLiveAssignment(a.status))
+                  .map((a) => ({ unitName: a.asset.unitName, category: it.category?.name ?? '' })),
               ),
             ];
             const units = [...new Map(raw.map((u) => [u.unitName + '|' + u.category, u])).values()];

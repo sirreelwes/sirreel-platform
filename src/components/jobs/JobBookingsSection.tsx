@@ -41,6 +41,7 @@
  */
 
 import { useCallback, useState } from 'react'
+import { isLiveAssignment } from '@/lib/jobs/reservedAssets'
 
 interface Assignment {
   id: string
@@ -158,7 +159,12 @@ export function JobBookingsSection({
 
   const remove = useCallback(
     async (b: JobBooking) => {
-      const units = b.items.flatMap((i) => i.assignments.map((a) => a.asset?.unitName)).filter(Boolean)
+      // Only units the booking still HOLDS — a SWAPPED row is a truck
+      // already handed back, and promising to release it again is a lie in
+      // a confirm dialog (isLiveAssignment, lib/jobs/reservedAssets).
+      const units = b.items
+        .flatMap((i) => i.assignments.filter((a) => isLiveAssignment(a.status)).map((a) => a.asset?.unitName))
+        .filter(Boolean)
       const what = units.length ? units.join(', ') : 'its units'
       if (
         !window.confirm(
@@ -229,7 +235,13 @@ export function JobBookingsSection({
         {bookings.map((b) => {
           const dead = DEAD.includes(b.status)
           const twin = twins.get(b.id)
-          const units = b.items.flatMap((i) => i.assignments.map((a) => a.asset?.unitName)).filter(Boolean)
+          // Same rule as the row's tiles: a released truck is history, not
+          // a unit on this reservation. Wes 2026-09-18, after holding two
+          // SuperCubes on SR-JOB-0413 by accident and taking one off —
+          // "it seems to be persistent and a ghost in the job".
+          const units = b.items
+            .flatMap((i) => i.assignments.filter((a) => isLiveAssignment(a.status)).map((a) => a.asset?.unitName))
+            .filter(Boolean)
           const cats = [...new Set(b.items.map((i) => i.category?.name).filter(Boolean))]
           return (
             <div
