@@ -3,7 +3,7 @@
  *
  * Both surfaces read this: the acknowledgement the reporter sees the
  * instant they hit send (src/components/guides/BugReportBox.tsx) and the
- * to-do board (/admin/bugs). They must agree — the whole promise of the
+ * to-do board (/admin/improvements). They must agree — the whole promise of the
  * box is "we read it and here is what we think", and a person who is told
  * "we're on it, this is blocking" and then finds their report sitting
  * under a grey "Low" chip stops reporting.
@@ -60,7 +60,7 @@ export const KIND_BLURB: Record<BugKind, string> = {
 export const ROUTING_LABEL: Record<BugRouting, string> = {
   PENDING: 'Reading it',
   ANSWERED: 'Answered on the spot',
-  QUEUED: 'On the fix list',
+  QUEUED: 'On the list',
   ESCALATED: 'Sent to Wes',
 }
 
@@ -106,7 +106,7 @@ export function acknowledgement(routing: BugRouting, severity: BugSeverity): str
         ? 'This one is blocking real work, so Wes has it now — not the back of a queue.'
         : 'This needs a decision from Wes, so it went straight to him.'
     case 'QUEUED':
-      return 'Thanks — that is a real one. It is on the fix list.'
+      return 'Thanks — that is a real one. It is on the list.'
     default:
       return 'Got it. Someone will read this shortly.'
   }

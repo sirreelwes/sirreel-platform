@@ -1,9 +1,14 @@
 ---
-description: Pull the bug reports Wes handed over on /admin/bugs and start fixing them
+description: Pull the improvements Wes handed over on /admin/improvements and work them
 ---
 
-Wes has ticked issues on the Reported Issues board at `/admin/bugs` and pressed
-"Hand to Claude". Collect that batch and work it.
+Wes has ticked items on the Improvements board at `/admin/improvements` and
+pressed "Hand to Claude". Collect that batch and work it.
+
+These are IMPROVEMENTS, not only bugs: some are broken mechanics, some are a
+screen being wrong about something that works, some are a colour nobody can
+read in the yard. Treat a design complaint as real work — it was reported
+because it costs somebody time every day.
 
 ## 1. Pull the work order
 
@@ -50,8 +55,16 @@ Read `CLAUDE.md` first if it is not already in context. In particular:
 When an issue is genuinely fixed and the build is green:
 
 ```bash
-npx tsx scripts/fix-queue.ts --done <report id> --note "what you actually changed"
+# one at a time
+npx tsx scripts/fix-queue.ts --done <report id> --note "what you changed" --commit <sha>
+
+# or the whole batch once it is all in and the build is green
+npx tsx scripts/fix-queue.ts --done-batch <batch id> --note "what shipped" --commit <sha>
 ```
+
+Always pass `--commit`. It is what makes "is this actually fixed?" answerable
+by looking at a SHA instead of someone re-testing every item by hand — which
+is the thing Wes specifically did not want to be doing.
 
 That marks it FIXED on the board, which is what the reporter sees on HQ Help
 and what the "Fixed" tile counts. Only mark what you actually fixed — report

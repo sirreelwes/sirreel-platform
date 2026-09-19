@@ -1,6 +1,6 @@
 /**
  * The local end of the bug hand-off: pull whatever Wes queued on
- * /admin/bugs and print it as a work order for Claude Code.
+ * /admin/improvements and print it as a work order for Claude Code.
  *
  * HQ runs on Vercel and Claude Code runs on this Mac, so the board cannot
  * start a session here. It queues; this collects. Reads the same database
@@ -11,9 +11,10 @@
  *   npx tsx scripts/fix-queue.ts                 # the newest batch Wes handed over
  *   npx tsx scripts/fix-queue.ts --batch <id>    # a specific one
  *   npx tsx scripts/fix-queue.ts --open          # everything open, batch or not
- *   npx tsx scripts/fix-queue.ts --done <report id> --note "what you did"
+ *   npx tsx scripts/fix-queue.ts --done <report id> --note "…" --commit <sha>
+ *   npx tsx scripts/fix-queue.ts --done-batch <batch id> --note "…" --commit <sha>
  *
- * `/fix-bugs` in Claude Code runs the first form and works what it prints.
+ * `/improvements` in Claude Code runs the first form and works what it prints.
  */
 import { prisma } from '../src/lib/prisma'
 import { composeFixBrief, type BriefReport } from '../src/lib/bugs/fixBrief'
@@ -24,7 +25,34 @@ function arg(flag: string): string | null {
   return i > -1 && process.argv[i + 1] ? process.argv[i + 1] : null
 }
 
-async function markDone(id: string, note: string | null) {
+/**
+ * Close a whole hand-off at once. Wes 2026-09-19 did not want to be
+ * "manually going through one by one and checking whether fixed or not" —
+ * a batch went out together and comes back together, stamped with the
+ * commit that did it.
+ */
+async function markBatchDone(batchId: string, note: string | null, commit: string | null) {
+  const rows = await prisma.bugReport.findMany({ where: { fixBatchId: batchId }, select: { id: true, title: true } })
+  if (!rows.length) {
+    console.error(`No improvements in batch ${batchId}.`)
+    process.exit(1)
+  }
+  await prisma.bugReport.updateMany({
+    where: { fixBatchId: batchId },
+    data: {
+      status: 'FIXED',
+      resolvedAt: new Date(),
+      resolvedByEmail: 'claude-code',
+      ...(note ? { resolutionNote: note } : {}),
+      ...(commit ? { resolutionCommit: commit } : {}),
+    },
+  })
+  console.log(`✓ ${rows.length} improvement(s) in ${batchId} marked FIXED${commit ? ` at ${commit}` : ''}:`)
+  rows.forEach((r) => console.log(`   - ${r.title ?? r.id}`))
+  if (!commit) console.log('\n  (no --commit given — pass one so "is it fixed?" has a SHA to look at)')
+}
+
+async function markDone(id: string, note: string | null, commit: string | null) {
   const existing = await prisma.bugReport.findUnique({ where: { id } })
   if (!existing) {
     console.error(`No report ${id}.`)
@@ -37,14 +65,17 @@ async function markDone(id: string, note: string | null) {
       resolvedAt: new Date(),
       resolvedByEmail: 'claude-code',
       resolutionNote: note ?? existing.resolutionNote,
+      resolutionCommit: commit ?? existing.resolutionCommit,
     },
   })
-  console.log(`✓ ${existing.title ?? id} marked FIXED${note ? ` — ${note}` : ''}`)
+  console.log(`✓ ${existing.title ?? id} marked FIXED${commit ? ` at ${commit}` : ''}${note ? ` — ${note}` : ''}`)
 }
 
 async function main() {
+  const doneBatch = arg('--done-batch')
+  if (doneBatch) return markBatchDone(doneBatch, arg('--note'), arg('--commit'))
   const doneId = arg('--done')
-  if (doneId) return markDone(doneId, arg('--note'))
+  if (doneId) return markDone(doneId, arg('--note'), arg('--commit'))
 
   const wantOpen = process.argv.includes('--open')
   const batch = arg('--batch')
@@ -60,7 +91,7 @@ async function main() {
     if (!batchId) {
       console.log(
         'Nothing has been handed over yet.\n\n' +
-          'Tick the issues you want on https://hq.sirreel.com/admin/bugs and press\n' +
+          'Tick the improvements you want on https://hq.sirreel.com/admin/improvements and press\n' +
           '"Hand to Claude", then run this again. Or pass --open to take everything\n' +
           'that is currently open.',
       )

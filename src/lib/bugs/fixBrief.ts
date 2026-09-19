@@ -9,7 +9,7 @@
  * The honest constraint: HQ runs on Vercel and Claude Code runs on Wes's
  * Mac. A web page cannot start a session on his laptop. So the hand-off is
  * a BRIEF plus a QUEUE, and there are two ways to collect it — the button
- * copies it for pasting, and `/fix-bugs` in the terminal pulls whatever is
+ * copies it for pasting, and `/improvements` in the terminal pulls whatever is
  * queued straight out of the database. Both render through this one
  * function, so the pasted brief and the pulled brief are never different
  * documents.
@@ -99,7 +99,7 @@ function oneReport(r: BriefReport, n: number): string {
 }
 
 /**
- * The whole work order. `batchId` is what `/fix-bugs` and the board use to
+ * The whole work order. `batchId` is what `/improvements` and the board use to
  * talk about the same hand-off, and what the fixer stamps back when done.
  */
 export function composeFixBrief(reports: BriefReport[], batchId: string): string {
@@ -124,7 +124,7 @@ export function composeFixBrief(reports: BriefReport[], batchId: string): string
     '  change to justify the ticket.',
     '- `npm run build` is the gate before any push (see CLAUDE.md), and this repo',
     '  has no ESLint, so put hooks above every early return by hand.',
-    '- When one is genuinely fixed, mark it on the board (/admin/bugs) or run',
+    '- When one is genuinely fixed, mark it on the board (/admin/improvements) or run',
     '  `npx tsx scripts/fix-queue.ts --done <report id> --note "what you did"`.',
     '',
     '---',

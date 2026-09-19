@@ -854,7 +854,7 @@ export function getNavSections(input: UserRole | PermissionsUser): NavSection[] 
         // because a list of what is broken that nobody opens is the same
         // as no list — and because the box promises the reporter someone
         // is looking.
-        { id: 'bug-reports', label: 'Reported Issues', icon: 'Bug', href: '/admin/bugs' },
+        { id: 'bug-reports', label: 'Improvements', icon: 'Bug', href: '/admin/improvements' },
         { id: 'cois', label: 'COIs', icon: 'ShieldCheck', href: '/admin/cois' },
         // The people behind those certificates (Wes 2026-09-17: "start
         // keeping a list of brokers"). Directly under COIs — it is the

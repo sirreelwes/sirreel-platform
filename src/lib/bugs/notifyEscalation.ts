@@ -5,7 +5,7 @@
  * Wes 2026-09-18: "the agent can determine whether to escalate to Wes or to
  * fix it on its own." Escalation is deliberately narrow — blockers, real
  * money, signed documents, anything a client can see, and judgment calls
- * that are his. Everything else lands on /admin/bugs and waits, because a
+ * that are his. Everything else lands on /admin/improvements and waits, because a
  * channel that pushes every typo stops being read by the third week.
  *
  * Audience is the `bug-escalations` channel (defaults to Wes alone), so it
@@ -34,12 +34,12 @@ export async function notifyBugEscalation(report: BugReport): Promise<{ sent: bo
     const to = await channelRecipients('bug-escalations')
     if (to.length === 0) return { sent: false, reason: 'channel silenced' }
 
-    const boardUrl = `${HQ_APP_URL}/admin/bugs?id=${report.id}`
+    const boardUrl = `${HQ_APP_URL}/admin/improvements?id=${report.id}`
     const title = report.title || 'A problem in HQ'
     const subject =
       report.severity === 'BLOCKER'
         ? `Blocking: ${title}`
-        : `Bug escalated: ${title}`
+        : `Escalated: ${title}`
 
     const rows: Array<{ label: string; value: string }> = [
       { label: 'Reported by', value: `${report.reportedByName}${report.reportedByRole ? ` (${report.reportedByRole})` : ''}` },
@@ -57,7 +57,7 @@ export async function notifyBugEscalation(report: BugReport): Promise<{ sent: bo
     // read comes after — Wes should be able to disagree with the triage
     // without having to go and find what was actually said.
     const html = renderEmailShell({
-      eyebrow: report.severity === 'BLOCKER' ? 'Blocking issue' : 'Escalated bug report',
+      eyebrow: report.severity === 'BLOCKER' ? 'Blocking issue' : 'Escalated improvement',
       heading: title,
       preheader: `${report.reportedByName} · ${SEVERITY_LABEL[report.severity]} · ${report.area || 'HQ'}`,
       bodyHtml: [
@@ -74,7 +74,7 @@ export async function notifyBugEscalation(report: BugReport): Promise<{ sent: bo
         .join('\n'),
       cta: { label: 'Open it on the board', href: boardUrl },
       footNote:
-        'You are getting this because the triage agent judged this report urgent. Everything it could handle itself stays on /admin/bugs. Change who receives these at /admin/notifications.',
+        'You are getting this because the triage agent judged this report urgent. Everything it could handle itself stays on /admin/improvements. Change who receives these at /admin/notifications.',
     })
 
     const text = renderEmailText([

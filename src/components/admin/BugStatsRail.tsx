@@ -55,7 +55,7 @@ export function BugStatsRail({ stats }: { stats: BugStats }) {
     <aside className="order-first lg:order-none grid grid-cols-2 gap-3 lg:grid-cols-1 lg:sticky lg:top-6">
       <Tile
         icon={Bug}
-        label="Bugs found"
+        label="Reported"
         value={reports.toLocaleString('en-US')}
         // Both numbers are true and they differ once anyone reports a
         // repeat; saying which is which is the whole point of the tile.

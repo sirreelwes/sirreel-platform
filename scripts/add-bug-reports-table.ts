@@ -11,7 +11,7 @@
  *   npx tsx scripts/add-bug-reports-table.ts
  *
  * Backs the "Did you find a bug in the system?" box at the top of HQ Help
- * (/guides) and the to-do board at /admin/bugs. Until this has run, the
+ * (/guides) and the to-do board at /admin/improvements. Until this has run, the
  * box refuses with a plain message naming this script rather than throwing
  * a raw P2021 at whoever was trying to be helpful.
  */

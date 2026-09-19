@@ -1,9 +1,18 @@
 'use client'
 
 /**
- * "Did you find a bug in the system?" — the box at the top of HQ Help.
+ * The improvement box at the top of HQ Help.
  *
  * Wes 2026-09-18: "make it seem really friendly… they can start typing."
+ *
+ * Wes 2026-09-19: "let's not call it bugs and call it improvements,
+ * especially on the employee- and client-facing side where they can report
+ * something: design improvements, color, whatever it is." The word does
+ * real work here. A box headed "found a bug?" only collects things people
+ * are already confident are BROKEN — nobody files a bug report because a
+ * colour is unreadable on the yard screen at 6am, or because a label is
+ * ambiguous, even though those cost just as much time. Widening the
+ * invitation is what gets those reported at all.
  * So: no category dropdown, no severity picker, no "steps to reproduce",
  * no ticket number. One box, already open, with the cursor welcome in it.
  * Every field a form like this usually asks for is something the triage
@@ -121,9 +130,10 @@ export function BugReportBox({ myReports }: { myReports: MyReport[] }) {
       </div>
       <div className="min-w-0">
           <p className="text-sm text-lt-fg2 mt-3 max-w-[62ch] leading-relaxed">
-            Tell us in your own words — no form, no ticket number. Something that didn&apos;t save,
-            a button that did nothing, a screen that reads wrong, anything that made you go
-            &ldquo;huh?&rdquo;. It gets read straight away and you&apos;ll hear back right here.
+            Anything at all, in your own words — no form, no ticket number. Something broken, a
+            button that did nothing, a screen that reads wrong, a colour you can&apos;t make out in
+            the yard, a step that takes four clicks and should take one. It gets read straight
+            away and you&apos;ll hear back right here.
           </p>
 
           {verdict ? (
@@ -137,7 +147,7 @@ export function BugReportBox({ myReports }: { myReports: MyReport[] }) {
                 rows={3}
                 maxLength={6000}
                 disabled={sending}
-                placeholder="Start typing… e.g. “I hit Send on the quote for the Netflix job and nothing happened — no error, it just sat there.”"
+                placeholder="Start typing… e.g. “I hit Send on the quote and nothing happened”, or “the pick list text is too small to read on the warehouse screen”."
                 className="mt-4 w-full rounded-lg border border-lt-hairline bg-lt-inner px-3.5 py-3 text-[15px] text-lt-fg placeholder:text-lt-fg3 leading-relaxed resize-y focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-600 disabled:opacity-60"
               />
               <div className="mt-3 flex flex-wrap items-center gap-3">
@@ -162,7 +172,7 @@ export function BugReportBox({ myReports }: { myReports: MyReport[] }) {
                 <span className="text-xs text-lt-fg3">
                   {sending
                     ? 'Working out what it is and where it goes — a few seconds.'
-                    : 'No detail is too small. Half a sentence is fine.'}
+                    : 'Nothing is too small. Half a sentence is fine.'}
                 </span>
               </div>
               {error && (

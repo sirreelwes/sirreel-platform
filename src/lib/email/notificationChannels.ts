@@ -70,9 +70,9 @@ export interface NotificationChannelDef {
 export const NOTIFICATION_CHANNELS: NotificationChannelDef[] = [
   {
     key: 'bug-escalations',
-    label: 'Bug reports escalated to Wes',
+    label: 'Improvements escalated to Wes',
     description:
-      'Someone typed a problem into the "Did you find a bug?" box at the top of HQ Help, and the triage agent judged it bad enough to push rather than queue: work is blocked, real money or a signed document is involved, a client can see something wrong, or it is a call only Wes can make. One email per escalation, with what they wrote verbatim, the agent\'s read on it, and a link to the board. Everything the agent could handle — the misleading screens and the how-to questions — never sends; it lands on /admin/bugs instead. Defaults to Wes alone (Wes 2026-09-18: "the agent can determine whether to escalate to Wes or to fix it on its own"). Save an empty list here to stop the pushes and work the board instead.',
+      'Someone reported a problem from the improvement box at the top of HQ Help, and the triage agent judged it bad enough to push rather than queue: work is blocked, real money or a signed document is involved, a client can see something wrong, or it is a call only Wes can make. One email per escalation, with what they wrote verbatim, the agent\'s read on it, and a link to the board. Everything the agent could handle — the misleading screens and the how-to questions — never sends; it lands on /admin/improvements instead. Defaults to Wes alone (Wes 2026-09-18: "the agent can determine whether to escalate to Wes or to fix it on its own"). Save an empty list here to stop the pushes and work the board instead.',
     defaults: () => ['wes@sirreel.com'],
   },
   {

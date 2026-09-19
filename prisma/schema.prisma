@@ -10638,8 +10638,16 @@ model JobEmailSignal {
 // ═══════════════════════════════════════
 // BUG REPORTS — "Did you find a bug?"
 // ═══════════════════════════════════════
-/// One thing someone told us was wrong, from the box at the top of HQ Help
-/// (/guides). The person types one paragraph in their own words — no
+/// One thing someone told us could be better, from the box at the top of
+/// HQ Help (/guides).
+///
+/// NAMING (Wes 2026-09-19): everything a person sees calls these
+/// IMPROVEMENTS, not bugs — "design improvements, color, whatever it is".
+/// A box labelled "bug" only collects things people are confident are
+/// broken, and the colour that is unreadable on the yard screen at 6am
+/// never gets mentioned. The model, table and enums keep their original
+/// names: renaming a live Postgres type and table buys nothing and risks
+/// the data. User-facing strings are the contract here, not identifiers. The person types one paragraph in their own words — no
 /// severity picker, no category dropdown, no "steps to reproduce". Wes
 /// 2026-09-18: "make it seem really friendly… they can start typing."
 ///
@@ -10756,6 +10764,10 @@ model BugReport {
   resolvedAt      DateTime? @map("resolved_at")
   resolvedByEmail String?   @map("resolved_by_email")
   resolutionNote  String?   @map("resolution_note")
+  /// The commit that fixed it, stamped by `/improvements` when it closes
+  /// one out. This is what makes "is it actually fixed?" answerable
+  /// without anybody re-testing by hand — there is a SHA to look at.
+  resolutionCommit String?  @map("resolution_commit")
 
   @@index([status, severity])
   @@index([createdAt])

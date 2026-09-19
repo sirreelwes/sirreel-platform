@@ -1,16 +1,17 @@
 'use client'
 
 /**
- * The to-do list on /admin/bugs.
+ * The to-do list on /admin/improvements.
  *
  * Every hook is above every early return — the repo has no ESLint, so
  * rules-of-hooks never runs (project_no_eslint_hooks_gap).
  */
 
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Bug, Check, ChevronDown, ChevronRight, ClipboardCheck, Copy, RefreshCw, Users, Wrench, X } from 'lucide-react'
+import { AlertTriangle, Bug, Check, ChevronDown, ChevronRight, ClipboardCheck, Copy, Layers, RefreshCw, Users, Wrench, X } from 'lucide-react'
 import type { BugKind, BugRouting, BugSeverity, BugStatus } from '@prisma/client'
 import type { BugContext } from '@/lib/bugs/clientContext'
+import { rollupByArea, type AreaGroup } from '@/lib/bugs/rollup'
 import {
   KIND_BLURB,
   KIND_LABEL,
@@ -141,6 +142,22 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
     })
   }
 
+  // The aggregate: every open improvement grouped by the part of HQ it
+  // lives in. Seven things wrong with Jobs/Orders are one afternoon for
+  // someone already in that code, and thirty separate decisions otherwise.
+  const groups: AreaGroup[] = useMemo(
+    () =>
+      rollupByArea(
+        rows
+          .filter((r) => !r.duplicateOfId && OPEN_STATUSES.includes(r.status))
+          .map((r) => ({
+            id: r.id, area: r.area, severity: r.severity, kind: r.kind, duplicateCount: r.duplicateCount,
+          })),
+      ),
+    [rows],
+  )
+  const allOpenIds = useMemo(() => groups.flatMap((g) => g.ids), [groups])
+
   const list = buckets[tab]
   // "All" means all of what you are LOOKING at, not all 300 rows — ticking
   // a filtered list and getting the archive is the classic version of this
@@ -156,22 +173,49 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
     })
   }
 
-  async function handToClaude() {
+  /**
+   * Close everything selected in one action. The point Wes made: going
+   * through them one at a time to record what was already done is the
+   * worst part of running a list like this.
+   */
+  async function bulkSet(status: BugStatus) {
     if (picked.size === 0 || handing) return
+    setHanding(true)
+    try {
+      const res = await fetch('/api/bug-reports/bulk', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...picked], status }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        const done: Set<string> = new Set(data.ids)
+        setRows((prev) => prev.map((r) => (done.has(r.id) ? { ...r, status } : r)))
+        setPicked(new Set())
+      }
+    } finally {
+      setHanding(false)
+    }
+  }
+
+  async function handToClaude(ids?: string[]) {
+    const selection = ids ?? [...picked]
+    if (selection.length === 0 || handing) return
     setHanding(true)
     try {
       const res = await fetch('/api/bug-reports/fix-batch', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ids: [...picked] }),
+        body: JSON.stringify({ ids: selection }),
       })
       const data = await res.json()
       if (res.ok) {
         setBrief({ batchId: data.batchId, count: data.count, text: data.brief })
         setPicked(new Set())
         // They are being worked now — reflect it without a reload.
+        const sent = new Set(selection)
         setRows((prev) =>
-          prev.map((r) => (data.brief && picked.has(r.id) ? { ...r, status: 'IN_PROGRESS' as BugStatus } : r)),
+          prev.map((r) => (sent.has(r.id) ? { ...r, status: 'IN_PROGRESS' as BugStatus } : r)),
         )
       }
     } finally {
@@ -194,6 +238,60 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
             <code>scripts/add-bug-reports-table.ts</code>. Until then the box on HQ Help refuses
             politely rather than losing reports.
           </span>
+        </div>
+      )}
+
+      {/*
+        The aggregate. Wes 2026-09-19: "an aggregation ability to look at all
+        bugs and be able to send that to Claude and push a fix for that."
+        Each area hands over as a unit, and the whole open list hands over
+        in one press — the groups are the useful size of a job.
+      */}
+      {groups.length > 0 && (
+        <div className="mb-5 rounded-xl border border-lt-hairline bg-lt-card p-4">
+          <div className="flex flex-wrap items-center gap-3 mb-3">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-lt-fg3" />
+              <h2 className="text-[15px] font-semibold text-lt-fg">
+                {allOpenIds.length} open, across {groups.length} part{groups.length === 1 ? '' : 's'} of HQ
+              </h2>
+            </div>
+            <div className="flex-1" />
+            <button
+              type="button"
+              onClick={() => handToClaude(allOpenIds)}
+              disabled={handing}
+              className="inline-flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:opacity-50 px-3 py-1.5 text-xs font-semibold text-white"
+            >
+              <Wrench className="w-3.5 h-3.5" />
+              Hand all {allOpenIds.length} to Claude
+            </button>
+          </div>
+          <div className="grid gap-2 sm:grid-cols-2">
+            {groups.map((g) => (
+              <div
+                key={g.area}
+                className="flex items-center justify-between gap-3 rounded-lg bg-lt-inner px-3 py-2"
+              >
+                <div className="min-w-0">
+                  <div className="text-[14px] font-medium text-lt-fg truncate">{g.area}</div>
+                  <div className="text-xs text-lt-fg3">
+                    {g.count} open
+                    {g.people > g.count ? ` · ${g.people} reports` : ''}
+                    {g.blocking ? ' · blocking' : ` · worst ${SEVERITY_LABEL[g.worst].toLowerCase()}`}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => handToClaude(g.ids)}
+                  disabled={handing}
+                  className="shrink-0 rounded-lg border border-lt-hairline bg-lt-card px-2.5 py-1.5 text-[11px] font-semibold text-lt-fg2 hover:text-lt-fg disabled:opacity-50"
+                >
+                  Hand over
+                </button>
+              </div>
+            ))}
+          </div>
         </div>
       )}
 
@@ -221,7 +319,7 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
         The hand-off. Ticking rows and pressing one button is the whole
         interaction Wes asked for; what it cannot do is start a session on
         his laptop (HQ is on Vercel), so it queues the batch and hands him
-        the brief — paste it, or run /fix-bugs and it pulls the same thing.
+        the brief — paste it, or run /improvements and it pulls the same thing.
       */}
       {list.length > 0 && (
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-lt-hairline bg-lt-card px-4 py-3">
@@ -236,17 +334,37 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
           </label>
           <div className="flex-1" />
           {picked.size > 0 && (
-            <button
-              type="button"
-              onClick={() => setPicked(new Set())}
-              className="text-xs font-semibold text-lt-fg3 hover:text-lt-fg"
-            >
-              Clear
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setPicked(new Set())}
+                className="text-xs font-semibold text-lt-fg3 hover:text-lt-fg"
+              >
+                Clear
+              </button>
+              {/* Closing the ones already done, without opening each row. */}
+              <button
+                type="button"
+                onClick={() => bulkSet('FIXED')}
+                disabled={handing}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-xs font-semibold text-lt-fg2 hover:text-lt-fg disabled:opacity-50"
+              >
+                <Check className="w-3.5 h-3.5" />
+                Mark {picked.size} fixed
+              </button>
+              <button
+                type="button"
+                onClick={() => bulkSet('WONT_FIX')}
+                disabled={handing}
+                className="rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 text-xs font-semibold text-lt-fg2 hover:text-lt-fg disabled:opacity-50"
+              >
+                Won&apos;t fix
+              </button>
+            </>
           )}
           <button
             type="button"
-            onClick={handToClaude}
+            onClick={() => handToClaude()}
             disabled={picked.size === 0 || handing}
             className="inline-flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:bg-lt-inner disabled:text-lt-fg3 disabled:cursor-not-allowed px-4 py-2 text-sm font-semibold text-white transition-colors"
           >
@@ -488,11 +606,15 @@ function FixBriefPanel({
           </p>
           <ol className="mt-2 space-y-1 text-sm text-lt-fg2 list-decimal pl-5">
             <li>
-              Run <code className="font-mono text-[13px] text-lt-fg">/fix-bugs</code> — it pulls
+              Run <code className="font-mono text-[13px] text-lt-fg">/improvements</code> — it pulls
               this batch itself, nothing to paste.
             </li>
             <li>Or copy the brief below and paste it in.</li>
           </ol>
+          <p className="mt-2 text-sm text-lt-fg2">
+            When it is done it closes the whole batch out at once, stamped with the commit —
+            no going back through them one by one.
+          </p>
           <p className="mt-2 text-xs text-lt-fg3">
             Batch <span className="font-mono">{brief.batchId}</span>
           </p>

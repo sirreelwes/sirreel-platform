@@ -21,6 +21,7 @@
  */
 
 import { applyInvariants, type TriageVerdict } from '../../src/lib/bugs/triage'
+import { normalizeArea, rollupByArea } from '../../src/lib/bugs/rollup'
 import {
   KIND_BLURB,
   KIND_LABEL,
@@ -170,6 +171,37 @@ check(
 check(
   'a blocking escalation says so, rather than sounding like a queue',
   acknowledgement('ESCALATED', 'BLOCKER') !== acknowledgement('ESCALATED', 'HIGH'),
+)
+
+// ── The aggregate view ──────────────────────────────────────────────────
+const ROWS = [
+  { id: 'a', area: 'Jobs / Orders', severity: 'HIGH' as const, kind: 'MECHANICAL' as const, duplicateCount: 2 },
+  { id: 'b', area: 'jobs/orders', severity: 'BLOCKER' as const, kind: 'MECHANICAL' as const, duplicateCount: 0 },
+  { id: 'c', area: 'Yard', severity: 'LOW' as const, kind: 'DESIGN' as const, duplicateCount: 0 },
+  { id: 'd', area: null, severity: 'MEDIUM' as const, kind: 'UNTRIAGED' as const, duplicateCount: 0 },
+]
+const groups = rollupByArea(ROWS)
+
+check(
+  'areas written differently by the agent collapse into one group',
+  normalizeArea('jobs/orders') === normalizeArea('Jobs / Orders'),
+)
+check('an area-less report groups under Unsorted', normalizeArea(null) === 'Unsorted')
+check('the two Jobs/Orders rows are one group of 2', groups[0].area === 'Jobs / Orders' && groups[0].count === 2)
+check('a group takes the WORST severity in it', groups[0].worst === 'BLOCKER')
+check('a group with a blocker says so', groups[0].blocking === true)
+check(
+  'people counts the duplicates too — three reports behind two issues',
+  groups[0].people === 4,
+)
+check('the worst group sorts first', groups[0].worst === 'BLOCKER')
+check(
+  'every open id appears in exactly one group',
+  groups.flatMap((g) => g.ids).sort().join(',') === 'a,b,c,d',
+)
+check(
+  'handing a group over hands over exactly its own ids',
+  groups[0].ids.sort().join(',') === 'a,b',
 )
 
 console.log()
