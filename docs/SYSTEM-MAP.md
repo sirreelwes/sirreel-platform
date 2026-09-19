@@ -9,8 +9,18 @@ Hard Rules at the top of `SHIPLOG.md`. `CLAUDE.md` is organised
 chronologically by ruling, which makes it superb for "why is this like this?"
 and useless for "where does X live". This file is the other half.
 
-Measured against `main` on 2026-09-19. Where a number is here, it was counted,
-not remembered.
+Measured on 2026-09-19 at `e18c2a1`. Where a number is here, it was counted,
+not remembered — but **several sessions merge into this repo daily, so the
+counts drift.** Treat them as calibration, not gospel, and re-measure rather
+than trusting a figure you are about to act on:
+
+```bash
+find src -name '*.ts' -o -name '*.tsx' | wc -l                      # source files
+grep -rhoE 'export (async function|const) (GET|POST|PATCH|PUT|DELETE)\b' \
+  src/app/api --include=route.ts | wc -l                            # API endpoints
+grep -c '^model ' prisma/schema.prisma                              # models
+node -e "console.log(Object.keys(require('./package.json').scripts).filter(k=>k.startsWith('test:')).length)"
+```
 
 > Supersedes `ARCHITECTURE-AUDIT.md` (2026-07-02), which is badly stale — it
 > describes 86 models and a 4,498-line schema. The system has since roughly
@@ -42,28 +52,28 @@ running anything that touches data.
 Next.js 14 (app router, `src/`) · TypeScript · Prisma · Neon PostgreSQL ·
 Vercel · Tailwind.
 
-**Roughly 2,300 hand-written source files and ~461,000 lines.** None of it is
+**Roughly 2,300 hand-written source files and ~463,000 lines.** None of it is
 generated — the largest file in the repo is a 7,589-line page component
 somebody typed.
 
 | Area | Files | Lines |
 | --- | --- | --- |
-| `src/app` (routes + pages) | 907 | **157,145** |
-| `src/lib` (the logic) | 762 | **141,598** |
-| `src/components` | 314 | **95,493** |
-| **`src/` total** | **1,984** | **395,260** |
-| `tests/` | 186 | 23,781 |
-| `scripts/` | 107 | 16,611 |
-| `prisma/` | 14 | 12,881 |
-| Docs (`CLAUDE.md` 2,921 · `SHIPLOG.md` 754 · `docs/`) | 23 | ~12,400 |
+| `src/app` (routes + pages) | 905 | **157,252** |
+| `src/lib` (the logic) | 765 | **142,325** |
+| `src/components` | 315 | **95,681** |
+| **`src/` total** | **1,988** | **396,282** |
+| `tests/` | 187 | 23,998 |
+| `scripts/` | 109 | 16,808 |
+| `prisma/` | 14 | 12,913 |
+| Docs (`CLAUDE.md` 2,922 · `SHIPLOG.md` 754 · `docs/`) | 23 | ~12,600 |
 
 | | |
 | --- | --- |
-| Prisma models / enums | **178** / **123** (10,780-line schema) |
+| Prisma models / enums | **178** / **123** (10,812-line schema) |
 | API **endpoints** | **916** (in 696 `route.ts` files) |
 | Pages | **193** (168 staff/portal + 25 public) |
-| React components | **309** |
-| `test:*` npm scripts | **183** (178 run green with no DB) |
+| React components | **310** |
+| `test:*` npm scripts | **184** (179 run green with no DB) |
 | Vercel cron entries | **30** (27 handlers; the daily brief is scheduled twice) |
 | Email templates | **34** |
 | Action-item providers | **23** |
@@ -175,11 +185,11 @@ src/
     intake/ details/ order/ invoice/ pay-details/   one-shot client links
     (vermar)/ (whitelabel)/   white-label surfaces (largely parked)
     api/             696 route handlers
-  lib/               762 modules, 141k lines — the real logic lives here
-  components/        314 components, 95k lines, grouped by surface
-prisma/schema.prisma 178 models, 10,780 lines
-scripts/             107 operational scripts, 17k lines
-tests/               186 test files, 24k lines, almost all pure and offline
+  lib/               765 modules, 142k lines — the real logic lives here
+  components/        315 components, 96k lines, grouped by surface
+prisma/schema.prisma 178 models, 10,812 lines
+scripts/             109 operational scripts, 17k lines
+tests/               187 test files, 24k lines, almost all pure and offline
 docs/                specs, runbooks, this file
 ```
 
@@ -245,8 +255,8 @@ set to copy the shape from:
 | Action-item providers | 23 | `src/lib/actionItems/providers/` |
 | PDF documents | 30 | `*Document.tsx` across lib + components |
 | Cron handlers | 27 | `src/app/api/cron/` |
-| Maintenance tasks | 13 | `src/lib/admin/maintenanceTasks.ts` |
-| Operational scripts | 107 | `scripts/` (96 allowlisted in `.gitignore`) |
+| Maintenance tasks | 11 | `src/lib/admin/maintenanceTasks.ts` |
+| Operational scripts | 109 | `scripts/` (96 allowlisted in `.gitignore`) |
 | Run journals | 118 | `journals/` — the captured-ID records that make cleanup reversible |
 
 The cron schedule reconciles exactly: 30 entries, 27 handlers under
@@ -266,8 +276,8 @@ contract-review phase briefs (~990 lines total), `contract-negotiation-playbook.
 **A decision lives in one pure module. A thin database half feeds it. Many
 surfaces read it.**
 
-**411 of 762 `src/lib` modules — 53% — never import Prisma.** That is not an
-accident; it is the dominant architectural pattern, and it is why 178 of 183
+**412 of 765 `src/lib` modules — 53% — never import Prisma.** That is not an
+accident; it is the dominant architectural pattern, and it is why 179 of 184
 test scripts run with no database at all.
 
 The shape, every time:
@@ -449,7 +459,7 @@ The fastest route, in order:
    nothing is there, that absence is itself information — say so.
 2. **Find the pure rule.** `ls src/lib/<area>/` and look for `*Rules.ts` or a
    file named after the decision. That is usually where the change belongs.
-3. **Find its test.** `grep '"test:' package.json` for the area. 183 scripts,
+3. **Find its test.** `grep '"test:' package.json` for the area. 184 scripts,
    named after behaviour.
 4. **Find the readers.** `grep -rn '<functionName>' src/` — a rule is usually
    read by 3–6 surfaces, and a change affects all of them. If you find two
@@ -479,7 +489,7 @@ Honest inventory, so nobody mistakes these for things to fix in passing:
   commit counts, `git log` depth and `git blame` are unreliable there. Do not
   reason about the project's age or churn from them without checking.
 - `ARCHITECTURE-AUDIT.md` is stale (July, pre-doubling).
-- **No test is genuinely red.** 178 of 183 pass offline; the other 5 want a
+- **No test is genuinely red.** 179 of 184 pass offline; the other 5 want a
   live database or Chrome. The three that were red until 2026-09-19 were all
   **stale assertions**, not bugs — see `AGENTS.md`, "If you find a red test
   here, suspect the TEST before the code". Two of them encoded the day-count

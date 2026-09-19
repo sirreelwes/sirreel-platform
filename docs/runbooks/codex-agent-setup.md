@@ -36,7 +36,7 @@ can misread it, and a long file competes for attention with the task. The
 things that would really hurt here should be impossible, not discouraged.
 
 **Give Codex no database.** This is the big one, and this repo makes it
-cheap: 178 of 183 test scripts pass with `DATABASE_URL` unset. Codex can read
+cheap: 179 of 184 test scripts pass with `DATABASE_URL` unset. Codex can read
 code, run the pure tests and run the production build without ever being able
 to reach Neon. Run it in a shell where `DATABASE_URL` and the CardPointe and
 Resend keys simply are not set.
@@ -88,7 +88,7 @@ LiteHold sitting at rank 2 with no unit).
 Read-only. Have it *report*, not edit. This is where the value is highest and
 the risk lowest.
 
-**Scope it to a path, always.** This repo is ~461,000 hand-written lines
+**Scope it to a path, always.** This repo is ~463,000 hand-written lines
 across ~2,300 files (see `docs/SYSTEM-MAP.md` §2). "Review the codebase" is
 not a task anything can do in one pass — it produces a shallow sweep that
 reads like insight. One directory or one route at a time.
@@ -140,7 +140,7 @@ Three questions, in order:
    reads.
 
 Known baseline so nobody chases ghosts: **nothing is genuinely red.** A clean
-offline run is **178 of 183 green**, with 5 skipped for wanting a live
+offline run is **179 of 184 green**, with 5 skipped for wanting a live
 database (`test:catalog-match`, `test:scheduling`, `test:quick-reply-items`,
 `test:live-paperwork`) or Chrome (`test:counter-pdf`). Two `tsc` errors
 remain pre-existing, in `tests/inventory/stock.test.ts` and

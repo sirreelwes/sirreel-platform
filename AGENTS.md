@@ -62,7 +62,7 @@ Four facts. Every one of them has already cost somebody something.
 
 `SYSTEM-MAP.md` §5 has this in full, but it is worth stating here because it
 determines where your change belongs: **a decision lives in one pure module, a
-thin database half feeds it, and many surfaces read it.** 411 of the 762
+thin database half feeds it, and many surfaces read it.** 412 of the 765
 `src/lib` modules — 53% — never import Prisma.
 
 So when you change behaviour, the edit almost always belongs in a pure rule
@@ -80,7 +80,7 @@ The test suite is **pure and offline by design** — 78 test files say so in
 their own header comments. Measured on `main`, 2026-09-19:
 
 ```
-178 of 183 `test:*` scripts pass with DATABASE_URL unset and no .env.local
+179 of 184 `test:*` scripts pass with DATABASE_URL unset and no .env.local
 ```
 
 So your verification loop needs **no credentials and no database**:
@@ -103,7 +103,7 @@ you fails the build with a type error in a file you never touched — e.g.
 page. That is a stale client, not their bug. Regenerate before you spend any
 time on it, and never "fix" an unrelated file to get past it.
 
-**Find the test before you change the rule.** `package.json` has 183 `test:*`
+**Find the test before you change the rule.** `package.json` has 184 `test:*`
 scripts and they are named after the behaviour, not the file — `test:card-ask`,
 `test:partner-paper`, `test:annual-signing`, `test:tent-sandbags`. If you
 change a pure rule, there is almost certainly a test that pins it.
@@ -111,7 +111,7 @@ change a pure rule, there is almost certainly a test that pins it.
 ### The 5 that need something this loop does not have
 
 **Nothing is genuinely red on `main`.** These five want an environment, not a
-fix, so a clean run is 178 green and 5 skipped:
+fix, so a clean run is 179 green and 5 skipped:
 
 | Script | Needs |
 | --- | --- |
