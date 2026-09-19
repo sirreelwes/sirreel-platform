@@ -57,6 +57,8 @@ export interface TriageInput {
   context?: BugContext | null
   /** Records the captured URLs point at, already looked up. */
   resolved?: string
+  /** True when a CLIENT wrote this from their own job portal. */
+  fromClient?: boolean
 }
 
 export interface TriageVerdict {
@@ -239,7 +241,7 @@ OPEN ISSUES ALREADY ON THE BOARD — the new report may be a repeat of one:
 ${openList}
 
 NEW REPORT
-Reported by: ${input.reporterName}${input.reporterRole ? ` (${input.reporterRole})` : ''}
+Reported by: ${input.reporterName}${input.reporterRole ? ` (${input.reporterRole})` : ''}${input.fromClient ? '\nTHIS IS A CLIENT, writing from their own job portal — read the client rules above.' : ''}
 Reported from: ${input.pagePath ?? 'unknown page'}
 Today: ${new Date().toISOString().slice(0, 10)}
 

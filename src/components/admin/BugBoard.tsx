@@ -8,10 +8,11 @@
  */
 
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Bug, Check, ChevronDown, ChevronRight, ClipboardCheck, Copy, Layers, RefreshCw, Users, Wrench, X } from 'lucide-react'
-import type { BugKind, BugRouting, BugSeverity, BugStatus } from '@prisma/client'
+import { AlertTriangle, Bug, Check, ChevronDown, ChevronRight, ClipboardCheck, Copy, Layers, RefreshCw, Star, Users, Wrench, X } from 'lucide-react'
+import type { BugKind, BugRouting, BugSeverity, BugStatus, ImprovementSource } from '@prisma/client'
 import type { BugContext } from '@/lib/bugs/clientContext'
 import { rollupByArea, type AreaGroup } from '@/lib/bugs/rollup'
+import type { RatingSummary } from '@/lib/bugs/ratings'
 import {
   KIND_BLURB,
   KIND_LABEL,
@@ -41,6 +42,7 @@ export interface BoardReport {
   reportedByEmail: string
   reportedByRole: string | null
   pagePath: string | null
+  source: ImprovementSource
   /** What the browser saw — see src/lib/bugs/clientContext.ts. */
   context: BugContext | null
   missingContext: string | null
@@ -74,7 +76,19 @@ function fmt(iso: string): string {
   }).format(new Date(iso))
 }
 
-export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; setupNeeded: boolean }) {
+export function BugBoard({
+  reports,
+  setupNeeded,
+  ratings,
+}: {
+  reports: BoardReport[]
+  setupNeeded: boolean
+  ratings: RatingSummary
+}) {
+  // Wes 2026-09-19 asked for clients in a SEPARATE LANE. A client saying
+  // the invoice page is confusing must not queue behind an internal
+  // warehouse gripe; they are different signals read by different people.
+  const [lane, setLane] = useState<ImprovementSource>('STAFF')
   const [tab, setTab] = useState<Tab>('todo')
   const [rows, setRows] = useState(reports)
   const [open, setOpen] = useState<string | null>(null)
@@ -85,17 +99,19 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
   const [brief, setBrief] = useState<{ batchId: string; count: number; text: string } | null>(null)
   const [copied, setCopied] = useState(false)
 
+  const laneRows = useMemo(() => rows.filter((r) => r.source === lane), [rows, lane])
+
   const buckets = useMemo(() => {
     // Duplicates never appear on their own — they are shown inside the
     // report they joined, which is the whole point of grouping them.
-    const parents = rows.filter((r) => !r.duplicateOfId)
+    const parents = laneRows.filter((r) => !r.duplicateOfId)
     return {
       todo: parents.filter((r) => OPEN_STATUSES.includes(r.status) && r.routing !== 'ESCALATED'),
       escalated: parents.filter((r) => OPEN_STATUSES.includes(r.status) && r.routing === 'ESCALATED'),
       answered: parents.filter((r) => r.status === 'ANSWERED'),
       done: parents.filter((r) => r.status === 'FIXED' || r.status === 'WONT_FIX'),
     }
-  }, [rows])
+  }, [laneRows])
 
   async function patch(id: string, payload: Record<string, unknown>) {
     setBusy(id)
@@ -148,15 +164,20 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
   const groups: AreaGroup[] = useMemo(
     () =>
       rollupByArea(
-        rows
+        laneRows
           .filter((r) => !r.duplicateOfId && OPEN_STATUSES.includes(r.status))
           .map((r) => ({
             id: r.id, area: r.area, severity: r.severity, kind: r.kind, duplicateCount: r.duplicateCount,
           })),
       ),
-    [rows],
+    [laneRows],
   )
   const allOpenIds = useMemo(() => groups.flatMap((g) => g.ids), [groups])
+
+  const laneCounts = useMemo(() => ({
+    STAFF: rows.filter((r) => r.source === 'STAFF' && !r.duplicateOfId && OPEN_STATUSES.includes(r.status)).length,
+    CLIENT: rows.filter((r) => r.source === 'CLIENT' && !r.duplicateOfId && OPEN_STATUSES.includes(r.status)).length,
+  }), [rows])
 
   const list = buckets[tab]
   // "All" means all of what you are LOOKING at, not all 300 rows — ticking
@@ -240,6 +261,31 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
           </span>
         </div>
       )}
+
+      {/* The two lanes. Clients first in the eye, staff first by default —
+          the client lane is smaller and easier to miss, and it is the one
+          where a missed item costs a relationship rather than a morning. */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        {(['STAFF', 'CLIENT'] as ImprovementSource[]).map((l) => (
+          <button
+            key={l}
+            type="button"
+            onClick={() => { setLane(l); setPicked(new Set()) }}
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${
+              lane === l
+                ? 'bg-lt-fg text-white'
+                : 'bg-lt-card border border-lt-hairline text-lt-fg2 hover:text-lt-fg'
+            }`}
+          >
+            {l === 'STAFF' ? 'From the team' : 'From clients'}
+            <span className={`ml-2 text-xs ${lane === l ? 'text-white/70' : 'text-lt-fg3'}`}>
+              {laneCounts[l]}
+            </span>
+          </button>
+        ))}
+      </div>
+
+      {lane === 'CLIENT' && <RatingsCard ratings={ratings} />}
 
       {/*
         The aggregate. Wes 2026-09-19: "an aggregation ability to look at all
@@ -396,7 +442,11 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-10 text-center">
           <Bug className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
           <p className="text-sm text-lt-fg2">
-            {tab === 'todo' ? 'Nothing on the list. Enjoy it.' : 'Nothing here.'}
+            {tab !== 'todo'
+              ? 'Nothing here.'
+              : lane === 'CLIENT'
+                ? 'No client has reported anything. That is usually good news.'
+                : 'Nothing on the list. Enjoy it.'}
           </p>
         </div>
       ) : (
@@ -572,6 +622,87 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * How clients rate the platform. Shown on the client lane only — it is
+ * their opinion, and putting it over the staff list would invite reading
+ * an internal gripe as a customer-satisfaction problem.
+ */
+function RatingsCard({ ratings }: { ratings: RatingSummary }) {
+  const { count, average, distribution, recentAverage, recentCount, unhappy } = ratings
+  if (count === 0) {
+    return (
+      <div className="mb-5 rounded-xl border border-lt-hairline bg-lt-card p-4">
+        <div className="flex items-center gap-2 text-[15px] font-semibold text-lt-fg">
+          <Star className="w-4 h-4 text-lt-fg3" />
+          No ratings yet
+        </div>
+        <p className="mt-1 text-sm text-lt-fg2">
+          Clients see the stars at the bottom of their job portal. Nobody has tapped one yet.
+        </p>
+      </div>
+    )
+  }
+  const most = Math.max(...distribution, 1)
+  return (
+    <div className="mb-5 rounded-xl border border-lt-hairline bg-lt-card p-4">
+      <div className="flex flex-wrap items-start gap-6">
+        <div>
+          <div className="flex items-center gap-2 text-[12px] text-lt-fg2">
+            <Star className="w-3.5 h-3.5 text-lt-fg3" />
+            How clients rate the platform
+          </div>
+          <div className="mt-1 flex items-baseline gap-2">
+            <span className="text-[30px] font-semibold leading-none tabular-nums text-lt-fg">
+              {average?.toFixed(1)}
+            </span>
+            <span className="text-sm text-lt-fg3">out of 5</span>
+          </div>
+          <div className="mt-1 text-[12px] text-lt-fg3">
+            {count} {count === 1 ? 'person' : 'people'}
+            {/* The 30-day figure is the one that moves when something
+                ships; the all-time one barely does. */}
+            {recentAverage !== null && recentCount > 0 && (
+              <> · {recentAverage.toFixed(1)} in the last 30 days ({recentCount})</>
+            )}
+          </div>
+        </div>
+
+        <div className="min-w-[160px] flex-1 max-w-[280px]">
+          {[5, 4, 3, 2, 1].map((n) => (
+            <div key={n} className="flex items-center gap-2">
+              <span className="w-3 text-right text-[11px] tabular-nums text-lt-fg3">{n}</span>
+              <div className="h-1.5 flex-1 rounded-full bg-lt-inner overflow-hidden">
+                <div
+                  className={`h-full rounded-full ${n >= 4 ? 'bg-chip-good-fg' : n === 3 ? 'bg-chip-warn-fg' : 'bg-chip-bad-fg'}`}
+                  style={{ width: `${(distribution[n - 1] / most) * 100}%` }}
+                />
+              </div>
+              <span className="w-5 text-[11px] tabular-nums text-lt-fg3">{distribution[n - 1]}</span>
+            </div>
+          ))}
+        </div>
+
+        {unhappy.length > 0 && (
+          <div className="min-w-[200px] flex-1">
+            <div className="text-[11px] uppercase font-semibold tracking-[1.4px] text-lt-fg3 mb-1.5">
+              Worth a call
+            </div>
+            <ul className="space-y-1">
+              {unhappy.slice(0, 4).map((u, i) => (
+                <li key={i} className="text-[13px] text-lt-fg2">
+                  <span className="font-medium text-lt-fg">{u.personName}</span>
+                  {' · '}
+                  {u.stars}★{u.comment ? ` — ${u.comment}` : ''}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+      </div>
     </div>
   )
 }

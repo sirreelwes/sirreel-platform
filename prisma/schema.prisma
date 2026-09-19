@@ -10673,6 +10673,18 @@ model BugReport {
   /// `title`, so the reporter's own words survive for whoever fixes it.
   body String
 
+  /// Staff (HQ Help) or a client (their job portal). Wes 2026-09-19 wanted
+  /// clients in a SEPARATE LANE: a client saying the invoice page is
+  /// confusing must not sit in a queue behind an internal warehouse gripe,
+  /// and the two are read with different eyes — a client noticing something
+  /// is a different kind of signal from Hugo noticing it.
+  source ImprovementSource @default(STAFF)
+
+  /// For client reports: whose portal they were in. Staff reports leave
+  /// these null; the agent resolves what it needs from the URL trail.
+  companyId String? @map("company_id")
+  jobId     String? @map("job_id")
+
   /// Who hit it. Kept denormalised as well as linked: the email/name are
   /// what the fixer needs to go ask a follow-up question, and they must
   /// survive the user row being deactivated.
@@ -10775,6 +10787,41 @@ model BugReport {
   @@map("sr_bug_reports")
 }
 
+/// A person's standing opinion of the platform, out of five.
+///
+/// Wes 2026-09-19: "put a quick star ranking system for how they like this
+/// platform." Separate from ImprovementReports on purpose — a rating is a
+/// mood, not a to-do, and mixing them would either bury real issues under
+/// happy five-star rows or turn a one-tap rating into a support ticket.
+///
+/// One row per person per job, upserted: this is what they think NOW, not
+/// a log of every time they tapped a star. Re-rating replaces.
+model PlatformRating {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  /// 1-5.
+  stars Int
+  /// Optional — the stars are the ask, this is if they feel like saying why.
+  comment String?
+
+  source      ImprovementSource @default(CLIENT)
+  personEmail String            @map("person_email")
+  personName  String            @map("person_name")
+  companyId   String?           @map("company_id")
+  /// The job whose portal they rated from. Required so the "one standing
+  /// rating per person per job" key actually dedupes — Postgres treats
+  /// NULLs as distinct, so a nullable half of a unique index would let the
+  /// same person pile up rows. The column stays nullable in the DB for a
+  /// future staff rating, which will need its own key rather than a NULL.
+  jobId String @map("job_id")
+
+  @@unique([personEmail, jobId])
+  @@index([createdAt])
+  @@map("sr_platform_ratings")
+}
+
 /// How badly it hurts. The agent picks one; the board sorts on it.
 enum BugSeverity {
   UNTRIAGED
@@ -10817,6 +10864,12 @@ enum BugRouting {
   QUEUED
   /// Wes emailed immediately.
   ESCALATED
+}
+
+/// Which side of the house a report came from.
+enum ImprovementSource {
+  STAFF
+  CLIENT
 }
 
 enum BugStatus {

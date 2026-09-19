@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { PortalFeedbackCard } from '@/components/portal/PortalFeedbackCard';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import type { AgreementStatus } from '@prisma/client';
 import { describeAgreementStatus } from '@/lib/portal/agreementStatus';
@@ -2158,6 +2159,15 @@ export default function JobPortalPage() {
             </ol>
           )}
         </section>
+
+        {/* ── How are we doing ─────────────────────────────────────────────
+            Last on the page on purpose: asking how it is going before they
+            have done the thing is asking about nothing. The stars are the
+            ask (one tap, saved immediately, no Send button); "Suggest an
+            improvement" sits small to the right for the person who wants
+            it (Wes 2026-09-19). Nothing the triage agent decides is ever
+            shown back to a client — they get a thank-you. */}
+        <PortalFeedbackCard />
 
     </JobPortalShell>
   );

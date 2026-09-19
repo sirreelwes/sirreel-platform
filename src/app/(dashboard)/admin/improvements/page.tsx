@@ -23,6 +23,7 @@ import { BugBoard, type BoardReport } from '@/components/admin/BugBoard'
 import { BugStatsRail } from '@/components/admin/BugStatsRail'
 import { SEVERITY_RANK } from '@/lib/bugs/vocab'
 import { bugStats, EMPTY_STATS } from '@/lib/bugs/stats'
+import { ratingSummary, EMPTY_RATINGS } from '@/lib/bugs/ratings'
 
 export const dynamic = 'force-dynamic'
 
@@ -41,6 +42,7 @@ export default async function BugBoardPage() {
   // client component, and shipping a second copy of every row to the browser
   // just to count them would be silly.
   const stats = await bugStats()
+  const ratings = await ratingSummary()
   try {
     const rows = await prisma.bugReport.findMany({
       orderBy: { createdAt: 'desc' },
@@ -71,6 +73,7 @@ export default async function BugBoardPage() {
         reportedByEmail: r.reportedByEmail,
         reportedByRole: r.reportedByRole,
         pagePath: r.pagePath,
+        source: r.source,
         context: (r.context as BoardReport['context']) ?? null,
         missingContext: r.missingContext,
         triagedAt: r.triagedAt?.toISOString() ?? null,
@@ -114,7 +117,11 @@ export default async function BugBoardPage() {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_230px] lg:items-start">
         <div className="min-w-0">
-          <BugBoard reports={reports} setupNeeded={setupNeeded} />
+          <BugBoard
+          reports={reports}
+          setupNeeded={setupNeeded}
+          ratings={setupNeeded ? EMPTY_RATINGS : ratings}
+        />
         </div>
         <BugStatsRail stats={setupNeeded ? EMPTY_STATS : stats} />
       </div>
