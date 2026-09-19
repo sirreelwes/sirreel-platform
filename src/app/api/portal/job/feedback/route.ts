@@ -30,6 +30,7 @@ import {
 import { resolveJobSession } from '@/lib/portal/jobMagicLink'
 import { triageBugReport, type OpenIssue } from '@/lib/bugs/triage'
 import { notifyBugEscalation } from '@/lib/bugs/notifyEscalation'
+import { reopenIfClosed } from '@/lib/bugs/reopen'
 import { OPEN_STATUSES } from '@/lib/bugs/vocab'
 
 export const dynamic = 'force-dynamic'
@@ -155,9 +156,18 @@ export async function POST(req: NextRequest) {
             triagedAt: new Date(),
             triageModel: verdict.model,
             status: isDuplicate ? 'DUPLICATE' : verdict.routing === 'ANSWERED' ? 'ANSWERED' : 'OPEN',
-            resolvedAt: isDuplicate || verdict.routing === 'ANSWERED' ? new Date() : null,
+            // NOT resolved. The agent answering is not the same as the
+            // thing being dealt with — Wes 2026-09-19: "if they are typing
+            // it usually it's because it was high friction, so I don't want
+            // AI just to shut down for no reason." resolvedAt is stamped by
+            // a PERSON agreeing, and until then it shows as unreviewed.
+            resolvedAt: null,
           },
         })
+        // Joining a CLOSED parent reopens it — somebody hitting the same
+        // thing again is the fix not taking, not a duplicate.
+        if (verdict.duplicateOf) await reopenIfClosed(verdict.duplicateOf, personName)
+
         if (saved.routing === 'ESCALATED' && !saved.escalatedAt) {
           const sent = await notifyBugEscalation(saved)
           if (sent.sent) {

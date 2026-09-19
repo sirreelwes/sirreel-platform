@@ -204,6 +204,28 @@ check(
   groups[0].ids.sort().join(',') === 'a,b',
 )
 
+// ── Nothing the agent decides removes a report from view ────────────────
+// Wes 2026-09-19: "I'd rather have reports come through than not... I don't
+// want AI just to shut down for no reason." These pin the shape of that.
+check(
+  'answering is still restricted to genuine how-tos',
+  applyInvariants(verdict({ kind: 'DESIGN', routing: 'ANSWERED' })).routing === 'QUEUED' &&
+    applyInvariants(verdict({ kind: 'MECHANICAL', routing: 'ANSWERED' })).routing === 'QUEUED',
+)
+check(
+  'an answered how-to keeps the answer text for the reporter',
+  applyInvariants(verdict({ kind: 'HOW_TO', routing: 'ANSWERED', response: 'it lives under Units' }))
+    .response === 'it lives under Units',
+)
+check(
+  'a duplicate still carries its severity to the parent rather than being downgraded',
+  applyInvariants(verdict({ duplicateOf: 'abc', severity: 'BLOCKER' })).severity === 'BLOCKER',
+)
+check(
+  'a blocker that the model tried to fold away still escalates',
+  applyInvariants(verdict({ duplicateOf: 'abc', severity: 'BLOCKER', routing: 'QUEUED' })).routing === 'ESCALATED',
+)
+
 console.log()
 if (failures.length) {
   console.error(`FAILED (${failures.length}):`)

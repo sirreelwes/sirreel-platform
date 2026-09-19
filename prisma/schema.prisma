@@ -10773,6 +10773,21 @@ model BugReport {
   queuedForFixAt DateTime? @map("queued_for_fix_at")
 
   // ── Working it ─────────────────────────────────────
+  /// A PERSON has looked at what the agent decided and agreed with it.
+  ///
+  /// Wes 2026-09-19: "I'd rather have reports come through than not, cause
+  /// if they are typing it usually it's because it was high friction, so I
+  /// don't want AI just to shut down for no reason."
+  ///
+  /// So the agent can ANSWER a report — the reporter gets their answer in
+  /// seconds, which is the good part — but answering no longer RESOLVES it.
+  /// Nothing the agent decides on its own takes an item out of sight. An
+  /// answered or auto-grouped report sits unreviewed until someone agrees,
+  /// because somebody bothering to type is itself the signal: the friction
+  /// was real even when the mechanics were fine.
+  reviewedAt      DateTime? @map("reviewed_at")
+  reviewedByEmail String?   @map("reviewed_by_email")
+
   resolvedAt      DateTime? @map("resolved_at")
   resolvedByEmail String?   @map("resolved_by_email")
   resolutionNote  String?   @map("resolution_note")

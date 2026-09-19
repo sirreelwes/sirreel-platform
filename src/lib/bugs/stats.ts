@@ -45,11 +45,22 @@ export interface BugStats {
   escalated: number
   /** Median days from report to fixed. Null until 3 have been fixed. */
   medianDaysToFix: number | null
+  /**
+   * Reports the AGENT decided needed nothing (answered, or folded into
+   * another) that no person has looked at yet.
+   *
+   * Wes 2026-09-19 did not want the AI quietly shutting reports down: if
+   * somebody typed, the friction was real. This number is the guard — it
+   * is the count of decisions taken without a human, sitting in plain
+   * sight until someone agrees with them.
+   */
+  awaitingGlance: number
 }
 
 export const EMPTY_STATS: BugStats = {
   reports: 0, reportsRecent: 0, issues: 0, open: 0, openBlocking: 0,
   fixed: 0, fixedRecent: 0, answered: 0, escalated: 0, medianDaysToFix: null,
+  awaitingGlance: 0,
 }
 
 function median(ns: number[]): number {
@@ -68,7 +79,7 @@ export async function bugStats(): Promise<BugStats> {
     const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
     const notDuplicate = { duplicateOfId: null }
 
-    const [reports, reportsRecent, issues, open, openBlocking, answered, escalated, fixedRows] =
+    const [reports, reportsRecent, issues, open, openBlocking, answered, escalated, awaitingGlance, fixedRows] =
       await Promise.all([
         prisma.bugReport.count(),
         prisma.bugReport.count({ where: { createdAt: { gte: since } } }),
@@ -79,6 +90,11 @@ export async function bugStats(): Promise<BugStats> {
         }),
         prisma.bugReport.count({ where: { ...notDuplicate, status: 'ANSWERED' } }),
         prisma.bugReport.count({ where: { ...notDuplicate, routing: 'ESCALATED' } }),
+        // Closed by the agent alone. Duplicates count too — being folded
+        // into another report is also a decision nobody checked.
+        prisma.bugReport.count({
+          where: { status: { in: ['ANSWERED', 'DUPLICATE'] }, reviewedAt: null },
+        }),
         prisma.bugReport.findMany({
           where: { ...notDuplicate, status: 'FIXED' },
           select: { createdAt: true, resolvedAt: true },
@@ -100,6 +116,7 @@ export async function bugStats(): Promise<BugStats> {
       fixedRecent: fixedRows.filter((r) => r.resolvedAt && r.resolvedAt >= since).length,
       answered,
       escalated,
+      awaitingGlance,
       // Three is the floor for a median that means anything; below that the
       // number is one lucky afternoon, and a tile that says "half a day"
       // on a sample of one is a promise nobody made.

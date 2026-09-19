@@ -22,6 +22,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-admin'
 import { triageBugReport, type OpenIssue } from '@/lib/bugs/triage'
 import { notifyBugEscalation } from '@/lib/bugs/notifyEscalation'
+import { reopenIfClosed } from '@/lib/bugs/reopen'
 import { acknowledgement, OPEN_STATUSES } from '@/lib/bugs/vocab'
 import type { BugContext } from '@/lib/bugs/clientContext'
 import { resolveBugContext, describeResolved } from '@/lib/bugs/resolveContext'
@@ -146,13 +147,19 @@ export async function POST(req: NextRequest) {
         // ANSWERED closes it — nothing was broken. A duplicate closes too:
         // the work lives on the report it joined.
         status: isDuplicate ? 'DUPLICATE' : verdict.routing === 'ANSWERED' ? 'ANSWERED' : 'OPEN',
-        resolvedAt: isDuplicate || verdict.routing === 'ANSWERED' ? new Date() : null,
+        // NOT resolved — see the note in the portal route. Only a person
+        // agreeing closes an improvement.
+        resolvedAt: null,
       },
     })
 
     // Escalate once. A duplicate of something already escalated does not
     // re-ping Wes — but a duplicate of a QUEUED issue that has now been hit
     // by a second person and read as blocking still does.
+    // Joining a CLOSED parent reopens it — somebody hitting the same thing
+    // again is the fix not taking, not a duplicate.
+    if (verdict.duplicateOf) await reopenIfClosed(verdict.duplicateOf, report.reportedByName)
+
     if (saved.routing === 'ESCALATED' && !saved.escalatedAt) {
       const sent = await notifyBugEscalation(saved)
       if (sent.sent) {

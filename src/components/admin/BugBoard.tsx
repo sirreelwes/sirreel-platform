@@ -46,6 +46,7 @@ export interface BoardReport {
   /** What the browser saw — see src/lib/bugs/clientContext.ts. */
   context: BugContext | null
   missingContext: string | null
+  reviewedAt: string | null
   triagedAt: string | null
   triageError: string | null
   escalatedAt: string | null
@@ -199,6 +200,24 @@ export function BugBoard({
    * through them one at a time to record what was already done is the
    * worst part of running a list like this.
    */
+  /** A person agreeing with what the agent decided. Nothing else closes. */
+  async function agree(id: string) {
+    setBusy(id)
+    try {
+      const res = await fetch(`/api/bug-reports/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reviewed: true }),
+      })
+      if (res.ok) {
+        const at = new Date().toISOString()
+        setRows((prev) => prev.map((r) => (r.id === id ? { ...r, reviewedAt: at } : r)))
+      }
+    } finally {
+      setBusy(null)
+    }
+  }
+
   async function bulkSet(status: BugStatus) {
     if (picked.size === 0 || handing) return
     setHanding(true)
@@ -512,6 +531,14 @@ export function BugBoard({
                             triage failed
                           </span>
                         )}
+                        {/* The agent closed this by itself and nobody has
+                            agreed yet. Visible on the row so it cannot rot
+                            in a tab nobody opens. */}
+                        {!r.reviewedAt && (r.status === 'ANSWERED' || r.status === 'DUPLICATE') && (
+                          <span className="rounded-full bg-chip-warn-bg px-2 py-0.5 font-semibold text-chip-warn-fg">
+                            needs a glance
+                          </span>
+                        )}
                       </div>
                     </div>
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_CHIP[r.status]}`}>
@@ -608,6 +635,12 @@ export function BugBoard({
                       {['FIXED', 'WONT_FIX', 'ANSWERED'].includes(r.status) && (
                         <Action onClick={() => patch(r.id, { status: 'OPEN' })} busy={busy === r.id}>
                           Reopen
+                        </Action>
+                      )}
+                      {!r.reviewedAt && (r.status === 'ANSWERED' || r.status === 'DUPLICATE') && (
+                        <Action onClick={() => agree(r.id)} busy={busy === r.id} primary>
+                          <Check className="w-3.5 h-3.5" />
+                          Agree, nothing to do
                         </Action>
                       )}
                       <Action onClick={() => patch(r.id, { retriage: true })} busy={busy === r.id}>

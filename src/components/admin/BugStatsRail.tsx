@@ -11,7 +11,7 @@
  * summary instead of a footer nobody scrolls to.
  */
 
-import { Bug, CheckCircle2, ListTodo, MessageCircleQuestion, Timer } from 'lucide-react'
+import { Bug, CheckCircle2, Eye, ListTodo, MessageCircleQuestion, Timer } from 'lucide-react'
 import { humanDays, type BugStats } from '@/lib/bugs/stats'
 
 function Tile({
@@ -46,7 +46,7 @@ function Tile({
 export function BugStatsRail({ stats }: { stats: BugStats }) {
   const {
     reports, reportsRecent, issues, open, openBlocking,
-    fixed, fixedRecent, answered, escalated, medianDaysToFix,
+    fixed, fixedRecent, answered, escalated, medianDaysToFix, awaitingGlance,
   } = stats
 
   const plural = (n: number, one: string, many = `${one}s`) => (n === 1 ? one : many)
@@ -91,7 +91,16 @@ export function BugStatsRail({ stats }: { stats: BugStats }) {
         icon={MessageCircleQuestion}
         label="Answered on the spot"
         value={answered.toLocaleString('en-US')}
-        sub={answered === 0 ? 'none yet' : 'nothing needed fixing'}
+        sub={answered === 0 ? 'none yet' : 'the agent had an answer'}
+      />
+      {/* The guard against the agent quietly closing things. Amber while
+          anything sits here: these are decisions no person has checked. */}
+      <Tile
+        icon={Eye}
+        label="Needs a glance"
+        value={awaitingGlance.toLocaleString('en-US')}
+        tone={awaitingGlance > 0 ? 'warn' : undefined}
+        sub={awaitingGlance === 0 ? 'nothing closed unchecked' : 'the agent closed these on its own'}
       />
       {medianDaysToFix !== null && (
         <div className="col-span-2 lg:col-span-1">

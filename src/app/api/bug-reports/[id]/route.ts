@@ -99,6 +99,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
 
   const data: Record<string, unknown> = {}
 
+  // A person agreeing with what the agent decided. This is the ONLY thing
+  // that turns an agent-closed report into a settled one — Wes 2026-09-19:
+  // the AI must not shut reports down on its own.
+  if (json.reviewed === true) {
+    data.reviewedAt = new Date()
+    data.reviewedByEmail = user.email
+    data.resolvedAt = new Date()
+  }
+
   const STATUSES = Object.values(BugStatus) as string[]
   if (typeof json.status === 'string' && STATUSES.includes(json.status)) {
     const status = json.status as BugStatus
