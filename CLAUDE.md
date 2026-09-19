@@ -6,6 +6,26 @@ Next.js 14 (app router, src/ directory) + Prisma + Neon PostgreSQL + Vercel.
 Repo: github.com/sirreelwes/sirreel-platform
 Live: hq.sirreel.com
 
+## Other agents read AGENTS.md, which POINTS here (2026-09-19 — Wes)
+Codex and most non-Claude coding agents read `AGENTS.md`, not this file. That
+file exists now and is a **pointer**: it names this file and SHIPLOG's Hard
+Rules as the law, and adds only what is agent-specific — the no-database
+verification loop (175 of 183 `test:*` scripts pass with `DATABASE_URL`
+unset), the currently-red baseline, and the list of code that looks deletable
+and is load-bearing (`promoteHoldsOnApproval`, the dormant-job sweep, the
+three parallel catalog ranking paths).
+- **Never let AGENTS.md become a COPY of this file.** Two copies of a safety
+  rule drift, and the stale copy is the one that runs `db push` against
+  production — the same one-object-one-record rule as the BIT pointer and the
+  radio-battery pool. A new agent reading a third filename gets another
+  pointer, never a copy.
+- When a ruling here changes, AGENTS.md usually needs no edit at all. It only
+  needs one if the VERIFICATION story changes (a test script renamed, the
+  build gate moved) or a new piece of load-bearing code starts looking dead.
+- How Wes drives it, the per-role prompts and the sandbox guardrails:
+  `docs/runbooks/codex-agent-setup.md` (under docs/, so AHA's
+  `platform_memory` can answer it by text).
+
 ## People
 - **Wes Bailey** (CEO/owner, primary user) — wes@sirreel.com
 - **Dani** — operations/co-owner
