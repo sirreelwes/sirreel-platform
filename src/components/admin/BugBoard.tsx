@@ -201,13 +201,19 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
                           {r.title || r.body.slice(0, 90)}
                         </span>
                       </div>
-                      <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-lt-fg3">
+                      {/*
+                        Separators are desktop-only. In a wrapping flex row a
+                        trailing "·" strands itself at the end of every wrapped
+                        line, which at phone width is most of them; the gap
+                        alone reads fine there.
+                      */}
+                      <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 sm:gap-x-3 gap-y-1 text-xs text-lt-fg3">
                         <span>{r.area || 'area unknown'}</span>
-                        <span>·</span>
+                        <span className="hidden sm:inline">·</span>
                         <span>{KIND_LABEL[r.kind]}</span>
-                        <span>·</span>
+                        <span className="hidden sm:inline">·</span>
                         <span>{r.reportedByName}</span>
-                        <span>·</span>
+                        <span className="hidden sm:inline">·</span>
                         <span>{fmt(r.createdAt)}</span>
                         {people > 1 && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-chip-warn-bg px-2 py-0.5 font-semibold text-chip-warn-fg">
