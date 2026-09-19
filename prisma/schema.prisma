@@ -10677,8 +10677,40 @@ model BugReport {
   /// asked for — the page path comes from the client, the user agent from
   /// the request — because asking is the friction that stops people
   /// reporting at all.
+  ///
+  /// NOTE `pagePath` is nearly always "/guides": the box lives on HQ Help,
+  /// so it records where they REPORTED, not where it broke. `context` is
+  /// the field that answers that — see below.
   pagePath  String? @map("page_path")
   userAgent String? @map("user_agent")
+
+  /// What the browser saw, captured with no one having to remember
+  /// anything: the pages walked through, the requests that failed, the
+  /// errors thrown (src/lib/bugs/clientContext.ts, shape BugContext).
+  /// Never request/response bodies or credentials.
+  ///
+  /// Wes 2026-09-19: "employees are sending this and I have no context at
+  /// all." A report saying "the send button didn't work" is unactionable;
+  /// the same report carrying `POST /api/orders/abc/quote/send → 500` is a
+  /// diagnosis.
+  context Json?
+
+  /// What the agent could NOT work out for itself, in one line, for the
+  /// board only. Wes 2026-09-19: "I'd prefer if it took an AI to find the
+  /// exact issue, or added some context rather than require more from
+  /// employees since that will decrease their incentive to continue." So
+  /// this is never shown to the reporter and never asks them anything —
+  /// it tells whoever picks the to-do up what the trail did not contain.
+  ///
+  /// Mapped to the old follow_up_question column: the earlier design did
+  /// ask the reporter, and reusing the column avoids a pointless DROP on a
+  /// live table.
+  missingContext String? @map("follow_up_question")
+
+  /// Unused. Kept so the live column stays described by the schema rather
+  /// than becoming drift (project_live_db_drift_no_schema); dropping a
+  /// column on this DB is never worth it.
+  followUpAnswer String? @map("follow_up_answer")
 
   // ── What the triage agent made of it ───────────────
   severity BugSeverity @default(UNTRIAGED)

@@ -26,6 +26,7 @@ import { usePathname } from 'next/navigation'
 import { Bug, Send, Loader2, CheckCircle2, AlertTriangle, ListTodo } from 'lucide-react'
 import type { BugRouting, BugSeverity } from '@prisma/client'
 import { ROUTING_CHIP, ROUTING_LABEL, SEVERITY_CHIP, SEVERITY_LABEL, STATUS_CHIP, STATUS_LABEL } from '@/lib/bugs/vocab'
+import { snapshotBugContext } from '@/lib/bugs/clientContext'
 
 export interface MyReport {
   id: string
@@ -39,6 +40,7 @@ export interface MyReport {
 }
 
 interface Verdict {
+  id: string
   acknowledgement: string
   response: string | null
   routing: BugRouting
@@ -65,7 +67,13 @@ export function BugReportBox({ myReports }: { myReports: MyReport[] }) {
       const res = await fetch('/api/bug-reports', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ body: text.trim(), pagePath: pathname }),
+        // The envelope: what the browser saw on the pages they came from.
+        // Nobody had to remember to include it, which is the point.
+        body: JSON.stringify({
+          body: text.trim(),
+          pagePath: pathname,
+          context: snapshotBugContext(pathname ?? ''),
+        }),
       })
       const data = await res.json()
       if (!res.ok) {
@@ -73,6 +81,7 @@ export function BugReportBox({ myReports }: { myReports: MyReport[] }) {
         return
       }
       setVerdict({
+        id: data.report?.id ?? '',
         acknowledgement: data.acknowledgement,
         response: data.response ?? null,
         routing: data.report?.routing ?? 'PENDING',

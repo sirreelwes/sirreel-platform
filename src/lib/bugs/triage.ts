@@ -34,6 +34,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import type { BugKind, BugRouting, BugSeverity } from '@prisma/client'
 import { BUG_TRIAGE_MODEL } from '@/lib/ai/models'
 import { parseAiJson } from '@/lib/ai/extractJson'
+import type { BugContext } from '@/lib/bugs/clientContext'
 
 const MAX_TOKENS = 1200
 
@@ -52,6 +53,10 @@ export interface TriageInput {
   reporterRole: string | null
   pagePath: string | null
   openIssues: OpenIssue[]
+  /** What the browser saw. Null for reports filed before this existed. */
+  context?: BugContext | null
+  /** Records the captured URLs point at, already looked up. */
+  resolved?: string
 }
 
 export interface TriageVerdict {
@@ -65,6 +70,11 @@ export interface TriageVerdict {
   response: string
   suspects: string[]
   duplicateOf: string | null
+  /**
+   * What the agent could not determine, for the board. NEVER a question
+   * aimed at the reporter — see the prompt rules.
+   */
+  missingContext: string | null
   model: string
 }
 
@@ -104,7 +114,8 @@ Return STRICT JSON, nothing else:
   "reasoning": string,
   "response": string,
   "suspects": string[],
-  "duplicateOf": string | null
+  "duplicateOf": string | null,
+  "missingContext": string | null
 }
 
 kind — the call Wes cares most about:
@@ -176,6 +187,10 @@ export function applyInvariants(v: TriageVerdict): TriageVerdict {
   // justify and float to the top of the board.
   if (out.kind === 'FEATURE_REQUEST' && out.severity === 'BLOCKER') out.severity = 'HIGH'
 
+  // Nothing is "missing" on a report that needed no fix, or one already
+  // being worked on its parent.
+  if (out.routing === 'ANSWERED' || out.duplicateOf) out.missingContext = null
+
   // A duplicate is folded into its parent, so its own routing is moot —
   // except that an escalation must still fire. Leave routing alone.
   return out
@@ -198,6 +213,26 @@ export async function triageBugReport(
         .join('\n')
     : '(none open)'
 
+  const ctx = input.context
+  const envelope = !ctx
+    ? '(no browser context — this report predates it, or the recorder was not running)'
+    : [
+        ctx.pages.length
+          ? `Pages walked through (oldest first): ${ctx.pages.map((p) => p.path).join(' → ')}`
+          : 'Pages walked through: (none recorded)',
+        ctx.failedRequests.length
+          ? `Requests that FAILED in the last few minutes:\n${ctx.failedRequests
+              .map((r) => `  - ${r.method} ${r.url} → ${r.status === 0 ? 'never completed' : r.status}`)
+              .join('\n')}`
+          : 'Requests that failed: none recorded',
+        ctx.errors.length
+          ? `Errors thrown in the page:\n${ctx.errors.map((e) => `  - ${e.message}${e.source ? ` (${e.source})` : ''}`).join('\n')}`
+          : 'Errors thrown: none recorded',
+        `Viewport: ${ctx.viewport}`,
+      ].join('\n')
+
+  const resolved = input.resolved ?? ''
+
   const userContent = `${SYSTEM_MAP}
 
 OPEN ISSUES ALREADY ON THE BOARD — the new report may be a repeat of one:
@@ -211,7 +246,10 @@ Today: ${new Date().toISOString().slice(0, 10)}
 What they wrote, verbatim between the markers:
 <<<REPORT
 ${input.body.slice(0, 6000)}
-REPORT>>>`
+REPORT>>>
+
+WHAT THE BROWSER SAW (captured automatically, not typed by them):
+${envelope}${resolved}`
 
   try {
     const res = await getClient().messages.create({
@@ -253,6 +291,7 @@ REPORT>>>`
       response: str(parsed.response, 4000),
       suspects,
       duplicateOf,
+      missingContext: str(parsed.missingContext, 240) || null,
       model: BUG_TRIAGE_MODEL,
     })
 

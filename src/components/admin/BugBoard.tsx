@@ -10,6 +10,7 @@
 import { useMemo, useState } from 'react'
 import { AlertTriangle, Bug, Check, ChevronDown, ChevronRight, RefreshCw, Users } from 'lucide-react'
 import type { BugKind, BugRouting, BugSeverity, BugStatus } from '@prisma/client'
+import type { BugContext } from '@/lib/bugs/clientContext'
 import {
   KIND_BLURB,
   KIND_LABEL,
@@ -39,6 +40,9 @@ export interface BoardReport {
   reportedByEmail: string
   reportedByRole: string | null
   pagePath: string | null
+  /** What the browser saw — see src/lib/bugs/clientContext.ts. */
+  context: BugContext | null
+  missingContext: string | null
   triagedAt: string | null
   triageError: string | null
   escalatedAt: string | null
@@ -263,6 +267,18 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
                       <span className="text-xs text-lt-fg3">{KIND_BLURB[r.kind]}</span>
                     </div>
 
+                    {/*
+                      The envelope. Shown ABOVE the agent's reasoning because
+                      it is the only part nobody typed — it is what the
+                      report would otherwise be missing, and it is what makes
+                      "the send button didn't work" actionable.
+                    */}
+                    {r.context && <BrowserContext ctx={r.context} />}
+
+                    {r.missingContext && (
+                      <Field label="What the agent could not work out">{r.missingContext}</Field>
+                    )}
+
                     {r.reasoning && <Field label="Why it was sorted this way">{r.reasoning}</Field>}
                     {r.response && (
                       <Field label={r.routing === 'ANSWERED' ? 'What the reporter was told' : 'What the agent thinks the fix is'}>
@@ -317,6 +333,79 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
               </div>
             )
           })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * What the browser saw, captured automatically. The failed requests are
+ * the valuable part — a status and a route turn a vague report into a
+ * place to look — so they lead, and the walked-through pages follow
+ * because the page BEFORE /guides is where it actually happened.
+ */
+function BrowserContext({ ctx }: { ctx: BugContext }) {
+  const pages = ctx.pages?.map((p) => p.path) ?? []
+  const failed = ctx.failedRequests ?? []
+  const errors = ctx.errors ?? []
+  // Looked up server-side at submit time (resolveContext.ts) and stashed
+  // alongside the envelope, so the board never re-queries.
+  const resolved = (ctx as BugContext & { resolved?: { label: string }[] }).resolved ?? []
+  if (!pages.length && !failed.length && !errors.length && !resolved.length) return null
+
+  return (
+    <div className="rounded-lg bg-lt-inner p-3">
+      <div className="text-[11px] uppercase font-semibold tracking-[1.4px] text-lt-fg3 mb-2">
+        What the browser saw
+      </div>
+
+      {failed.length > 0 && (
+        <div className="mb-2">
+          <div className="text-[12px] text-lt-fg2 mb-1">Requests that failed</div>
+          <ul className="space-y-0.5">
+            {failed.map((f, i) => (
+              <li key={i} className="font-mono text-[12px] text-lt-fg">
+                <span className="text-chip-bad-fg">{f.status === 0 ? 'never completed' : f.status}</span>{' '}
+                {f.method} {f.url}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {errors.length > 0 && (
+        <div className="mb-2">
+          <div className="text-[12px] text-lt-fg2 mb-1">Errors thrown</div>
+          <ul className="space-y-0.5">
+            {errors.map((e, i) => (
+              <li key={i} className="font-mono text-[12px] text-chip-bad-fg">{e.message}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {resolved.length > 0 && (
+        <div className="mb-2">
+          <div className="text-[12px] text-lt-fg2 mb-1">Which records those were</div>
+          <ul className="space-y-0.5">
+            {resolved.map((e, i) => (
+              <li key={i} className="text-[13px] font-medium text-lt-fg">{e.label}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {pages.length > 0 && (
+        <div className="text-[12px] text-lt-fg2">
+          Pages: <span className="font-mono text-lt-fg">{pages.join(' → ')}</span>
+        </div>
+      )}
+
+      {failed.length === 0 && errors.length === 0 && (
+        <div className="text-[12px] text-lt-fg3">
+          Nothing failed in the last few minutes — if a click should have sent something, the
+          handler probably never fired.
         </div>
       )}
     </div>

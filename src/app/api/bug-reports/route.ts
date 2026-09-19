@@ -23,6 +23,8 @@ import { getCurrentUser } from '@/lib/auth-admin'
 import { triageBugReport, type OpenIssue } from '@/lib/bugs/triage'
 import { notifyBugEscalation } from '@/lib/bugs/notifyEscalation'
 import { acknowledgement, OPEN_STATUSES } from '@/lib/bugs/vocab'
+import type { BugContext } from '@/lib/bugs/clientContext'
+import { resolveBugContext, describeResolved } from '@/lib/bugs/resolveContext'
 
 export const dynamic = 'force-dynamic'
 
@@ -42,6 +44,11 @@ export async function POST(req: NextRequest) {
   const json = await req.json().catch(() => ({}))
   const body = typeof json.body === 'string' ? json.body.trim() : ''
   const pagePath = typeof json.pagePath === 'string' ? json.pagePath.slice(0, 300) : null
+  // What the browser saw, from the shell recorder. Shape-checked loosely —
+  // it is diagnostic colour, and a malformed envelope must never cost
+  // someone their report.
+  const context: BugContext | null =
+    json.context && typeof json.context === 'object' ? (json.context as BugContext) : null
 
   // Low floor on purpose. "save button broken" is a perfectly good report
   // and we would rather have it than an empty box.
@@ -62,6 +69,9 @@ export async function POST(req: NextRequest) {
         reportedByRole: user.role,
         pagePath,
         userAgent: req.headers.get('user-agent')?.slice(0, 400) ?? null,
+        // Prisma's Json input type does not accept a typed interface
+        // directly; the shape is documented on BugContext.
+        context: context ? (context as unknown as Prisma.InputJsonValue) : undefined,
       },
     })
 
@@ -81,12 +91,19 @@ export async function POST(req: NextRequest) {
       select: { id: true, title: true, area: true, kind: true, severity: true },
     })
 
+    // Look the captured URLs up BEFORE triage, so the agent is handed
+    // "Job SR-JOB-0219 'Riverbend' for CMS" instead of a cuid — and so
+    // nobody has to ask the reporter which job it was.
+    const entities = await resolveBugContext(context)
+
     const { verdict, error } = await triageBugReport({
       body,
       reporterName: report.reportedByName,
       reporterRole: report.reportedByRole,
       pagePath: report.pagePath,
       openIssues,
+      context,
+      resolved: describeResolved(entities),
     })
 
     if (!verdict) {
@@ -120,6 +137,12 @@ export async function POST(req: NextRequest) {
         triagedAt: new Date(),
         triageModel: verdict.model,
         triageError: null,
+        missingContext: verdict.missingContext,
+        // The looked-up records ride along with the envelope so the board
+        // shows them without resolving again.
+        context: context
+          ? ({ ...context, resolved: entities } as unknown as Prisma.InputJsonValue)
+          : undefined,
         // ANSWERED closes it — nothing was broken. A duplicate closes too:
         // the work lives on the report it joined.
         status: isDuplicate ? 'DUPLICATE' : verdict.routing === 'ANSWERED' ? 'ANSWERED' : 'OPEN',

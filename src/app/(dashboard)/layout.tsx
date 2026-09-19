@@ -14,6 +14,7 @@ import { NavList } from '@/components/shell/NavList';
 import { UserMenu, ROLE_LABELS } from '@/components/shell/UserMenu';
 import { MobileNav } from '@/components/shell/MobileNav';
 import { PAPERWORK_QUEUE_EVENT } from '@/lib/paperwork/reviewQueueClient';
+import { BugContextRecorder } from '@/components/bugs/BugContextRecorder';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -212,6 +213,13 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     // collapsing address bar doesn't clip the last row of the nav;
     // h-screen is the fallback for browsers without dvh.
     <div className="hq-shell flex flex-col md:flex-row h-screen supports-[height:100dvh]:h-[100dvh] overflow-hidden bg-[#F7F6F3]">
+      {/*
+        Renders nothing. Keeps a small in-memory buffer of failed requests,
+        thrown errors and the pages walked through, so a bug report typed on
+        HQ Help can still say what broke on the page the person came FROM.
+        Mounted here because the shell survives client-side navigation.
+      */}
+      <BugContextRecorder />
       <MobileNav
         sections={sections}
         activeHref={activeHref}

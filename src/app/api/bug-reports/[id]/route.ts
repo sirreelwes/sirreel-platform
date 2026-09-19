@@ -11,6 +11,7 @@ import { prisma } from '@/lib/prisma'
 import { getCurrentUser } from '@/lib/auth-admin'
 import { triageBugReport, type OpenIssue } from '@/lib/bugs/triage'
 import { notifyBugEscalation } from '@/lib/bugs/notifyEscalation'
+import { resolveBugContext, describeResolved } from '@/lib/bugs/resolveContext'
 import { OPEN_STATUSES } from '@/lib/bugs/vocab'
 
 export const dynamic = 'force-dynamic'
@@ -20,13 +21,16 @@ const CLOSED: BugStatus[] = ['FIXED', 'WONT_FIX', 'DUPLICATE', 'ANSWERED']
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
   const user = await getCurrentUser()
   if (!user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
-  if (user.role !== 'ADMIN' && user.role !== 'MANAGER') {
-    return NextResponse.json({ error: 'forbidden' }, { status: 403 })
-  }
 
   const json = await req.json().catch(() => ({}))
   const existing = await prisma.bugReport.findUnique({ where: { id: params.id } })
   if (!existing) return NextResponse.json({ error: 'not found' }, { status: 404 })
+
+  // ADMIN/MANAGER only. Nothing on this route ever asks the reporter for
+  // more — Wes 2026-09-19: questions back tax the one behaviour worth
+  // encouraging, so the agent resolves context itself (resolveContext.ts).
+  const isBoardUser = user.role === 'ADMIN' || user.role === 'MANAGER'
+  if (!isBoardUser) return NextResponse.json({ error: 'forbidden' }, { status: 403 })
 
   // Re-triage: the agent reads it again, with whatever is on the board now.
   // Used when a report was mis-sorted, or when the first pass failed.
@@ -42,12 +46,15 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
       take: 40,
       select: { id: true, title: true, area: true, kind: true, severity: true },
     })
+    const entities = await resolveBugContext((existing.context as never) ?? null)
     const { verdict, error } = await triageBugReport({
       body: existing.body,
       reporterName: existing.reportedByName,
       reporterRole: existing.reportedByRole,
       pagePath: existing.pagePath,
       openIssues,
+      context: (existing.context as never) ?? null,
+      resolved: describeResolved(entities),
     })
     if (!verdict) {
       await prisma.bugReport.update({ where: { id: existing.id }, data: { triageError: error } })
@@ -68,6 +75,7 @@ export async function PATCH(req: NextRequest, { params }: { params: { id: string
         triagedAt: new Date(),
         triageModel: verdict.model,
         triageError: null,
+        missingContext: verdict.missingContext,
         // A re-triage never reopens something a person has already closed —
         // their call outranks the model's.
         status: CLOSED.includes(existing.status)

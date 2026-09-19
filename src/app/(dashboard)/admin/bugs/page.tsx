@@ -71,6 +71,8 @@ export default async function BugBoardPage() {
         reportedByEmail: r.reportedByEmail,
         reportedByRole: r.reportedByRole,
         pagePath: r.pagePath,
+        context: (r.context as BoardReport['context']) ?? null,
+        missingContext: r.missingContext,
         triagedAt: r.triagedAt?.toISOString() ?? null,
         triageError: r.triageError,
         escalatedAt: r.escalatedAt?.toISOString() ?? null,

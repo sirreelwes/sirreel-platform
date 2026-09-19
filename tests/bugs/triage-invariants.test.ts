@@ -51,6 +51,7 @@ function verdict(over: Partial<TriageVerdict>): TriageVerdict {
     response: '',
     suspects: [],
     duplicateOf: null,
+    missingContext: null,
     model: 'test',
     ...over,
   }
@@ -114,6 +115,27 @@ const plain = verdict({ kind: 'MECHANICAL', severity: 'HIGH', routing: 'QUEUED' 
 check(
   'a plain queued mechanical bug is not rewritten',
   JSON.stringify(applyInvariants(plain)) === JSON.stringify(plain),
+)
+
+// ── What the agent could not work out (board-only, never a question) ─────
+check(
+  'nothing is "missing" on a report that needed no fix',
+  applyInvariants(verdict({ kind: 'HOW_TO', routing: 'ANSWERED', missingContext: 'no job in the trail' }))
+    .missingContext === null,
+)
+check(
+  'nothing is "missing" on a duplicate — it is worked on its parent',
+  applyInvariants(verdict({ duplicateOf: 'abc', missingContext: 'no job in the trail' })).missingContext === null,
+)
+check(
+  'a queued report keeps its note about what could not be determined',
+  applyInvariants(verdict({ kind: 'MECHANICAL', routing: 'QUEUED', missingContext: 'No order page in the trail.' }))
+    .missingContext === 'No order page in the trail.',
+)
+check(
+  'an escalated blocker keeps it too',
+  applyInvariants(verdict({ severity: 'BLOCKER', missingContext: 'Invoice id not in the trail.' })).missingContext ===
+    'Invoice id not in the trail.',
 )
 
 // ── Every enum value can be rendered ─────────────────────────────────────
