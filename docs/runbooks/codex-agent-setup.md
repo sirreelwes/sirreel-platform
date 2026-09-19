@@ -36,7 +36,7 @@ can misread it, and a long file competes for attention with the task. The
 things that would really hurt here should be impossible, not discouraged.
 
 **Give Codex no database.** This is the big one, and this repo makes it
-cheap: 175 of 183 test scripts pass with `DATABASE_URL` unset. Codex can read
+cheap: 179 of 184 test scripts pass with `DATABASE_URL` unset. Codex can read
 code, run the pure tests and run the production build without ever being able
 to reach Neon. Run it in a shell where `DATABASE_URL` and the CardPointe and
 Resend keys simply are not set.
@@ -88,7 +88,7 @@ LiteHold sitting at rank 2 with no unit).
 Read-only. Have it *report*, not edit. This is where the value is highest and
 the risk lowest.
 
-**Scope it to a path, always.** This repo is ~461,000 hand-written lines
+**Scope it to a path, always.** This repo is ~463,000 hand-written lines
 across ~2,300 files (see `docs/SYSTEM-MAP.md` §2). "Review the codebase" is
 not a task anything can do in one pass — it produces a shallow sweep that
 reads like insight. One directory or one route at a time.
@@ -139,18 +139,24 @@ Three questions, in order:
    `scripts/`?** Those three want your eyes regardless of how clean the diff
    reads.
 
-Known baseline so nobody chases ghosts: `test:supply-estimate`,
-`test:week-decision` and `test:job-stage` are **already red on `main`**
-(confirmed at `0757e4d`), plus two pre-existing `tsc` errors in
-`tests/inventory/stock.test.ts` and `tests/sub-rentals/partner-intro-nudge.ts`.
-An agent reporting those has found the baseline, not a regression.
+Known baseline so nobody chases ghosts: **nothing is genuinely red.** A clean
+offline run is **179 of 184 green**, with 5 skipped for wanting a live
+database (`test:catalog-match`, `test:scheduling`, `test:quick-reply-items`,
+`test:live-paperwork`) or Chrome (`test:counter-pdf`). Two `tsc` errors
+remain pre-existing, in `tests/inventory/stock.test.ts` and
+`tests/sub-rentals/partner-intro-nudge.ts`. An agent reporting those has found
+the baseline, not a regression.
 
-**`test:supply-estimate` is worth a look on its own account.** It is failing
-on a 6-day window billing as 7 days — `$294` where the test expects `$252`,
-about a 17% overcharge on a supply estimate. It is not date-dependent and not
-a timezone artifact (checked both). Either the code has an off-by-one in
-billable days or the test was written ahead of a change that never landed.
-Either way it is money, and it is a good first real task to hand Codex.
+**The lesson from the three that WERE red** (fixed 2026-09-19) is worth
+keeping in front of you when reviewing agent work: all three were **stale
+tests, not bugs.** `test:supply-estimate` and `test:week-decision` asserted
+the exclusive day gap after the billable-days rule flipped to inclusive on
+2026-09-12; `test:job-stage` asserted a blind-pickup colour rule that had been
+retired, while another test asserted the current rule and passed. An agent
+told only "make this pass" would have edited `computeDays` and re-priced every
+daily-rate line, quote PDF and invoice in the system. **If Codex proposes a
+code change to satisfy a failing test, ask it to quote the function's doc
+comment first** — this codebase records dated rulings there.
 
 ---
 
@@ -158,11 +164,15 @@ Either way it is money, and it is a good first real task to hand Codex.
 
 In order, easiest to hardest:
 
-1. **`test:supply-estimate`** — a real red test, about money, with a pure
-   reproduction already written. Perfect debugger task.
-2. **`test:week-decision` and `test:job-stage`** — the other two reds.
-3. **An efficiency read of one hot path** — `/api/jobs` or the portal data
-   route. Report only.
+1. **A warm-up with a real answer.** Two stale `.save` backups are committed
+   — `src/app/(dashboard)/layout.tsx.save` and `src/lib/autoAssign.ts.save` —
+   and `.gitignore` has no `*.save` rule. Small, safe, verifiable, and it
+   removes a stale copy sitting beside the real staff-shell layout.
+2. **An efficiency read of one hot path**, report-only — `/api/jobs` or the
+   portal data route. Zero risk, and it tells you how good its judgement is
+   before you let it write anything.
+3. **A real bug when one appears.** The pure tests give it a genuine
+   reproduction loop with no credentials, which is where it is strongest.
 4. **Only then** anything that edits broadly.
 
 Do not start by asking it to "clean up the codebase". This repo's oddities

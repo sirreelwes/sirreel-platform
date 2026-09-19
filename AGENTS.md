@@ -62,7 +62,7 @@ Four facts. Every one of them has already cost somebody something.
 
 `SYSTEM-MAP.md` §5 has this in full, but it is worth stating here because it
 determines where your change belongs: **a decision lives in one pure module, a
-thin database half feeds it, and many surfaces read it.** 411 of the 762
+thin database half feeds it, and many surfaces read it.** 412 of the 765
 `src/lib` modules — 53% — never import Prisma.
 
 So when you change behaviour, the edit almost always belongs in a pure rule
@@ -80,7 +80,7 @@ The test suite is **pure and offline by design** — 78 test files say so in
 their own header comments. Measured on `main`, 2026-09-19:
 
 ```
-175 of 183 `test:*` scripts pass with DATABASE_URL unset and no .env.local
+179 of 184 `test:*` scripts pass with DATABASE_URL unset and no .env.local
 ```
 
 So your verification loop needs **no credentials and no database**:
@@ -96,30 +96,50 @@ validation, so a stray `export const FOO` in a route file passes `tsc` and
 fails the deploy. A red build blocks every later commit from deploying.
 Never disable a lint or build check to get it green.
 
-**Find the test before you change the rule.** `package.json` has 183 `test:*`
+**After pulling or rebasing, run `npx prisma generate` first.** The generated
+client is derived from `schema.prisma`, so a checkout that moved underneath
+you fails the build with a type error in a file you never touched — e.g.
+`Property 'context' does not exist on type ...` pointing at someone else's
+page. That is a stale client, not their bug. Regenerate before you spend any
+time on it, and never "fix" an unrelated file to get past it.
+
+**Find the test before you change the rule.** `package.json` has 184 `test:*`
 scripts and they are named after the behaviour, not the file — `test:card-ask`,
 `test:partner-paper`, `test:annual-signing`, `test:tent-sandbags`. If you
 change a pure rule, there is almost certainly a test that pins it.
 
-### The 8 that do not run clean offline
+### The 5 that need something this loop does not have
 
-Know these so you neither chase them nor claim credit for them.
+**Nothing is genuinely red on `main`.** These five want an environment, not a
+fix, so a clean run is 179 green and 5 skipped:
 
-| Script | Why |
+| Script | Needs |
 | --- | --- |
-| `test:catalog-match`, `test:scheduling`, `test:quick-reply-items` | want `.env.local` |
-| `test:live-paperwork` | genuinely needs `DATABASE_URL` |
-| `test:counter-pdf` | renders a PDF; wants Chrome |
-| **`test:supply-estimate`** | **red on `main`** — a 6-day window bills as 7 (`$294` where the test wants `$252`) |
-| **`test:week-decision`**, **`test:job-stage`** | **red on `main`** |
+| `test:catalog-match`, `test:scheduling`, `test:quick-reply-items`, `test:live-paperwork` | a live database (they read `.env.local` at import) |
+| `test:counter-pdf` | Chrome, to render a PDF |
 
-The last three are **pre-existing failures on `main`**, confirmed at
-`0757e4d`, not caused by any current branch, and not date-dependent. Treat
-them as the baseline. `test:supply-estimate` is about money and is worth a
-human's attention before anyone "fixes" it blind.
-
-Two `tsc` errors are also pre-existing, in `tests/inventory/stock.test.ts` and
+Two `tsc` errors are still pre-existing, in `tests/inventory/stock.test.ts` and
 `tests/sub-rentals/partner-intro-nudge.test.ts`.
+
+**If you find a red test here, suspect the TEST before the code.** On
+2026-09-19 all three of the then-red tests turned out to be stale
+assertions, not bugs — and each would have been "fixed" catastrophically by
+an agent that just made them pass:
+
+- `test:supply-estimate` and `test:week-decision` asserted the **exclusive**
+  day gap (Sep 13 → 19 = 6). The billable-days rule flipped to **inclusive**
+  on 2026-09-12 (`src/lib/orders/days.ts`, "Wes ruling B") and the tests were
+  never updated. Making them pass by editing `computeDays` would have
+  re-priced every daily-rate line, quote PDF and invoice in the system, and
+  reintroduced the "3/2" display bug Wes personally reported.
+- `test:job-stage` asserted that a blind pickup does **not** colour an
+  unbooked hold — the retired rule. `tests/scheduling/blind-bar.test.ts`
+  asserted the opposite and passed. Two tests, one function, contradictory
+  claims.
+
+So: before changing code to satisfy a failing assertion, read the function's
+own doc comment. This codebase records dated rulings there, and a test that
+disagrees with a dated ruling is the thing that is out of date.
 
 ---
 

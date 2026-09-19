@@ -72,7 +72,18 @@ eq(Object.keys(STAGE_RAIL).sort(), ['booked', 'cancelled', 'hold', 'inquiry', 'l
 eq(Object.keys(STAGE_CHIP).length >= 6, true, 'every stage has a chip')
 eq(barColor('order').bg, STATUS_COLORS.order.bg, 'order stage paints the Planyo dark red')
 eq(barColor('order', { blindPickup: true }).bg, 'bg-violet-500', 'blind pickup still wins over red')
-eq(barColor('hold', { blindPickup: true }).bg, STATUS_COLORS.hold.bg, 'blind pickup does not color an unbooked hold')
+// A hold DOES go violet, and this line used to assert the opposite.
+// `barColor`'s own comment records the change: the violet "used to require
+// booked / order, so a blind handoff on a reservation still on hold (the
+// usual state when Make Reservation asks the closed-day question) never
+// went violet." This assertion encoded the retired rule and had been
+// failing ever since, while tests/scheduling/blind-bar.test.ts asserted the
+// CURRENT rule and passed — two tests, opposite claims, about one function.
+// Cancelled and lost are the only stages the violet skips: a dead job has
+// no handoff to warn anyone about.
+eq(barColor('hold', { blindPickup: true }).bg, 'bg-violet-500', 'a blind pickup colors an unbooked hold too — Make Reservation asks before the order exists')
+eq(barColor('cancelled', { blindPickup: true }).bg, STATUS_COLORS.cancelled.bg, 'a dead job has no handoff to warn about')
+eq(barColor('lost', { blindPickup: true }).bg, STATUS_COLORS.lost.bg, 'nor a lost one')
 eq(LEGEND_ITEMS.some((l) => l.label === 'Booked · Warehouse order'), true, 'legend names the red rung')
 eq(readinessMeterStyle(3, 5, { stage: 'hold' }).backgroundImage?.includes('147, 197, 253'), true, 'a hold washes blue')
 eq(readinessMeterStyle(3, 5, { stage: 'order' }).backgroundImage?.includes('253, 164, 175'), true, 'a warehouse-order job washes rose')
