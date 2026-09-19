@@ -8,7 +8,7 @@
  */
 
 import { useMemo, useState } from 'react'
-import { AlertTriangle, Bug, Check, ChevronDown, ChevronRight, RefreshCw, Users } from 'lucide-react'
+import { AlertTriangle, Bug, Check, ChevronDown, ChevronRight, ClipboardCheck, Copy, RefreshCw, Users, Wrench, X } from 'lucide-react'
 import type { BugKind, BugRouting, BugSeverity, BugStatus } from '@prisma/client'
 import type { BugContext } from '@/lib/bugs/clientContext'
 import {
@@ -78,6 +78,11 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
   const [rows, setRows] = useState(reports)
   const [open, setOpen] = useState<string | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  // Ticked for hand-off to Claude Code (Wes 2026-09-19).
+  const [picked, setPicked] = useState<Set<string>>(new Set())
+  const [handing, setHanding] = useState(false)
+  const [brief, setBrief] = useState<{ batchId: string; count: number; text: string } | null>(null)
+  const [copied, setCopied] = useState(false)
 
   const buckets = useMemo(() => {
     // Duplicates never appear on their own — they are shown inside the
@@ -127,7 +132,52 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
     }
   }
 
+  function toggle(id: string) {
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
   const list = buckets[tab]
+  // "All" means all of what you are LOOKING at, not all 300 rows — ticking
+  // a filtered list and getting the archive is the classic version of this
+  // button being dangerous.
+  const allPicked = list.length > 0 && list.every((r) => picked.has(r.id))
+
+  function toggleAll() {
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (allPicked) list.forEach((r) => next.delete(r.id))
+      else list.forEach((r) => next.add(r.id))
+      return next
+    })
+  }
+
+  async function handToClaude() {
+    if (picked.size === 0 || handing) return
+    setHanding(true)
+    try {
+      const res = await fetch('/api/bug-reports/fix-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ids: [...picked] }),
+      })
+      const data = await res.json()
+      if (res.ok) {
+        setBrief({ batchId: data.batchId, count: data.count, text: data.brief })
+        setPicked(new Set())
+        // They are being worked now — reflect it without a reload.
+        setRows((prev) =>
+          prev.map((r) => (data.brief && picked.has(r.id) ? { ...r, status: 'IN_PROGRESS' as BugStatus } : r)),
+        )
+      }
+    } finally {
+      setHanding(false)
+    }
+  }
 
   return (
     // No width cap here — the PAGE owns the width now that the tally rail
@@ -167,6 +217,63 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
         ))}
       </div>
 
+      {/*
+        The hand-off. Ticking rows and pressing one button is the whole
+        interaction Wes asked for; what it cannot do is start a session on
+        his laptop (HQ is on Vercel), so it queues the batch and hands him
+        the brief — paste it, or run /fix-bugs and it pulls the same thing.
+      */}
+      {list.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-3 rounded-xl border border-lt-hairline bg-lt-card px-4 py-3">
+          <label className="flex items-center gap-2 text-sm text-lt-fg2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={allPicked}
+              onChange={toggleAll}
+              className="w-4 h-4 accent-amber-600 cursor-pointer"
+            />
+            Select all {list.length} shown
+          </label>
+          <div className="flex-1" />
+          {picked.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setPicked(new Set())}
+              className="text-xs font-semibold text-lt-fg3 hover:text-lt-fg"
+            >
+              Clear
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={handToClaude}
+            disabled={picked.size === 0 || handing}
+            className="inline-flex items-center gap-2 rounded-lg bg-amber-600 hover:bg-amber-500 disabled:bg-lt-inner disabled:text-lt-fg3 disabled:cursor-not-allowed px-4 py-2 text-sm font-semibold text-white transition-colors"
+          >
+            <Wrench className="w-4 h-4" />
+            {handing ? 'Handing over…' : `Hand to Claude${picked.size ? ` (${picked.size})` : ''}`}
+          </button>
+        </div>
+      )}
+
+      {brief && (
+        <FixBriefPanel
+          brief={brief}
+          copied={copied}
+          onCopy={async () => {
+            try {
+              await navigator.clipboard.writeText(brief.text)
+              setCopied(true)
+              setTimeout(() => setCopied(false), 2000)
+            } catch {
+              // Clipboard can be blocked; the textarea below is the fallback
+              // and is already selectable.
+            }
+          }}
+          onClose={() => setBrief(null)}
+        />
+      )}
+
       {list.length === 0 ? (
         <div className="bg-lt-card border border-lt-hairline rounded-xl p-10 text-center">
           <Bug className="w-6 h-6 text-lt-fg3 mx-auto mb-2" />
@@ -181,10 +288,21 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
             const people = 1 + r.duplicateCount
             return (
               <div key={r.id} className="bg-lt-card border border-lt-hairline rounded-xl overflow-hidden">
+                <div className="flex items-start">
+                  {/* Outside the expand button — a checkbox inside a button
+                      is not clickable without swallowing the toggle. */}
+                  <label className="pl-4 pt-[18px] shrink-0 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                    <input
+                      type="checkbox"
+                      checked={picked.has(r.id)}
+                      onChange={() => toggle(r.id)}
+                      className="w-4 h-4 accent-amber-600 cursor-pointer"
+                    />
+                  </label>
                 <button
                   type="button"
                   onClick={() => setOpen(expanded ? null : r.id)}
-                  className="w-full text-left p-4 hover:bg-lt-inner/60 transition-colors"
+                  className="flex-1 min-w-0 text-left p-4 hover:bg-lt-inner/60 transition-colors"
                 >
                   <div className="flex items-start gap-3">
                     {expanded ? (
@@ -233,6 +351,7 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
                     </span>
                   </div>
                 </button>
+                </div>
 
                 {expanded && (
                   <div className="border-t border-lt-hairline p-4 space-y-4">
@@ -335,6 +454,69 @@ export function BugBoard({ reports, setupNeeded }: { reports: BoardReport[]; set
           })}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * The work order, once a batch is handed over. Shown rather than silently
+ * copied: Wes should see what is being sent, and the clipboard is not
+ * reliable enough to be the only route (it is blocked in plenty of
+ * contexts, and the textarea is the fallback).
+ */
+function FixBriefPanel({
+  brief,
+  copied,
+  onCopy,
+  onClose,
+}: {
+  brief: { batchId: string; count: number; text: string }
+  copied: boolean
+  onCopy: () => void
+  onClose: () => void
+}) {
+  return (
+    <div className="mb-4 rounded-xl border border-lt-hairline bg-lt-card p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-[15px] font-semibold text-lt-fg">
+            {brief.count} issue{brief.count === 1 ? '' : 's'} handed over
+          </h2>
+          <p className="mt-1 text-sm text-lt-fg2">
+            They are marked <strong>Being fixed</strong> so nobody doubles up. Two ways to pick
+            them up in Claude Code:
+          </p>
+          <ol className="mt-2 space-y-1 text-sm text-lt-fg2 list-decimal pl-5">
+            <li>
+              Run <code className="font-mono text-[13px] text-lt-fg">/fix-bugs</code> — it pulls
+              this batch itself, nothing to paste.
+            </li>
+            <li>Or copy the brief below and paste it in.</li>
+          </ol>
+          <p className="mt-2 text-xs text-lt-fg3">
+            Batch <span className="font-mono">{brief.batchId}</span>
+          </p>
+        </div>
+        <button type="button" onClick={onClose} className="shrink-0 text-lt-fg3 hover:text-lt-fg" aria-label="Close">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+
+      <textarea
+        readOnly
+        value={brief.text}
+        rows={10}
+        onFocus={(e) => e.currentTarget.select()}
+        className="mt-3 w-full rounded-lg border border-lt-hairline bg-lt-inner px-3 py-2 font-mono text-[12px] leading-relaxed text-lt-fg"
+      />
+      <button
+        type="button"
+        onClick={onCopy}
+        className="mt-2 inline-flex items-center gap-2 rounded-lg bg-lt-inner border border-lt-hairline px-3 py-2 text-xs font-semibold text-lt-fg2 hover:text-lt-fg"
+      >
+        {copied ? <ClipboardCheck className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+        {copied ? 'Copied' : 'Copy the brief'}
+      </button>
     </div>
   )
 }

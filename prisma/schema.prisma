@@ -10745,6 +10745,13 @@ model BugReport {
   /// Escalations are emailed once. Stamped so a re-triage can't re-send.
   escalatedAt DateTime? @map("escalated_at")
 
+  /// Handed to Claude Code to be fixed. Wes ticks reports on the board and
+  /// presses one button; they are stamped with a shared batch id and move
+  /// to IN_PROGRESS, so nobody picks up something already being worked and
+  /// the local `/fix-bugs` command knows what it was handed.
+  fixBatchId     String?   @map("fix_batch_id")
+  queuedForFixAt DateTime? @map("queued_for_fix_at")
+
   // ── Working it ─────────────────────────────────────
   resolvedAt      DateTime? @map("resolved_at")
   resolvedByEmail String?   @map("resolved_by_email")
