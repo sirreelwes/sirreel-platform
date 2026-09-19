@@ -60,22 +60,40 @@ export const VEHICLE_DOC_KINDS: readonly VehicleDocKind[] = ['registration', 'bi
  * which is correct-but-vague, rather than a guess that is confidently wrong
  * on a document somebody has to hand to an inspector.
  *
- * DELIBERATELY NOT CLASSIFIED: ProScout / VTR (the LCDW note calls it a
- * "VTR/PeopleMover" van, so it may well be a BIT vehicle — but "may well be"
- * is not a ruling, and a wrong BIT label is worse than a vague right one).
- * Add a pattern here the day Julian says so.
+ * ProScout / VTR was left unclassified when this shipped — the LCDW note
+ * calls it a "VTR/PeopleMover" van, which was a hint and not a ruling. Wes
+ * ruled on 2026-09-19: "Yes it's a bit vehicle." It carries crew, so the
+ * 10-or-more-passenger test reaches it the same way it reaches the vans.
+ *
+ * Everything else on the roster is still unruled and still reads DOT. Add a
+ * pattern here when somebody who files the paperwork says so — not because
+ * a class sounds like it might carry people.
  */
 export type InspectionRegime = 'bit' | 'dot'
 
 /**
- * Matched against `AssetCategory.name`. A regex rather than an exact-name set
- * on purpose: this family has already been renamed once — "Passenger Van"
+ * Matched against `AssetCategory.name`. Regexes rather than an exact-name set
+ * on purpose: the van family has already been renamed once — "Passenger Van"
  * split into "12-Passenger Van" and "15-Passenger Van" on 2026-09-09 — and
  * an exact list would have silently gone back to saying DOT that afternoon.
- * "passenger" is the discriminator; no other vehicle class on the roster
- * carries the word (Cargo Van, PopVan, Camera Cube, Stakebed, DLUX...).
+ *
+ * Every pattern is word-bounded, and none of the words appears in any class
+ * that is NOT on this list (Cargo Van, PopVan, Camera Cube, Cube Truck,
+ * Stakebed, DLUX, Scissor Lift). "Cargo Van" is the one worth naming: it is
+ * van-shaped and carries nobody, so the discriminator is deliberately
+ * "passenger" and never "van".
  */
-const BIT_CLASS_PATTERNS: readonly RegExp[] = [/\bpassenger\b/i]
+const BIT_CLASS_PATTERNS: readonly RegExp[] = [
+  /\bpassenger\b/i,
+  // ProScout / VTR (Wes 2026-09-19). Three spellings because the catalog
+  // name, the LCDW note and Planyo do not agree on one: the HQ category is
+  // "ProScout / VTR", the terms copy says "VTR/PeopleMover". `vtr` is a
+  // short token, so it is word-bounded — no other class on the roster
+  // contains it.
+  /\bproscout\b/i,
+  /\bvtr\b/i,
+  /\bpeople\s*mover\b/i,
+]
 
 /** Which inspection a class carries. An unknown class gets the umbrella. */
 export function inspectionRegimeForClass(categoryName?: string | null): InspectionRegime {
