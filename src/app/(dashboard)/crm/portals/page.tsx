@@ -345,8 +345,13 @@ export default async function CompanyPortalsPage({ searchParams }: { searchParam
 
   return (
     <div className="max-w-[1100px] mx-auto">
-      <div className="flex items-end justify-between gap-4 mb-5">
-        <div>
+      {/* Portrait phones: the lede gets the whole width and the buttons drop
+          below it. Side by side with a shrink-0 action block, the paragraph
+          was squeezed to a five-word column and "New portal" ran off the
+          edge — <main> is overflow-x-hidden, so it was clipped, not
+          scrollable. */}
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between sm:gap-4 mb-5">
+        <div className="min-w-0">
           <h1 className="text-2xl font-semibold text-lt-fg">Portals</h1>
           <p className="text-sm text-lt-fg2 mt-1 max-w-[70ch]">
             Every link we hand out, by kind — who has it, whether they&apos;ve opened it, and where
@@ -356,7 +361,7 @@ export default async function CompanyPortalsPage({ searchParams }: { searchParam
         </div>
         {/* The other direction: this page is who HAS a portal, and the
             template is how the rest get offered one. */}
-        <div className="shrink-0 flex flex-wrap items-center justify-end gap-2">
+        <div className="flex flex-wrap items-center gap-2 sm:shrink-0 sm:justify-end">
         <Link
           href="/outreach?template=exec-portal-invite"
           className="shrink-0 inline-flex items-center gap-1.5 px-3 py-2 rounded-lg border border-lt-hairline text-sm text-lt-fg2 hover:border-lt-fg2 hover:text-lt-fg"
