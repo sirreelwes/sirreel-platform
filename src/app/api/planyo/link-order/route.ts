@@ -3,7 +3,7 @@ import { getServerSession } from 'next-auth'
 import { authOptions } from '@/lib/auth'
 import {
   planyoMirrorEnabled,
-  PLANYO_MIRROR_RETIRED_ON,
+  PLANYO_ACCOUNT_CLOSED_ON,
 } from '@/lib/sync/planyo/mirrorSwitch'
 
 const API_KEY = process.env.PLANYO_API_KEY || ''
@@ -17,15 +17,18 @@ export async function POST(req: NextRequest) {
   // Retired with the mirror (2026-09-14). This is the one route in the
   // system that WRITES BACK to Planyo — it stamps an RW order number into
   // a reservation's user_notes via modify_reservation. Past the cutover
-  // that is an edit to a book nobody reads, made against reservations HQ
-  // no longer tracks, so it is refused rather than left to write into the
-  // dark. 410 Gone, not 404: the route existed and was deliberately ended.
+  // that was an edit to a book nobody reads; since the account was
+  // cancelled (2026-09-19) there is no book and no account to write to at
+  // all. Refused rather than left to write into the dark. 410 Gone, not
+  // 404: the route existed and was deliberately ended.
   if (!planyoMirrorEnabled()) {
     return NextResponse.json(
       {
-        error: 'Planyo linking was retired on ' + PLANYO_MIRROR_RETIRED_ON +
+        error: 'Planyo linking ended when the Planyo account was cancelled on ' +
+          PLANYO_ACCOUNT_CLOSED_ON +
           ' — reservations are made in HQ only. Link the RentalWorks order from the job page instead.',
         retired: true,
+        accountClosedOn: PLANYO_ACCOUNT_CLOSED_ON,
       },
       { status: 410 },
     )

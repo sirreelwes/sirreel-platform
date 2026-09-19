@@ -168,7 +168,7 @@ export default function SchedulingHubPage() {
           <DiagTile
             href="/planyo-cancellations"
             title="Planyo cancellations"
-            description="Residual Planyo-era holds still consuming a unit here. Mirroring was switched off 2026-09-14, so this list is final — clear it and the page is done."
+            description="Residual Planyo-era holds still consuming a unit here. Mirroring went off 2026-09-14 and the Planyo account was cancelled 2026-09-19, so this list is final and it is the last Planyo work left — clear it and the page is done."
           />
           <DiagTile
             href="/gantt"
@@ -181,14 +181,17 @@ export default function SchedulingHubPage() {
       <section className="mb-6">
         <div className="text-xs uppercase tracking-wide text-zinc-500 mb-2">Write paths (operator-gated)</div>
         <div className="bg-white border border-zinc-200 rounded-lg p-4 text-sm text-zinc-700">
-          <p className="mb-2 rounded-lg bg-chip-neutral-bg border border-lt-hairline px-3 py-2 text-[12px] text-lt-fg2">
-            <strong className="text-lt-fg">Cutover complete (2026-09-14).</strong> Reservations
-            are made in HQ only and the daily Planyo mirror is off. These scripts are no
-            longer part of a routine — they stay as the recovery path if something turns
-            out to have been left behind in Planyo, and running one is a deliberate act.
+          <p className="mb-2 rounded-lg bg-chip-warn-bg border border-lt-hairline px-3 py-2 text-[12px] text-chip-warn-fg">
+            <strong>Planyo is gone (account cancelled 2026-09-19).</strong> Reservations have
+            been made in HQ only since the 2026-09-14 cutover, and the account behind the
+            migration has now been closed. The Planyo script below <strong>can no longer
+            run</strong> — it reads the Planyo REST API, so with no site and no API key there
+            is nothing to pull. It is kept for the record of how the book got here, not as a
+            recovery path: whatever was left in Planyo was left there for good. The list of
+            what still needs a human is the Planyo cancellations queue above.
           </p>
           <p>
-            Two scripts in <code className="text-xs bg-zinc-100 px-1 rounded">scripts/</code> handle the
+            Two scripts in <code className="text-xs bg-zinc-100 px-1 rounded">scripts/</code> handled the
             one-time Planyo migration. Both default to dry-run; pass <code className="text-xs bg-zinc-100 px-1 rounded">--write</code> to persist.
           </p>
           <ol className="list-decimal pl-5 mt-2 space-y-1 text-zinc-700">
@@ -197,9 +200,10 @@ export default function SchedulingHubPage() {
               Lankershim Studios category + 4 stages + Video Van Asset.
             </li>
             <li>
-              <code className="text-xs bg-zinc-100 px-1 rounded">scheduling-planyo-migration.ts</code> — pulls
-              Planyo forward book; creates Booking + BookingItem (+ BookingAssignment where the unit name
-              matches). Cart-level idempotent — safe to re-run.
+              <code className="text-xs bg-zinc-100 px-1 rounded">scheduling-planyo-migration.ts</code> — pulled
+              the Planyo forward book; created Booking + BookingItem (+ BookingAssignment where the unit
+              name matched). Ran clean 2026-08-18. <strong>Dead since the account closed</strong> — it
+              has no source to read.
             </li>
           </ol>
           <p className="mt-2 text-xs text-zinc-500">

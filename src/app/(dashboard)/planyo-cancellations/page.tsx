@@ -51,8 +51,11 @@ export default function PlanyoCancellationsPage() {
   // Non-null once Planyo mirroring is retired (2026-09-14). No new
   // candidates are produced after that, so the list below is final —
   // and the "read is over a day old" warning must not keep firing at a
-  // sync that was switched off deliberately.
-  const [retired, setRetired] = useState<{ on: string } | null>(null)
+  // sync that was switched off deliberately. `accountClosedOn` is set
+  // once the Planyo account itself was cancelled (2026-09-19): past that
+  // point the list is not just final, it is the last Planyo-era work
+  // left anywhere in HQ.
+  const [retired, setRetired] = useState<{ on: string; accountClosedOn?: string } | null>(null)
 
   const load = useCallback(async () => {
     const res = await fetch('/api/scheduling/planyo-release-candidates')
@@ -99,7 +102,8 @@ export default function PlanyoCancellationsPage() {
         <p className="mt-1 text-sm text-gray-500 max-w-2xl">
           Holds cancelled in Planyo that are still holding a unit in HQ. Nothing is released
           automatically — check each one, then release it here. Releasing frees the unit and
-          flips its assignment to SWAPPED, which stays on the record.
+          flips its assignment to SWAPPED, which stays on the record. These rows are read
+          from HQ&rsquo;s own audit of the last sync, so they survive Planyo being gone.
         </p>
         {run && (
           <p className={`mt-2 text-xs ${stale ? 'text-amber-700 font-semibold' : 'text-gray-400'}`}>
@@ -112,13 +116,17 @@ export default function PlanyoCancellationsPage() {
         {retired && (
           <div className="mt-3 rounded-xl border border-lt-hairline bg-chip-neutral-bg px-4 py-3">
             <div className="text-[13px] font-semibold text-lt-fg">
-              This list is final
+              This list is final{retired.accountClosedOn ? ' — and it is the last of Planyo' : ''}
             </div>
             <p className="mt-1 text-[12px] leading-relaxed text-lt-fg2">
               Planyo mirroring was switched off on {retired.on} — reservations are made in
-              HQ only, so nothing new will appear here. Anything still listed is a hold
-              from the Planyo era that is worth clearing; once the list is empty this page
-              is done. Releasing still works exactly as before.
+              HQ only, so nothing new will appear here.
+              {retired.accountClosedOn
+                ? ` The Planyo account itself was cancelled on ${retired.accountClosedOn}, so there is nothing left to
+                   check anything against: every row below is a Planyo-era hold sitting on a real
+                   unit here, and clearing them is the last step of the decommission.`
+                : ' Anything still listed is a hold from the Planyo era that is worth clearing.'}
+              {' '}Once the list is empty this page is done. Releasing still works exactly as before.
             </p>
           </div>
         )}
@@ -134,6 +142,13 @@ export default function PlanyoCancellationsPage() {
           <div className="mt-1 text-[13px] text-gray-400">
             No cancelled Planyo holds are still consuming capacity.
           </div>
+          {retired?.accountClosedOn && (
+            <div className="mx-auto mt-3 max-w-md text-[12px] leading-relaxed text-gray-400">
+              That was the last Planyo-era work in HQ. The sync code, its cron entry and this
+              page can be deleted whenever someone gets to it — the imported bookings keep
+              their history either way.
+            </div>
+          )}
         </div>
       ) : (
         <div className="overflow-hidden rounded-2xl border border-gray-200 bg-white">

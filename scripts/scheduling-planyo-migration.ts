@@ -1,5 +1,25 @@
 #!/usr/bin/env tsx
 /**
+ * HISTORICAL — THIS SCRIPT CANNOT RUN ANY MORE (2026-09-19).
+ *
+ * It ran clean once, on 2026-08-18: 47 bookings / 65 items / 61
+ * assignments. After the 2026-09-14 cutover it was kept deliberately
+ * ungated as the recovery path — a human running the importer by hand
+ * was a deliberate act, and it was the way back if something turned out
+ * to have been left behind in Planyo.
+ *
+ * That is over. Wes cancelled the Planyo account on 2026-09-19. This
+ * script reads the Planyo REST API (list_reservations), so with the site
+ * closed and the API key dead there is no forward book to pull: a run
+ * fails at the pull and writes nothing. Nothing can be recovered from
+ * Planyo now, by this or any other path.
+ *
+ * It is kept as the record of how the native book was populated — every
+ * imported row still carries `source=PLANYO_BACKFILL` and its
+ * `planyoCartId`. Do not reach for it to "catch up drift": there is no
+ * upstream to drift from, and against a native book it would only mint
+ * duplicates if it could reach anything at all.
+ *
  * Chunk 7 of native-scheduling-v1-brief.md — Planyo → native one-time
  * migration. Pulls the forward book from Planyo (list_reservations,
  * detail_level=3), and for each reservation:

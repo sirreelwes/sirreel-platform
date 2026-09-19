@@ -2,13 +2,19 @@
  * Daily Planyo→HQ sync cron. Wired in vercel.json at `0 13 * * *` UTC
  * (= 6 AM PT). CRON_SECRET-protected like the other crons.
  *
- * RETIRED 2026-09-14. The team books reservations in HQ only, so this
- * whole run is gated behind `planyoMirrorEnabled()` and returns before it
- * touches Planyo or the database. The schedule stays in vercel.json so
- * bringing it back is one env var (`PLANYO_MIRROR=1`) rather than a
- * deploy — see lib/sync/planyo/mirrorSwitch.ts for why it is shaped that
- * way. Everything below this paragraph describes the run as it behaves
- * when the override is set.
+ * RETIRED 2026-09-14, and PERMANENT since 2026-09-19. The team books
+ * reservations in HQ only, so this whole run is gated behind
+ * `planyoMirrorEnabled()` and returns before it touches Planyo or the
+ * database. That gate used to be one env var from reopening; it is not
+ * any more — Wes cancelled the Planyo account on 2026-09-19, so there is
+ * no book upstream to mirror and `planyoMirrorEnabled()` reads no
+ * environment at all. See lib/sync/planyo/mirrorSwitch.ts.
+ *
+ * The schedule stays in vercel.json for now because the tick costs
+ * nothing and the `/planyo-cancellations` queue is still being worked;
+ * once that queue is empty, this route, the vercel.json entry and the
+ * sync lib go together. Everything below this paragraph describes the run
+ * as it behaved while the mirror was live, and is now unreachable.
  *
  * Two-phase: plan first (dry-run) to compute the signature, then apply
  * with that signature as `authorizedSignature`. If Planyo's state shifts
@@ -30,7 +36,9 @@ import { prisma } from '@/lib/prisma'
 import { postMessage as slackPost } from '@/lib/slack'
 import {
   planyoMirrorEnabled,
+  planyoMirrorOverrideIgnored,
   PLANYO_MIRROR_RETIRED_ON,
+  PLANYO_ACCOUNT_CLOSED_ON,
 } from '@/lib/sync/planyo/mirrorSwitch'
 import { runSync, type RunSyncResult } from '@/lib/sync/planyo/runSync'
 import { autoReleaseCandidates, autoReleaseEnabled, type AutoReleaseResult } from '@/lib/sync/planyo/autoRelease'
@@ -64,14 +72,45 @@ export async function GET(req: NextRequest) {
   // 200 (not an error) keeps Vercel's cron history green — a retired job
   // is not a failing one — and `skipped` names the reason for anyone
   // reading the log wondering why the sync stopped.
+  //
+  // This branch is now the whole route: the gate cannot reopen, because
+  // the Planyo account was cancelled on 2026-09-19.
   if (!planyoMirrorEnabled()) {
+    // THE ONE THING WORTH SAYING OUT LOUD. Until 2026-09-19 the way to
+    // bring the mirror back was `PLANYO_MIRROR=1`, and that recipe is
+    // written down everywhere — this file's own history, the cutover
+    // note, a year of Slack. Someone acting on it today sets the
+    // variable, sees a green cron, and reasonably concludes the mirror
+    // is running again. It is not, and nothing else would ever tell
+    // them. The old switch alerted so an override could not run in the
+    // dark; this one alerts so an override cannot be BELIEVED in the
+    // dark. Best-effort: a failed Slack post must not colour the tick.
+    const overrideIgnored = planyoMirrorOverrideIgnored()
+    if (overrideIgnored) {
+      try {
+        await slackPost(
+          `:warning: *Planyo mirror override is set and does nothing.* ` +
+            `\`PLANYO_MIRROR=1\` is set in the environment, but the Planyo account was ` +
+            `cancelled on ${PLANYO_ACCOUNT_CLOSED_ON} — there is no book upstream to mirror and ` +
+            `the sync cannot be resumed by any variable. Nothing was imported, and nothing will be. ` +
+            `Unset it to stop this daily reminder. If a Planyo-era hold is still holding a truck ` +
+            `here, clear it at /planyo-cancellations.`,
+        )
+      } catch (e) {
+        console.error('[planyo-sync cron] override notice failed to post:', e)
+      }
+    }
+
     return NextResponse.json({
       ok: true,
       skipped: 'mirror-retired',
       retiredOn: PLANYO_MIRROR_RETIRED_ON,
+      accountClosedOn: PLANYO_ACCOUNT_CLOSED_ON,
+      overrideIgnored,
       detail:
-        'Planyo mirroring is off: reservations are made in HQ only. ' +
-        'Set PLANYO_MIRROR=1 in Production to resume the daily sync.',
+        'Planyo mirroring is off: reservations are made in HQ only, and the Planyo ' +
+        'account was cancelled on ' + PLANYO_ACCOUNT_CLOSED_ON + '. There is nothing ' +
+        'upstream to mirror and no environment variable that can resume the sync.',
     })
   }
 

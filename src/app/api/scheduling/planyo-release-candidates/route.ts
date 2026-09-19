@@ -5,6 +5,7 @@ import { normalizePlanyoUnitName } from '@/lib/scheduling/planyoNameNormalizer'
 import {
   planyoMirrorEnabled,
   PLANYO_MIRROR_RETIRED_ON,
+  PLANYO_ACCOUNT_CLOSED_ON,
 } from '@/lib/sync/planyo/mirrorSwitch'
 
 export const dynamic = 'force-dynamic'
@@ -35,6 +36,16 @@ export const dynamic = 'force-dynamic'
  * is returned so the page can say the list is final rather than letting
  * its "this read is over a day old, the sync may not be completing"
  * warning fire forever against a sync that was switched off on purpose.
+ *
+ * SINCE THE ACCOUNT WAS CANCELLED (2026-09-19) this is the LAST Planyo
+ * surface still doing work, and it is the reason the rest of the Planyo
+ * code is still in the tree. It reads stored `PlanyoSyncEvent` audit rows
+ * — not Planyo — so a closed account changes nothing about it. Each
+ * remaining row is a Planyo-era hold consuming a real unit on the native
+ * board; clearing them is the last decommission step, and only once this
+ * list is empty can the sync lib, the cron and its vercel.json entry be
+ * deleted. Releasing goes through the shared release endpoint, which
+ * settles the candidate so it stops re-flagging.
  */
 export async function GET() {
   const session = await getServerSession()
@@ -44,7 +55,7 @@ export async function GET() {
 
   const retired = planyoMirrorEnabled()
     ? null
-    : { on: PLANYO_MIRROR_RETIRED_ON }
+    : { on: PLANYO_MIRROR_RETIRED_ON, accountClosedOn: PLANYO_ACCOUNT_CLOSED_ON }
 
   // Most recent run that actually produced candidates.
   const run = await prisma.planyoSyncRun.findFirst({

@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server'
 import {
   planyoMirrorEnabled,
   PLANYO_MIRROR_RETIRED_ON,
+  PLANYO_ACCOUNT_CLOSED_ON,
 } from '@/lib/sync/planyo/mirrorSwitch'
 
 const API_KEY = process.env.PLANYO_API_KEY || ''
@@ -19,17 +20,21 @@ function mapStatus(status: string): string {
 }
 
 export async function GET() {
-  // Retired with the mirror (2026-09-14). This fed the RentalWorks
-  // dispatch linker a live list of Planyo carts; with reservations made
-  // in HQ only, that list is history rather than work. Returning an empty
-  // `ok` payload keeps the page's `.catch(() => ({}))` shape and lets it
-  // render its own retired notice instead of an error.
+  // Retired with the mirror (2026-09-14), and permanent since the Planyo
+  // account was cancelled (2026-09-19). This fed the RentalWorks dispatch
+  // linker a live list of Planyo carts; with reservations made in HQ only
+  // that list was already history rather than work, and there is now no
+  // account left to ask. Returning an empty `ok` payload keeps the page's
+  // `.catch(() => ({}))` shape and lets it render its own retired notice
+  // instead of an error. The pull below is unreachable and stays only
+  // until this route is deleted with the rest of the Planyo code.
   if (!planyoMirrorEnabled()) {
     return NextResponse.json({
       ok: true,
       unlinked: [],
       retired: true,
       retiredOn: PLANYO_MIRROR_RETIRED_ON,
+      accountClosedOn: PLANYO_ACCOUNT_CLOSED_ON,
     })
   }
 

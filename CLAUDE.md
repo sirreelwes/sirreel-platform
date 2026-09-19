@@ -57,8 +57,10 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 ### Data Sources of Truth
 - **Scheduling — import executed 2026-08-18 (Wes authorized):** the one-time Planyo import ran clean — 47 bookings / 65 items / 61 assignments, every PLANYO booking linked to a Job, in-progress rentals included (window reaches back 60 days), and the 4 stale prior-backfill carts with drifted units superseded from current Planyo truth. HQ's native scheduler now holds the live book as of that run.
   - **CUTOVER DONE 2026-09-14 (Wes): reservations are made in HQ ONLY and Planyo mirroring is OFF.** HQ is the book — full stop. Planyo (Site ID 36171) is history, not a working surface, and NOT a source to reconcile against: a cart that exists there and not here is not automatically a gap, because the team stopped maintaining it.
-  - The kill switch is `planyoMirrorEnabled()` in `src/lib/sync/planyo/mirrorSwitch.ts`, read by the `planyo-sync` cron and the two `/api/planyo/*` routes. It is **default OFF with no env var set**, so the state is the deployed default. Rolling back is `PLANYO_MIRROR=1` in Vercel Production — one env var, no deploy — and any run under that override posts a loud daily Slack line so a forgotten flag can't resume imports in the dark. The cron entry stays in vercel.json on purpose (a no-op tick beats needing a deploy to resurrect).
-  - `scripts/scheduling-planyo-migration.ts` is deliberately NOT gated — a human running the importer is a deliberate act and it is the recovery path. Do NOT run it to "catch up drift" as routine; that re-imports carts against a native book and mints duplicates. Historical rows keep `source=PLANYO_BACKFILL` + `planyoCartId`, and the `PlanyoSyncRun`/`PlanyoSyncEvent` audit tables are untouched.
+  - **ACCOUNT CANCELLED 2026-09-19 (Wes): there is no Planyo any more.** The site, its book and its API key are gone. Nothing can be pulled from Planyo, re-imported, reconciled or written back, by any script, route or env var — and nothing was kept but what is already in our own tables. Treat every Planyo mention below as history.
+  - The kill switch is `planyoMirrorEnabled()` in `src/lib/sync/planyo/mirrorSwitch.ts`, read by the `planyo-sync` cron and the two `/api/planyo/*` routes. **It now returns false unconditionally and reads no environment at all** — before 2026-09-19 it was one env var (`PLANYO_MIRROR=1`) from reopening, and that recipe is still written all over this repo's history, so the test pins that the string no longer does anything. **Do not restore the override.** If anyone sets it, the daily no-op tick posts a Slack line saying it changed nothing (`planyoMirrorOverrideIgnored()`) — the old switch alerted so an override couldn't run in the dark, this one alerts so an override can't be *believed* in the dark. Were the gate ever forced open, a cancelled account fails the pull (`FAILED_PULL`) or trips runSync's suspicious-low guard, so it aborts before any write — the risk is a red cron and a wasted morning, not a wrongly-released truck. The cron entry stays in vercel.json until the cancellations queue is clear.
+  - `scripts/scheduling-planyo-migration.ts` is **no longer the recovery path — there is no recovery path.** It reads the Planyo REST API, so with the account closed a run fails at the pull and writes nothing; same for `backfill-planyo-*` and `planyo-unit-alignment`. It ran clean once (2026-08-18) and is kept only as the record of how the native book was populated. Historical rows keep `source=PLANYO_BACKFILL` + `planyoCartId`, and the `PlanyoSyncRun`/`PlanyoSyncEvent` audit tables are untouched — those tables are what `/planyo-cancellations` reads, which is why they outlive the account.
+  - **What is still LIVE and matters: `/planyo-cancellations`.** It is the last Planyo surface doing work and the last decommission step. It reads stored `PlanyoSyncEvent` audit rows (never Planyo), so a closed account changes nothing about it; each remaining row is a Planyo-era hold sitting on a real unit on the native board. Releasing goes through the shared booking-item release endpoint, which calls `settlePlanyoCancellation` so the row stops re-flagging. **Only once that list is empty** is it safe to delete `src/lib/sync/planyo/` (minus `settleCancellation.ts`, which the live release route imports), the cron route and its vercel.json entry.
   - Post-import manual list (report): 3 Lankershim room assignments, 1 backup-hold linkage, agent reattribution (imports default to Wes as agent).
 - **RentalWorks** = billing source of truth (being deprecated long-term — design new features for SirReel HQ-native workflow, not RW alignment)
 - **CardPointe** = card processing. **LIVE in production since 2026-08-18** —
@@ -2805,9 +2807,18 @@ The dev server and ad-hoc Prisma scripts hit the SAME Neon DB as production — 
 1. AI fleet optimization
 2. RentalWorks token refresh automation
 3. Update Timeline page to use real jobId instead of cart_id
-4. Planyo decommission tail (cutover shipped 2026-09-14) — clear the
-   residual `/planyo-cancellations` queue, then delete the `planyo-sync`
-   cron entry + `src/lib/sync/planyo/` once it has been dark a month.
+4. Planyo decommission tail — **account cancelled 2026-09-19, so the
+   "wait a month" clause is spent**: it existed to preserve the rollback,
+   and there is nothing left to roll back to. Remaining work, in order:
+   (a) clear the residual `/planyo-cancellations` queue — real units are
+   held by it; (b) then delete the `planyo-sync` cron route + its
+   vercel.json entry + `src/lib/sync/planyo/` **except
+   `settleCancellation.ts`** (the live release route imports it), the two
+   `/api/planyo/*` routes, the dead `backfill-planyo-*` /
+   `planyo-unit-alignment` / `scheduling-planyo-migration` scripts and the
+   `/planyo-cancellations` page itself. Keep `planyoNameNormalizer.ts`
+   until the queue is gone. (c) Ops, not code: drop `PLANYO_API_KEY` /
+   `PLANYO_SITE_ID` / any `PLANYO_MIRROR` from Vercel — dead credentials.
    Plan artifact: eb4023dd
 
 (Removed as shipped: Julian's dispatch view = /dispatch "Deliveries &
