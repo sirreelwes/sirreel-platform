@@ -22,6 +22,18 @@
  *     to click through, which costs the first direction its only
  *     defence. A one-day rental, an undated section, a section someone
  *     already answered, and hand-typed day counts must all stay quiet.
+ *
+ * DATES HERE ARE INCLUSIVE OF BOTH ENDS. `src/lib/orders/days.ts` is the
+ * billable-days authority (Wes ruling B, 2026-07-17): a rental TOUCHING
+ * Sep 13 and Sep 16 is 4 days, not 3. Every fixture below is written so
+ * its date span equals the duration its comment names — a "6 calendar
+ * day" section runs 09-13 → 09-18.
+ *
+ * These fixtures were written against the EXCLUSIVE gap and were never
+ * updated when that flipped on 2026-09-12, so this file failed for a week
+ * while the code was right. If a fixture here starts disagreeing with its
+ * own comment, move the DATE, never the expectation — and never
+ * `computeDays`, which prices every daily-rate line in the system.
  */
 
 import type { LineItemDepartment } from '@prisma/client'
@@ -52,7 +64,7 @@ function line(over: Partial<WeekLine> = {}): WeekLine {
     rateType: 'DAILY',
     billableDays: 3,
     pickupDate: '2026-09-13',
-    returnDate: '2026-09-19',
+    returnDate: '2026-09-18',
     catalogProductId: 'inv-1',
     description: 'Surveillance Kit',
     ...over,
@@ -91,7 +103,7 @@ check(
 // Three calendar days at a 3-day week bills three days. The cap did
 // nothing, the section is at list, and before the prompt nothing said so.
 console.log('\nthe defect — a rental no longer than the department week')
-const shortJob = [line({ quantity: 6, rate: 7, billableDays: 3, returnDate: '2026-09-16' })]
+const shortJob = [line({ quantity: 6, rate: 7, billableDays: 3, returnDate: '2026-09-15' })]
 check(capInEffect('COMMUNICATIONS', shortJob), 3, 'still reads as the 3-day week')
 check(weekSection('COMMUNICATIONS', shortJob)?.currentTotal, 126, 'every calendar day billed')
 check(
@@ -103,7 +115,7 @@ check(weekDecisionsPending(shortJob, {}).length, 1, 'asked about')
 
 // GE's week IS seven days, so every GE rental inside a week is full rate.
 console.log('\nGE — the department whose standard week discounts nothing')
-const ge = [line({ department: 'GE', quantity: 2, rate: 50, billableDays: 4, returnDate: '2026-09-17' })]
+const ge = [line({ department: 'GE', quantity: 2, rate: 50, billableDays: 4, returnDate: '2026-09-16' })]
 check(capInEffect('GE', ge), 7, 'the 7-day week explains 4 days of a 4-day rental')
 check(
   deltasOf('GE', ge),
@@ -114,7 +126,7 @@ check(weekDecisionsPending(ge, {}).length, 1, 'asked about')
 
 // ── Quiet when there is nothing to decide ──────────────────────────────
 console.log('\nquiet — the cases a prompt must not interrupt')
-const oneDay = [line({ billableDays: 1, returnDate: '2026-09-14' })]
+const oneDay = [line({ billableDays: 1, returnDate: '2026-09-13' })]
 check(capInEffect('COMMUNICATIONS', oneDay), 3, 'a one-day rental bills one day at every week')
 check(weekDecisionsPending(oneDay, {}).length, 0, 'no shorter week changes the money — silent')
 
@@ -246,7 +258,7 @@ check(
 
 const mixedSpans = [
   line({ quantity: 6, rate: 7, billableDays: 3 }),
-  line({ quantity: 2, rate: 40, billableDays: 2, returnDate: '2026-09-15', description: 'Comms Kit' }),
+  line({ quantity: 2, rate: 40, billableDays: 2, returnDate: '2026-09-14', description: 'Comms Kit' }),
 ]
 check(
   weekSection('COMMUNICATIONS', mixedSpans)?.options.map((o) => o.uniformDays),

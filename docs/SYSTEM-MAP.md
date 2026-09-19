@@ -63,7 +63,7 @@ somebody typed.
 | API **endpoints** | **916** (in 696 `route.ts` files) |
 | Pages | **193** (168 staff/portal + 25 public) |
 | React components | **309** |
-| `test:*` npm scripts | **183** |
+| `test:*` npm scripts | **183** (178 run green with no DB) |
 | Vercel cron entries | **30** (27 handlers; the daily brief is scheduled twice) |
 | Email templates | **34** |
 | Action-item providers | **23** |
@@ -267,7 +267,7 @@ contract-review phase briefs (~990 lines total), `contract-negotiation-playbook.
 surfaces read it.**
 
 **411 of 762 `src/lib` modules — 53% — never import Prisma.** That is not an
-accident; it is the dominant architectural pattern, and it is why 175 of 183
+accident; it is the dominant architectural pattern, and it is why 178 of 183
 test scripts run with no database at all.
 
 The shape, every time:
@@ -479,9 +479,12 @@ Honest inventory, so nobody mistakes these for things to fix in passing:
   commit counts, `git log` depth and `git blame` are unreliable there. Do not
   reason about the project's age or churn from them without checking.
 - `ARCHITECTURE-AUDIT.md` is stale (July, pre-doubling).
-- `test:supply-estimate`, `test:week-decision`, `test:job-stage` are **red on
-  `main`**. `test:supply-estimate` is a 6-day window billing as 7 — money, and
-  worth a human's attention.
+- **No test is genuinely red.** 178 of 183 pass offline; the other 5 want a
+  live database or Chrome. The three that were red until 2026-09-19 were all
+  **stale assertions**, not bugs — see `AGENTS.md`, "If you find a red test
+  here, suspect the TEST before the code". Two of them encoded the day-count
+  rule that flipped from exclusive to inclusive on 2026-09-12; "fixing" them
+  in the code would have re-priced every daily-rate line in the system.
 - Two `tsc` errors pre-exist in `tests/inventory/stock.test.ts` and
   `tests/sub-rentals/partner-intro-nudge.test.ts`.
 - `AssetCategory` and `InventoryItem` coexist mid-cutover, by design.

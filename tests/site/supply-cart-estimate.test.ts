@@ -22,6 +22,7 @@
  */
 
 import { lineEstimate, rentalDaysBetween, type CartLine } from '../../src/hooks/useSupplyCart'
+import { computeDays } from '../../src/lib/orders/days'
 
 const failures: string[] = []
 function check(got: unknown, want: unknown, why: string): void {
@@ -59,23 +60,52 @@ function serverSnapshot(line: CartLine): number {
   return line.price * line.qty * days
 }
 
+// ── The day count is INCLUSIVE, and it is not this file's to decide ──
+//
+// Sep 13 → Sep 19 is SEVEN days: the rental touches the 13th and the 19th
+// and every day between. `src/lib/orders/days.ts` is the billable-days
+// authority (Wes ruling B, 2026-07-17) and says so in as many words —
+// "the calendar days the rental TOUCHES, both ends included".
+//
+// These four checks were written against the EXCLUSIVE gap and never
+// updated when that flipped on 2026-09-12, so they have been failing ever
+// since, asserting 6 days and $252 against a system that correctly bills 7
+// and $294. Nothing was overcharging: the test was a cycle behind.
+//
+// Why the flip happened, because it is the thing that must not be undone:
+// line create was ALREADY billing inclusively while this derivation was
+// exclusive, so the order page read "3/2" — billing 3 days of a 2-day
+// rental — which looks like an overcharge to the client and to the rep
+// (Wes, forwarded 2026-09-12).
+//
+// So the assertion below is against `computeDays` rather than a number.
+// Three implementations have to agree — `computeDays`, `calendarDays` in
+// billing.ts and `rentalDays` in orders.ts — and the cart is downstream of
+// all of them. A hardcoded literal here is what let this drift for a week;
+// pinned to the authority, the cart cannot disagree with what gets billed.
 console.log('\nthe week is not the client’s to pick')
 const full = cartLine()
-check(rentalDaysBetween('2026-09-13', '2026-09-19'), 6, 'six calendar days')
-check(lineEstimate(full), 252, '6 kits × $7 × 6 days')
+check(
+  rentalDaysBetween('2026-09-13', '2026-09-19'),
+  computeDays('2026-09-13T00:00:00Z', '2026-09-19T00:00:00Z'),
+  'the cart reads the billable-days authority, not its own arithmetic',
+)
+check(rentalDaysBetween('2026-09-13', '2026-09-19'), 7, 'both ends included — the 13th through the 19th')
+check(rentalDaysBetween('2026-09-14', '2026-09-16'), 3, "days.ts's own worked example: Sep 14 → 16 is 3")
+check(lineEstimate(full), 294, '6 kits × $7 × 7 days')
 check(
   lineEstimate(cartLine({ claimedDays: 1 })),
-  252,
+  294,
   'one shoot day claimed — the estimate does not move',
 )
 check(
   lineEstimate(cartLine({ claimedDays: 3 })),
-  252,
+  294,
   'a 3-day claim is not a 3-day week either',
 )
 check(
   lineEstimate(cartLine({ claimedDays: 99 })),
-  252,
+  294,
   'and a claim cannot inflate it — the basis is the dates, full stop',
 )
 
@@ -93,8 +123,9 @@ check(
   'expendables are bought, not rented — qty × price, no days',
 )
 check(
+  // $100 x 1 x the same inclusive 7 days as every other rental line above.
   lineEstimate(cartLine({ itemKind: 'VEHICLE', type: 'VEHICLE', price: 100, qty: 1, claimedDays: 1 })),
-  600,
+  700,
   'a vehicle is a rental by kind even when its type is not EQUIPMENT',
 )
 check(
