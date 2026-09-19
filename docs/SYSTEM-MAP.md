@@ -60,13 +60,22 @@ somebody typed.
 | | |
 | --- | --- |
 | Prisma models / enums | **178** / **123** (10,780-line schema) |
-| API route handlers | **696** |
-| Pages | **193** |
+| API **endpoints** | **916** (in 696 `route.ts` files) |
+| Pages | **193** (168 staff/portal + 25 public) |
 | React components | **309** |
 | `test:*` npm scripts | **183** |
-| Vercel cron jobs | **30** |
+| Vercel cron entries | **30** (27 handlers; the daily brief is scheduled twice) |
+| Email templates | **34** |
+| Action-item providers | **23** |
+| PDF documents | **30** |
 | Environment variables | **73** |
 | `AuditLog` action strings | **181** |
+| Prisma migration files | **5** — see §9 |
+
+**Count endpoints, not route files.** One `route.ts` exports up to five
+handlers, so the API surface is 916, not 696: **392 GET, 388 POST, 60 PATCH,
+60 DELETE, 16 PUT.** A sweep that counts files understates the surface by a
+third.
 
 **Calibrate on this before you estimate anything.** A question like "where is
 X handled?" can have six right answers here, and a sweep across "the whole
@@ -120,6 +129,30 @@ class table; `InventoryItem` is the unified catalog (Aug 2026). `Asset` and
 `BookingItem` carry FKs to **both** — readers prefer `catalogItemId`, and the
 legacy column stays populated so nothing has to be dropped. Do not "finish"
 this migration on your own initiative.
+
+### The lifecycles
+
+123 enums, but these carry the domain. An agent that knows these can read most
+of the codebase's branching:
+
+| Enum | States |
+| --- | --- |
+| `OrderStatus` | DRAFT · QUOTE_SENT · APPROVED · BOOKED · LOADED_READY · ON_JOB · RETURNED · LD_CHECK · INVOICED · CLOSED · CANCELLED |
+| `OrderQuoteStatus` | DRAFT · SENT · WON · LOST · EXPIRED |
+| `CadenceState` | QUOTE_DRAFT → QUOTE_SENT → QUOTE_ACKNOWLEDGED → QUOTE_DISCUSSING → BOOKED → PICKUP_CONFIRMED → IN_PROGRESS → RETURNED → INVOICED → PAID → WRAPPED (+ LOST, CANCELLED) |
+| `BookingStatus` | REQUEST · AI_REVIEW · PENDING_APPROVAL · CONFIRMED · ACTIVE · RETURNED · CANCELLED · ARCHIVED |
+| `JobStatus` | NEW · QUOTED · ACTIVE · WRAPPED · HOLD · LOST — **not a lifecycle the app advances.** Demoted 2026-08-25 to three human off-ramps (HOLD / WRAPPED / LOST); "where is this job" is DERIVED from its orders by `jobs/cadence.ts`. Legacy ACTIVE rows are ignored. |
+| `InvoiceStatus` | DRAFT · SENT · PAID · PARTIAL · VOID |
+| `SubRentalStatus` | ESTIMATED · REQUESTED · CONFIRMED · PICKED_UP · ON_RENT · RETURNED · CANCELLED |
+| `LineItemDepartment` | VEHICLES · COMMUNICATIONS · STAGES · PRO_SUPPLIES · EXPENDABLES · GE · ART · WARDROBE_MAKEUP · PHOTO_SHOOT |
+| `LineItemPickStatus` | PENDING_PICK · PICKED · STAGED · LOADED · RETURNED · SHORT |
+| `FulfillmentLane` | FLEET · WAREHOUSE · STAGE |
+| `ReceiveMethod` | PICKUP · DELIVERY · WILL_CALL · DELIVER_TO_SIRREEL |
+| `LostReason` | NO_RESPONSE · ACKNOWLEDGED_NO_BOOK · EXPLICIT_REJECTION · MANUAL_CLOSE · LOST_TO_COMPETITOR · BUDGET · TIMING · SCOPE_CHANGED · INSURANCE · OTHER |
+
+**`CadenceState` is the one to internalise.** It is the derived answer to
+"where is this job", computed from the orders rather than stored, and it
+drives the /jobs board's colours, sort and chips.
 
 Other spine models worth knowing: **`SubRental`** (a partner's or another
 house's unit on our order), **`Vendor`** (a partner company — the model is
@@ -197,6 +230,34 @@ asked for with a very long tail.
 **API routes by weight:** `portal` (84), `orders` (79), `public` (64),
 `admin` (46), `jobs` (45), `crm` (44), `scheduling` (29), `cron` (27),
 `collections` (24).
+
+**`src/components` by weight:** `site` (35), `orders` (32), `jobs` (30),
+`crm` (29), `portal` (24), `hq-white-label` (14, parked), `scheduling` (11),
+`portal-v2` (10), `sales` (9), `collections` (8), then `reports`, `fleet`,
+`coi`, `shared`, `dashboard` at 6–7 each.
+
+**Repeatable inventories** — when you add one of these, there is an existing
+set to copy the shape from:
+
+| Thing | Count | Where |
+| --- | --- | --- |
+| Email templates | 34 | `src/lib/email/templates/` |
+| Action-item providers | 23 | `src/lib/actionItems/providers/` |
+| PDF documents | 30 | `*Document.tsx` across lib + components |
+| Cron handlers | 27 | `src/app/api/cron/` |
+| Maintenance tasks | 13 | `src/lib/admin/maintenanceTasks.ts` |
+| Operational scripts | 107 | `scripts/` (96 allowlisted in `.gitignore`) |
+| Run journals | 118 | `journals/` — the captured-ID records that make cleanup reversible |
+
+The cron schedule reconciles exactly: 30 entries, 27 handlers under
+`/api/cron`, plus `/api/gmail/watch` and `/api/admin/rw-invoice-sync`, with
+the daily brief scheduled twice (morning and evening editions). No dead
+schedule entries, no unscheduled handlers — checked.
+
+**Root-level docs** beyond `CLAUDE.md` (2,921) and `SHIPLOG.md` (754): three
+contract-review phase briefs (~990 lines total), `contract-negotiation-playbook.md`
+(384), `DEPLOY.md` (315), `E2E-REPORT.md` (179), `README.md` (169),
+`native-scheduling-v1-brief.md` (152).
 
 ---
 
@@ -401,6 +462,22 @@ The fastest route, in order:
 
 Honest inventory, so nobody mistakes these for things to fix in passing:
 
+- **Two stale `.save` backups are COMMITTED to the repo**, and `.gitignore`
+  has no rule for `*.save` (it only covers `.bak.*`):
+  `src/app/(dashboard)/layout.tsx.save` and `src/lib/autoAssign.ts.save`.
+  The first sits directly beside the real staff-shell layout, so a `grep` for
+  shell markup can land you in a stale copy. Read the real file. Removing
+  them and adding the ignore rule is a genuine small cleanup — but it is a
+  cleanup nobody has asked for, so propose it rather than doing it in passing.
+- **Only 5 migration files exist for 178 models.** That is the concrete shape
+  of the "migration history has known drift from the live DB" rule: the
+  migration directory is emphatically *not* the record of how the database got
+  here, and you cannot reconstruct the schema from it. Schema changes go in as
+  additive SQL and the schema file is the reference.
+- **Git history may be truncated.** A cloud or CI checkout of this repo is
+  often a shallow clone (`git rev-parse --is-shallow-repository` → true), so
+  commit counts, `git log` depth and `git blame` are unreliable there. Do not
+  reason about the project's age or churn from them without checking.
 - `ARCHITECTURE-AUDIT.md` is stale (July, pre-doubling).
 - `test:supply-estimate`, `test:week-decision`, `test:job-stage` are **red on
   `main`**. `test:supply-estimate` is a 6-day window billing as 7 — money, and
